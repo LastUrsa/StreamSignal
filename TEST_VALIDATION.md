@@ -6,6 +6,19 @@ This document records the Milestone 8 review of StreamSignal's automated tests a
 
 ## Current Snapshot
 
+Release-candidate quality gate checked on June 2, 2026:
+
+- `go test ./...`: passed locally
+- `npm test --prefix frontend`: passed locally with 3 test files and 49 tests
+- `npm run build --prefix frontend`: passed locally
+- `npm audit --prefix frontend`: passed locally with 0 vulnerabilities
+- `govulncheck ./...`: passed locally with no vulnerabilities found
+- GitHub Actions `Quality Gate` on `main`: passed for run `26801640687`
+  - `Backend Tests and Vulnerability Scan`: success
+  - `Frontend Tests, Build, and Audit`: success
+
+Note: the local frontend build/test initially failed because the installed `frontend/node_modules` tree was missing Rolldown's optional native Linux binding. Running `npm install --prefix frontend` repaired the local install state without changing tracked files, and the quality gate passed after that refresh.
+
 Backend coverage from `go test ./... -coverprofile=coverage.out`:
 
 - root app package: `40.3%`

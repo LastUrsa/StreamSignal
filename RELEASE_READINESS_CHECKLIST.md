@@ -92,16 +92,16 @@ Ship StreamSignal in a way that is:
 
 - [x] keep `README.md` focused on install, run, test, quickstart, and project-doc entry points
 - [ ] keep `SECURITY.md` and `SECURITY_AUDIT.md` aligned with the current posture
-- [ ] keep `TEST_VALIDATION.md` aligned with real CI expectations
+- [x] keep `TEST_VALIDATION.md` aligned with real CI expectations
 - [ ] add release notes guidance before the first public release
 - [ ] decide whether a dedicated user setup guide should be added
 
 ## CI And Maintenance
 
-- [ ] keep the GitHub quality gate green on `main`
-- [ ] keep required branch protection checks aligned with the live job names
+- [x] keep the GitHub quality gate green on `main`
+- [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
-- [ ] review `govulncheck` and `npm audit` output regularly
+- [x] review `govulncheck` and `npm audit` output regularly
 - [ ] re-run frontend coverage reporting when significant UI changes land
 
 ## Release Decision
@@ -113,5 +113,5 @@ Before calling the app release-ready, confirm:
 - [ ] macOS DMG behavior is understood
 - [x] first-run setup is documented
 - [x] usability and workflow validation are complete enough that the app can be trusted by a first-time real user
-- [ ] quality gate is green
-- [ ] no open high-severity security concerns remain
+- [x] quality gate is green
+- [x] no open high-severity security concerns remain
