@@ -29,8 +29,8 @@ Ship StreamSignal in a way that is:
 - [x] confirm the production/release frontend build hides the debug-only Execution Results section
 - [x] confirm the production/release frontend build hides the debug-only Logs tab
 - [x] use the debug frontend build when workflow validation needs Execution Results and Logs
-- [x] confirm Preview stays network-free
-- [x] confirm Preview shows Go Live messages plus enabled destination-level End Stream messages in one pass
+- [x] confirm Preview text rendering remains safe and link-preview metadata fetching is guarded
+- [x] confirm Preview shows Go Live messages plus enabled destination-level End Stream messages in collapsible rows
 - [x] confirm Go Live publishes correctly to Discord, Bluesky, and Mastodon
 - [x] confirm End Stream clears Bluesky `Live Now`
 - [x] confirm destination-level End Stream posting can be enabled or disabled independently per destination
@@ -55,12 +55,13 @@ Ship StreamSignal in a way that is:
   - Release Build run `26802453873` created the app bundle successfully on `macos-latest`.
 - [x] produce a macOS DMG from the CI-built `.app` bundle
   - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
-  - The planned release artifact name is `StreamSignal-0.1.0-macos-universal.dmg`.
-  - Release Build run `26802453873` uploaded artifact `streamsignal-0.1.0-macos-universal-dmg` at 12,540,884 bytes.
+  - The planned release artifact name is `StreamSignal-0.2.0-macos-universal.dmg`.
+  - Previous `0.1.0` Release Build run `26802453873` uploaded a macOS DMG artifact successfully.
+  - A fresh `0.2.0` release-build run still needs to validate the final artifact size and packaging output.
   - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
 - [ ] verify macOS app signing, notarization, and Gatekeeper behavior
 - [x] validate installer metadata, icon, and version information
-  - Installer and app executable metadata are set to `DRDohr`, `StreamSignal`, and `0.1.0`.
+  - Installer and app executable metadata are set to `DRDohr`, `StreamSignal`, and `0.2.0`.
   - The app executable reports populated Windows Details fields through `FileVersionInfo` and direct Win32 version-resource lookup.
 - [ ] verify install path behavior on a clean Windows machine or VM
   - Silent temp-directory install succeeded at `C:\Users\Don\AppData\Local\Temp\StreamSignalInstallTest`.
@@ -68,10 +69,11 @@ Ship StreamSignal in a way that is:
 - [x] verify first launch after install succeeds without manual setup steps
 - [ ] verify upgrade behavior from one build to the next
 - [x] decide how release artifacts will be attached to GitHub releases
-  - The Release Build workflow uploads `StreamSignal-0.1.0-windows-amd64-installer.exe` and `StreamSignal-0.1.0-macos-universal.dmg` as workflow artifacts.
+  - The Release Build workflow uploads `StreamSignal-0.2.0-windows-amd64-installer.exe` and `StreamSignal-0.2.0-macos-universal.dmg` as workflow artifacts.
   - On `v*` tag pushes, the Release Build workflow creates a GitHub Release and attaches both artifacts.
   - Manual dispatch can publish a guarded draft/prerelease by setting `publish_release` to `true`.
-  - Release Build run `26802453873` uploaded artifact `streamsignal-0.1.0-windows-amd64-installer` at 8,000,959 bytes.
+  - Previous `0.1.0` Release Build run `26802453873` uploaded a Windows installer artifact successfully.
+  - A fresh `0.2.0` release-build run still needs to validate the final artifact size and packaging output.
 
 ## Secrets And Local Security
 
@@ -106,14 +108,12 @@ Ship StreamSignal in a way that is:
 ## CI And Maintenance
 
 - [x] keep the GitHub quality gate green on `main`
-- [x] validate the Release Build workflow on a tag or manual dispatch
-  - Manual dispatch for version `0.1.0` completed successfully in Release Build run `26802453873`.
-  - Windows Installer and macOS DMG jobs both completed successfully.
-- [x] validate GitHub Release creation with attached Windows and macOS artifacts
-  - Manual dispatch run `26803097005` created a draft `StreamSignal 0.1.0` release with `prerelease` set to `false`.
-  - The draft release attached `StreamSignal-0.1.0-windows-amd64-installer.exe` at 8,033,486 bytes and `StreamSignal-0.1.0-macos-universal.dmg` at 12,589,691 bytes.
-  - The test draft release was deleted after validation, and no `v0.1.0` tag ref remained.
-  - Tag push run `26803575479` created public release `v0.1.0` with both final artifacts attached.
+- [ ] validate the Release Build workflow for `0.2.0` on a tag or manual dispatch
+  - Previous `0.1.0` manual dispatch completed successfully in Release Build run `26802453873`.
+  - Windows Installer and macOS DMG jobs both completed successfully in the previous release path.
+- [ ] validate GitHub Release creation with attached Windows and macOS artifacts for `0.2.0`
+  - Previous `0.1.0` draft-release and tag-push paths were validated successfully.
+  - For `0.2.0`, run a guarded manual dispatch first or create tag `v0.2.0` when ready to publish.
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly

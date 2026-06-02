@@ -6,7 +6,7 @@ on:
       version:
         description: Release version without a leading v
         required: true
-        default: 0.1.0
+        default: 0.2.0
       publish_release:
         description: Create a GitHub Release after the artifacts build
         type: boolean
