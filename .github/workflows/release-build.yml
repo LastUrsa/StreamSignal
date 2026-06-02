@@ -1,0 +1,159 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without a leading v
+        required: true
+        default: 0.1.0
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  windows-installer:
+    name: Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set release version
+        id: version
+        shell: pwsh
+        run: |
+          $eventName = '${{ github.event_name }}'
+          $refName = '${{ github.ref_name }}'
+          $inputVersion = '${{ github.event.inputs.version }}'
+
+          if ($eventName -eq 'workflow_dispatch' -and $inputVersion) {
+            $version = $inputVersion
+          } else {
+            $version = $refName -replace '^v', ''
+          }
+
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "release_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Install Wails CLI
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          "$env:USERPROFILE\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build Windows installer
+        run: wails build -platform windows/amd64 -nsis
+
+      - name: Name Windows installer artifact
+        shell: pwsh
+        run: |
+          $source = 'build\bin\StreamSignal-amd64-installer.exe'
+          $target = "build\bin\StreamSignal-$env:RELEASE_VERSION-windows-amd64-installer.exe"
+
+          if (!(Test-Path $source)) {
+            throw "Expected installer was not created at $source"
+          }
+
+          Copy-Item -Path $source -Destination $target
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamsignal-${{ steps.version.outputs.release_version }}-windows-amd64-installer
+          path: build/bin/StreamSignal-${{ steps.version.outputs.release_version }}-windows-amd64-installer.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-dmg:
+    name: macOS DMG
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set release version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${{ github.ref_name }}"
+            version="${version#v}"
+          fi
+
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Build macOS app bundle
+        run: wails build -platform darwin/universal
+
+      - name: Create macOS DMG
+        run: |
+          app_path="build/bin/StreamSignal.app"
+          dmg_path="build/bin/StreamSignal-${RELEASE_VERSION}-macos-universal.dmg"
+
+          if [ ! -d "$app_path" ]; then
+            echo "Expected app bundle was not created at $app_path" >&2
+            exit 1
+          fi
+
+          hdiutil create -volname "StreamSignal" -srcfolder "$app_path" -ov -format UDZO "$dmg_path"
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamsignal-${{ steps.version.outputs.release_version }}-macos-universal-dmg
+          path: build/bin/StreamSignal-${{ steps.version.outputs.release_version }}-macos-universal.dmg
+          if-no-files-found: error
+          retention-days: 14

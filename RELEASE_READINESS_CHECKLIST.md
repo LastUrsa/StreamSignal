@@ -52,8 +52,10 @@ Ship StreamSignal in a way that is:
 - [ ] produce a macOS app bundle on macOS with `wails build -platform darwin/universal`
   - Wails v2.12.0 reports that cross-compiling to Mac from Windows is not currently supported.
   - The macOS build needs a Mac runner or Mac tester with Xcode command line tools, Node, Go, and Wails installed.
+  - The Release Build workflow is configured to create this bundle on `macos-latest`; the first successful run still needs review.
 - [ ] produce a macOS DMG from the tested `.app` bundle
   - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
+  - The planned release artifact name is `StreamSignal-0.1.0-macos-universal.dmg`.
   - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
 - [ ] verify macOS app signing, notarization, and Gatekeeper behavior
 - [x] validate installer metadata, icon, and version information
@@ -65,6 +67,7 @@ Ship StreamSignal in a way that is:
 - [x] verify first launch after install succeeds without manual setup steps
 - [ ] verify upgrade behavior from one build to the next
 - [ ] decide how release artifacts will be attached to GitHub releases
+  - The Release Build workflow currently uploads `StreamSignal-0.1.0-windows-amd64-installer.exe` and `StreamSignal-0.1.0-macos-universal.dmg` as workflow artifacts.
 
 ## Secrets And Local Security
 
@@ -93,12 +96,14 @@ Ship StreamSignal in a way that is:
 - [x] keep `README.md` focused on install, run, test, quickstart, and project-doc entry points
 - [ ] keep `SECURITY.md` and `SECURITY_AUDIT.md` aligned with the current posture
 - [x] keep `TEST_VALIDATION.md` aligned with real CI expectations
-- [ ] add release notes guidance before the first public release
+- [x] add release notes guidance before the first public release
 - [ ] decide whether a dedicated user setup guide should be added
 
 ## CI And Maintenance
 
 - [x] keep the GitHub quality gate green on `main`
+- [ ] validate the Release Build workflow on a tag or manual dispatch
+  - The workflow is configured to build a Windows NSIS installer and macOS DMG, but the macOS runner output still needs a real run before it is considered proven.
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly

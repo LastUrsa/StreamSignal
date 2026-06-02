@@ -78,9 +78,11 @@ npm audit --prefix frontend
 
 ## Project Docs
 
+- [RELEASE_NOTES.md](./RELEASE_NOTES.md): release notes draft and artifact naming
 - [SECURITY.md](./SECURITY.md): vulnerability reporting policy
 - [SECURITY_AUDIT.md](./SECURITY_AUDIT.md): public-facing security posture summary
 - [INTEGRATION_LIMITATIONS.md](./INTEGRATION_LIMITATIONS.md): current platform integration constraints and boundaries
 - [TEST_VALIDATION.md](./TEST_VALIDATION.md): testing strategy and PR quality-gate guidance
 - [RELEASE_READINESS_CHECKLIST.md](./RELEASE_READINESS_CHECKLIST.md): release and packaging checklist for the next phase
+- [MACOS_RELEASE_TEST_PLAN.md](./MACOS_RELEASE_TEST_PLAN.md): macOS app, DMG, Keychain, and Gatekeeper validation plan
 - [.github/workflows/quality-gate.yml](./.github/workflows/quality-gate.yml): GitHub PR checks
