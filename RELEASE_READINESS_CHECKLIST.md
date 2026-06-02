@@ -47,10 +47,15 @@ Ship StreamSignal in a way that is:
 
 ## Packaging And Installer
 
-- [ ] produce a clean Windows release build with `wails build`
+- [x] produce a clean Windows release build with `wails build`
+- [x] produce a clean Windows NSIS installer with `wails build -platform windows/amd64 -nsis`
 - [ ] validate installer metadata, icon, and version information
+  - Installer metadata is set to `DRDohr`, `StreamSignal`, and `0.1.0`.
+  - App executable Windows details are still blank and need a Windows-resource follow-up before release.
 - [ ] verify install path behavior on a clean Windows machine or VM
-- [ ] verify first launch after install succeeds without manual setup steps
+  - Silent temp-directory install succeeded at `C:\Users\Don\AppData\Local\Temp\StreamSignalInstallTest`.
+  - Default Program Files install path still needs a clean-machine or VM pass.
+- [x] verify first launch after install succeeds without manual setup steps
 - [ ] verify upgrade behavior from one build to the next
 - [ ] decide how release artifacts will be attached to GitHub releases
 
@@ -59,7 +64,10 @@ Ship StreamSignal in a way that is:
 - [x] verify Windows Credential Manager entries are created, reused, and updated correctly
 - [x] verify secrets never appear in SQLite, logs, or diagnostics
 - [x] verify masked secret-edit UX works in release builds
-- [ ] verify uninstall behavior expectations for retained or removed secrets are documented
+- [x] verify uninstall behavior expectations for retained or removed secrets are documented
+  - The NSIS uninstaller removes the installed program directory.
+  - The current installer runs with admin/all-users shell context, while StreamSignal writes per-user config to `%APPDATA%\StreamSignal`.
+  - Uninstall currently retains per-user config, WebView2 profile data, and Windows Credential Manager entries.
 
 ## First-Run UX
 
@@ -92,7 +100,7 @@ Ship StreamSignal in a way that is:
 Before calling the app release-ready, confirm:
 
 - [ ] packaging is repeatable
-- [ ] installer behavior is understood
+- [x] installer behavior is understood
 - [x] first-run setup is documented
 - [x] usability and workflow validation are complete enough that the app can be trusted by a first-time real user
 - [ ] quality gate is green
