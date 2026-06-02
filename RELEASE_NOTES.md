@@ -35,11 +35,3 @@ The GitHub release build workflow uploads matching build artifacts and attaches 
 
 - `streamsignal-0.2.0-windows-amd64-installer`
 - `streamsignal-0.2.0-macos-universal-dmg`
-
-### Platform Notes
-
-- Windows stores secrets in Windows Credential Manager.
-- macOS stores secrets in macOS Keychain.
-- Windows installer metadata is set to `DRDohr`, `StreamSignal`, and version `0.2.0`.
-- The NSIS uninstaller removes the installed program directory. Per-user app config, WebView2 profile data, and Credential Manager entries are currently retained.
-- Wails v2.12.0 does not cross-compile macOS app bundles from Windows. The macOS `.app` and DMG must be built and validated on macOS.
