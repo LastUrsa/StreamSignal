@@ -6,7 +6,7 @@ Current product status:
 
 - Wails desktop shell, Go backend, and React + TypeScript frontend are all wired together
 - First-run setup and use has been validated end to end with real Discord, Bluesky, and Mastodon destinations
-- Preview, Go Live, End Stream, duplicate confirmation, and explicit production/test destinations are implemented and manually exercised
+- Preview, Go Live, End Stream, duplicate confirmation, and explicit production/test destination filtering are implemented and manually exercised
 - Discord, Bluesky, and Mastodon publishers are connected
 - Discord webhook posting has been manually validated, including selected-destination targeting, optional additional image embeds, and destination-level End Stream enablement
 - Bluesky posting has been validated with app-password auth, rich stream links, external cards, configurable `Live Now` duration, an opt-out for Live Status changes, End Stream clearing, and manual recovery if the app closes mid-stream
@@ -28,7 +28,7 @@ The current UI is a desktop-first creator control panel:
 - **Settings** contains application defaults, Live Now recovery, and platform legal notices.
 - **Logs** are available in debug builds for scan-first workflow diagnostics.
 
-Default Stream URL may prefill a fresh Home session. If the user edits or clears the Home Stream URL field, that session value is respected for preview and publish actions.
+Default Stream URL and Default Hashtags may prefill a fresh Home session. If the user edits or clears either Home field, that session value is respected for preview and publish actions.
 
 ## Quickstart
 
@@ -38,7 +38,7 @@ Default Stream URL may prefill a fresh Home session. If the user edits or clears
    - **Bluesky**: create a Bluesky app password, enter the account identifier and app password, then choose whether StreamSignal should change Bluesky Live Status during Go Live.
    - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
 3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags.
-4. Use **Send To** to choose which destinations are included in the current session.
+4. Use **Destinations** on Home to filter by **All**, **Production**, or **Test**, then choose which destinations are included in the current session.
 5. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
 6. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
 7. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.

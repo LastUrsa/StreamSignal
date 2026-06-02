@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestNormalizeAnnouncementUsesHashtagDefaultOnly(t *testing.T) {
+func TestNormalizeAnnouncementDoesNotApplyHiddenDefaults(t *testing.T) {
 	input := Announcement{
 		StreamTitle: "Going Live",
 	}
@@ -19,8 +19,8 @@ func TestNormalizeAnnouncementUsesHashtagDefaultOnly(t *testing.T) {
 	if normalized.StreamURL != "" {
 		t.Fatalf("expected stream url to remain under Home control, got %q", normalized.StreamURL)
 	}
-	if normalized.Hashtags != settings.DefaultHashtags {
-		t.Fatalf("expected default hashtags %q, got %q", settings.DefaultHashtags, normalized.Hashtags)
+	if normalized.Hashtags != "" {
+		t.Fatalf("expected hashtags to remain under Home control, got %q", normalized.Hashtags)
 	}
 }
 

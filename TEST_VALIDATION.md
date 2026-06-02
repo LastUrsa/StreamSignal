@@ -10,7 +10,7 @@ Release-candidate quality gate checked on June 2, 2026:
 
 - `GOCACHE=/tmp/go-build-cache go test ./...`: passed locally
 - `GOCACHE=/tmp/go-build-cache go vet ./...`: passed locally
-- `npm test --prefix frontend`: passed locally with 3 test files and 51 tests
+- `npm test --prefix frontend`: passed locally with 3 test files and 53 tests
 - `npm run build --prefix frontend`: passed locally
 - `npm audit --prefix frontend`: passed locally with 0 vulnerabilities
 - `GOCACHE=/tmp/go-build-cache govulncheck ./...`: passed locally with no called vulnerabilities found after upgrading `golang.org/x/net` to `v0.38.0`
@@ -95,6 +95,8 @@ The `ui-update` pass added or updated coverage for:
 - destination quick actions, guided setup, advanced-section defaults, and token insertion
 - collapsible generated previews
 - default Stream URL prefill behavior that respects a user-cleared Home field
+- default Hashtags prefill behavior that respects a user-cleared Home field
+- Home destination environment filtering for All, Production, and Test workflow scopes
 - Discord/Mastodon link-preview metadata attachment in backend preview generation
 - platform logo/fallback rendering and platform legal notice visibility
 - newest-first log ordering and scan-friendly log cards

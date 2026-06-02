@@ -18,11 +18,7 @@ var platformCharacterLimits = map[DestinationPlatform]int{
 }
 
 func NormalizeAnnouncement(input Announcement, settings AppSettings) Announcement {
-	normalized := input
-	if strings.TrimSpace(normalized.Hashtags) == "" {
-		normalized.Hashtags = strings.TrimSpace(settings.DefaultHashtags)
-	}
-	return normalized
+	return input
 }
 
 func ValidateAnnouncement(input Announcement) []string {
