@@ -1,6 +1,29 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, type ComponentType, type SVGProps, useEffect, useRef, useState } from 'react';
+import {
+    Activity,
+    ClipboardList,
+    Copy,
+    ExternalLink,
+    FileText,
+    Home,
+    ListChecks,
+    Play,
+    Radio,
+    RefreshCw,
+    RotateCcw,
+    Send,
+    Settings,
+    ShieldAlert,
+    Square,
+    Trash2,
+    Wrench,
+    Zap,
+} from 'lucide-react';
 import './App.css';
 import streamSignalIcon from './assets/images/streamsignal-icon.png';
+import blueskyLogo from './assets/platforms/bluesky.svg';
+import discordLogo from './assets/platforms/discord.svg';
+import mastodonLogo from './assets/platforms/mastodon.svg';
 import {
     clearPendingLiveNowSession,
     deleteDestination,
@@ -39,6 +62,8 @@ type TabKey = 'home' | 'destinations' | 'settings' | 'logs';
 
 const STORED_SECRET_TOKEN = '[stored securely]';
 const SHOW_DEBUG_WORKFLOW_UI = import.meta.env.DEV || import.meta.env.MODE === 'debug';
+const TAB_KEYS: TabKey[] = ['home', 'destinations', 'settings', 'logs'];
+const PRODUCTION_TAB_KEYS: TabKey[] = ['home', 'destinations', 'settings'];
 
 const initialAnnouncement: AnnouncementInput = {
     streamTitle: '',
@@ -73,6 +98,15 @@ type WorkflowToast = {
 type LogCategoryFilter = 'all' | 'execution' | 'destinations' | 'settings' | 'preview';
 type LogStatusFilter = 'all' | 'failed' | 'validation' | 'warning' | 'success';
 
+type SidebarItem = {
+    key: TabKey;
+    label: string;
+    icon: ComponentType<SVGProps<SVGSVGElement>>;
+    badge?: number;
+};
+
+type StatusTone = 'success' | 'failed' | 'warning' | 'validation' | 'skipped' | 'pending' | 'idle';
+
 const LOG_CATEGORY_FILTERS: Array<{ value: LogCategoryFilter; label: string }> = [
     { value: 'all', label: 'All' },
     { value: 'execution', label: 'Execution' },
@@ -88,6 +122,74 @@ const LOG_STATUS_FILTERS: Array<{ value: LogStatusFilter; label: string }> = [
     { value: 'warning', label: 'Warning' },
     { value: 'success', label: 'Success' },
 ];
+
+const LEGAL_NOTICE =
+    'StreamSignal is an independent tool and is not affiliated with, endorsed by, or sponsored by Discord, Bluesky, Mastodon, or any Mastodon server operator. Platform names and logos are used only to identify supported integrations.';
+
+// Keep platform logos unmodified and limited to integration-identification UI.
+const PLATFORM_LOGOS: Record<string, string> = {
+    discord: discordLogo,
+    bluesky: blueskyLogo,
+    mastodon: mastodonLogo,
+};
+
+function platformLabel(platform: string) {
+    switch (platform.toLowerCase()) {
+        case 'discord':
+            return 'Discord';
+        case 'bluesky':
+            return 'Bluesky';
+        case 'mastodon':
+            return 'Mastodon';
+        default:
+            return platform || 'Destination';
+    }
+}
+
+function PlatformIcon({ platform, className = '' }: { platform: string; className?: string }) {
+    const logo = PLATFORM_LOGOS[platform.toLowerCase()];
+    if (logo) {
+        return <img src={logo} alt="" className={`platform-icon ${className}`} aria-hidden="true" />;
+    }
+    return <Radio className={`platform-icon platform-icon-fallback ${className}`} aria-hidden="true" />;
+}
+
+function statusTone(status: string | null | undefined): StatusTone {
+    const normalized = String(status ?? '').toLowerCase();
+    if (normalized === 'success' || normalized === 'valid') {
+        return 'success';
+    }
+    if (normalized === 'warning' || normalized === 'partial') {
+        return 'warning';
+    }
+    if (normalized === 'validation' || normalized === 'validation_error' || normalized === 'invalid') {
+        return 'validation';
+    }
+    if (normalized === 'failed' || normalized === 'error') {
+        return 'failed';
+    }
+    if (normalized === 'skipped') {
+        return 'skipped';
+    }
+    if (normalized === 'pending') {
+        return 'pending';
+    }
+    return 'idle';
+}
+
+function StatusBadge({ status, label }: { status: string | null | undefined; label?: string }) {
+    const tone = statusTone(status);
+    return <span className={`status-badge status-${tone}`}>{label ?? status ?? 'Idle'}</span>;
+}
+
+function inferLogPlatform(entry: LogEntry, destinations: DestinationInput[]) {
+    const destination = destinations.find((item) => item.name === entry.destination);
+    return destination?.platform ?? '';
+}
+
+function newestFirstLogs(entries: LogEntry[]) {
+    return [...entries].sort((left, right) => Date.parse(right.timestamp || '0') - Date.parse(left.timestamp || '0'));
+}
 
 function executionModeLabel(mode: ExecutionSummary['mode']) {
     switch (mode) {
@@ -201,6 +303,32 @@ function executionStatusMessage(summary: ExecutionSummary | null) {
     return null;
 }
 
+function publishStatusMessage(summary: ExecutionSummary | null) {
+    if (!summary) {
+        return 'Run Go Live or End Stream to see publish status.';
+    }
+
+    const action = executionModeLabel(summary.mode);
+    if (summary.status === 'SUCCESS') {
+        return `${action} completed successfully${summary.successCount > 0 ? ` for ${summary.successCount} destination${summary.successCount === 1 ? '' : 's'}` : ''}.`;
+    }
+    return executionStatusMessage(summary) ?? `${action} needs attention.`;
+}
+
+function shouldOpenExecutionDetails(summary: ExecutionSummary | null) {
+    if (!summary) {
+        return false;
+    }
+    return summary.status !== 'SUCCESS' || summary.failedCount > 0 || summary.validationErrorCount > 0 || summary.skippedCount > 0;
+}
+
+function shouldShowExecutionPanel(summary: ExecutionSummary | null, executionError: string | null, pendingConfirmation: boolean) {
+    if (executionError || pendingConfirmation) {
+        return true;
+    }
+    return shouldOpenExecutionDetails(summary);
+}
+
 function hasSecretValue(value: string) {
     return value.trim() !== '';
 }
@@ -233,10 +361,10 @@ function toMaskedDestinationForm(form: DestinationFormState): DestinationFormSta
     };
 }
 
-function applyAnnouncementDefaults(announcement: AnnouncementInput, settings: AppSettings): AnnouncementInput {
+function applyAnnouncementDefaults(announcement: AnnouncementInput, settings: AppSettings, prefillStreamURL = false): AnnouncementInput {
     return {
         ...announcement,
-        streamURL: announcement.streamURL.trim() === '' ? settings.defaultStreamURL : announcement.streamURL,
+        streamURL: prefillStreamURL && announcement.streamURL.trim() === '' ? settings.defaultStreamURL : announcement.streamURL,
         hashtags: announcement.hashtags.trim() === '' ? settings.defaultHashtags : announcement.hashtags,
     };
 }
@@ -340,57 +468,57 @@ function guidedSetupSteps(platform: DestinationInput['platform']): GuidedSetupSt
         case 'discord':
             return [
                 {
-                    title: 'Step 1: Create and name a channel webhook',
+                    title: 'Create and name a channel webhook',
                     detail: 'In Discord, open Server Settings > Integrations > Webhooks, create a webhook for your go-live channel, and name it StreamSignal or the messenger name you want shown in chat.',
                 },
                 {
-                    title: 'Step 2: Paste the webhook URL below',
+                    title: 'Paste the webhook URL below',
                     detail: 'Copy the full webhook URL into StreamSignal. Messages sent through this destination will appear in Discord as the webhook app/bot you named.',
                 },
                 {
-                    title: 'Step 3: Test before saving',
+                    title: 'Test before saving',
                     detail: 'Use Test Connection to confirm the webhook responds before you save this destination.',
                 },
             ];
         case 'bluesky':
             return [
                 {
-                    title: 'Step 1: Create an app password',
+                    title: 'Create an app password',
                     detail: 'In Bluesky, open Settings > Privacy and Security > App Passwords, create one for StreamSignal, and copy it once.',
                 },
                 {
-                    title: 'Step 2: Enter your handle and app password',
+                    title: 'Enter your handle and app password',
                     detail: 'Use the Bluesky handle or account identifier for the account that should post and set Live Now.',
                 },
                 {
-                    title: 'Step 3: Test login before saving',
+                    title: 'Test login before saving',
                     detail: 'Test Connection signs in with the app password so you know the account can be reached before you depend on it.',
                 },
             ];
         case 'mastodon':
             return [
                 {
-                    title: 'Step 1: Open your Mastodon instance',
+                    title: 'Open your Mastodon instance',
                     detail: 'Sign in to the account StreamSignal should post from, then open Preferences > Development. On some instances this is under Settings > Development.',
                 },
                 {
-                    title: 'Step 2: Create a new application',
+                    title: 'Create a new application',
                     detail: 'Name it StreamSignal. If Mastodon asks for a website, you can leave it blank or use your stream/profile URL.',
                 },
                 {
-                    title: 'Step 3: Set the redirect URI',
+                    title: 'Set the redirect URI',
                     detail: 'Use urn:ietf:wg:oauth:2.0:oob if the field is required. StreamSignal only needs a manually copied access token and does not run an OAuth redirect server.',
                 },
                 {
-                    title: 'Step 4: Choose scopes',
+                    title: 'Choose scopes',
                     detail: 'Enable write:statuses so StreamSignal can publish posts. If your instance requires account verification for token testing, also enable read:accounts.',
                 },
                 {
-                    title: 'Step 5: Copy the access token',
+                    title: 'Copy the access token',
                     detail: 'After saving the application, copy the generated access token. Paste the full instance URL, like https://mastodon.social, and the access token into StreamSignal.',
                 },
                 {
-                    title: 'Step 6: Test before saving',
+                    title: 'Test before saving',
                     detail: 'Test Connection checks the token against your Mastodon account so invalid, expired, or under-scoped tokens fail early.',
                 },
             ];
@@ -431,7 +559,11 @@ function endStreamActionHint(postCount: number, liveNowClearCount: number) {
 }
 
 function App() {
-    const [selectedTab, setSelectedTab] = useState<TabKey>('home');
+    const [selectedTab, setSelectedTab] = useState<TabKey>(() => {
+        const requestedView = new URLSearchParams(window.location.search).get('view');
+        const availableTabs = SHOW_DEBUG_WORKFLOW_UI ? TAB_KEYS : PRODUCTION_TAB_KEYS;
+        return availableTabs.includes(requestedView as TabKey) ? (requestedView as TabKey) : 'home';
+    });
 
     const [announcement, setAnnouncement] = useState<AnnouncementInput>(initialAnnouncement);
     const [selectedDestinationIDs, setSelectedDestinationIDs] = useState<string[]>([]);
@@ -459,7 +591,6 @@ function App() {
     const [destinationConnectionResult, setDestinationConnectionResult] = useState<CredentialCheckResult | null>(null);
     const [destinationConnectionLoading, setDestinationConnectionLoading] = useState(false);
     const [destinationHelperStatus, setDestinationHelperStatus] = useState<string | null>(null);
-    const [showGuidedSetup, setShowGuidedSetup] = useState(false);
 
     const [settings, setSettings] = useState<AppSettings>(defaultSettings);
     const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -471,11 +602,15 @@ function App() {
     const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null);
     const [workflowToast, setWorkflowToast] = useState<WorkflowToast | null>(null);
     const initializedSelection = useRef(false);
+    const streamURLTouched = useRef(false);
     const workflowToastTimeout = useRef<number | null>(null);
     const discordThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyAdditionalImageInputRef = useRef<HTMLInputElement | null>(null);
     const mastodonAdditionalImageInputRef = useRef<HTMLInputElement | null>(null);
+    const templateInputRef = useRef<HTMLTextAreaElement | null>(null);
+    const endStreamTemplateInputRef = useRef<HTMLTextAreaElement | null>(null);
+    const activeTemplateInputRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
         void refreshDestinations();
@@ -519,7 +654,7 @@ function App() {
         try {
             const current = await getSettings();
             setSettings(current);
-            setAnnouncement((existing) => applyAnnouncementDefaults(existing, current));
+            setAnnouncement((existing) => applyAnnouncementDefaults(existing, current, !streamURLTouched.current));
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to load settings.');
             setSettingsError(message);
@@ -605,6 +740,7 @@ function App() {
             }
             setPendingGoLiveConfirmation(false);
             setExecutionSummary(summary);
+            showToast(publishStatusMessage(summary), summary.status === 'SUCCESS' ? 'success' : 'warning');
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to run execution.');
             setExecutionError(message);
@@ -622,6 +758,7 @@ function App() {
             const summary = await forceGoLive(announcement, selectedDestinationIDs);
             setPendingGoLiveConfirmation(false);
             setExecutionSummary(summary);
+            showToast(publishStatusMessage(summary), summary.status === 'SUCCESS' ? 'success' : 'warning');
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to confirm Go Live.');
             setExecutionError(message);
@@ -644,6 +781,7 @@ function App() {
 
             const summary = await endStream(announcement, selectedDestinationIDs);
             setExecutionSummary(summary);
+            showToast(publishStatusMessage(summary), summary.status === 'SUCCESS' ? 'success' : 'warning');
             await refreshPendingLiveNowSessions();
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to end stream.');
@@ -730,6 +868,29 @@ function App() {
         }
     }
 
+    function editDestination(destination: DestinationInput) {
+        const form = toDestinationFormState(destination);
+        setDestinationSecrets(destinationSecretCacheFrom(form));
+        setDestinationForm(toMaskedDestinationForm(form));
+        setDestinationConnectionResult(null);
+        setDestinationHelperStatus(null);
+    }
+
+    function duplicateDestination(destination: DestinationInput) {
+        const form = toDestinationFormState(destination);
+        const duplicateForm: DestinationFormState = {
+            ...form,
+            id: '',
+            name: `${form.name || platformLabel(form.platform)} Copy`,
+            createdAt: '',
+            updatedAt: '',
+        };
+        setDestinationSecrets(destinationSecretCacheFrom(form));
+        setDestinationForm(toMaskedDestinationForm(duplicateForm));
+        setDestinationConnectionResult(null);
+        setDestinationHelperStatus('Duplicate ready. Review connection details, then save it as a new destination.');
+    }
+
     async function onTestDestinationConnection() {
         setDestinationError(null);
         setDestinationStatus(null);
@@ -753,6 +914,50 @@ function App() {
             setDestinationError(message);
         } finally {
             setDestinationConnectionLoading(false);
+        }
+    }
+
+    async function onTestSavedDestination(destination: DestinationInput) {
+        setDestinationError(null);
+        setDestinationStatus(null);
+        setDestinationConnectionResult(null);
+        setDestinationConnectionLoading(true);
+        editDestination(destination);
+
+        try {
+            const result = await testDestinationConnection(destination);
+            setDestinationConnectionResult(result);
+            if (result.state === 'SUCCESS') {
+                showToast(result.message);
+            }
+        } catch (err: unknown) {
+            const message = errorMessage(err, 'Unable to test destination connection.');
+            setDestinationError(message);
+        } finally {
+            setDestinationConnectionLoading(false);
+        }
+    }
+
+    async function onDeleteSavedDestination(destination: DestinationInput) {
+        setDestinationError(null);
+        setDestinationStatus(null);
+
+        try {
+            await deleteDestination(destination.id);
+            if (destinationForm.id === destination.id) {
+                setDestinationForm(createEmptyDestinationForm(destination.platform));
+                setDestinationSecrets({
+                    discordWebhookKey: '',
+                    blueskyCredentialKey: '',
+                    mastodonCredentialKey: '',
+                });
+            }
+            setSelectedDestinationIDs((current) => current.filter((id) => id !== destination.id));
+            showToast('Destination deleted.');
+            await refreshDestinations();
+        } catch (err: unknown) {
+            const message = errorMessage(err, 'Unable to delete destination.');
+            setDestinationError(message);
         }
     }
 
@@ -791,7 +996,7 @@ function App() {
         try {
             const saved = await saveSettings(settings);
             setSettings(saved);
-            setAnnouncement((existing) => applyAnnouncementDefaults(existing, saved));
+            setAnnouncement((existing) => applyAnnouncementDefaults(existing, saved, !streamURLTouched.current));
             setSettingsStatus(null);
             showToast('Settings saved.');
         } catch (err: unknown) {
@@ -820,6 +1025,9 @@ function App() {
     }
 
     function updateAnnouncement<K extends keyof AnnouncementInput>(field: K, value: AnnouncementInput[K]) {
+        if (field === 'streamURL') {
+            streamURLTouched.current = true;
+        }
         setAnnouncement((current) => ({
             ...current,
             [field]: value,
@@ -995,18 +1203,24 @@ function App() {
         }
     }
 
-    async function onCopyTemplateVariable(variable: string) {
+    function insertTemplateVariable(variable: string) {
         setDestinationHelperStatus(null);
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(variable);
-                setDestinationHelperStatus(`Copied ${variable}`);
-                return;
-            }
-            setDestinationHelperStatus('Clipboard is unavailable in this environment.');
-        } catch (err: unknown) {
-            const message = errorMessage(err, 'Unable to copy template variable.');
-            setDestinationHelperStatus(message);
+        const target = activeTemplateInputRef.current ?? templateInputRef.current;
+        const field = target === endStreamTemplateInputRef.current ? 'endStreamTemplate' : 'template';
+        const currentValue = field === 'endStreamTemplate' ? destinationForm.endStreamTemplate : destinationForm.template;
+        const start = target?.selectionStart ?? currentValue.length;
+        const end = target?.selectionEnd ?? currentValue.length;
+        const nextValue = `${currentValue.slice(0, start)}${variable}${currentValue.slice(end)}`;
+
+        updateDestination(field, nextValue);
+        setDestinationHelperStatus(`Inserted ${variable}`);
+
+        if (target) {
+            window.requestAnimationFrame(() => {
+                target.focus();
+                const nextCursor = start + variable.length;
+                target.setSelectionRange(nextCursor, nextCursor);
+            });
         }
     }
 
@@ -1029,1203 +1243,327 @@ function App() {
     const selectedDestinations = destinations.filter((destination) => selectedDestinationIDSet.has(destination.id));
     const selectedEndStreamPostCount = selectedDestinations.filter((destination) => toDestinationFormState(destination).endStreamEnabled).length;
     const selectedLiveNowClearCount = pendingLiveNowSessions.filter((session) => selectedDestinationIDSet.has(session.destinationID)).length;
-    const filteredLogs = logs.filter((entry) => {
+    const sortedLogs = newestFirstLogs(logs);
+    const filteredLogs = sortedLogs.filter((entry) => {
         const matchesCategory = logCategoryFilter === 'all' || logCategoryForAction(entry.action) === logCategoryFilter;
         return matchesCategory && logMatchesStatusFilter(entry, logStatusFilter);
     });
+    const recentActivity = filteredLogs.slice(0, 4);
+    const sidebarItems: SidebarItem[] = [
+        { key: 'home', label: 'Home', icon: Home },
+        { key: 'destinations', label: 'Destinations', icon: Radio },
+        ...(SHOW_DEBUG_WORKFLOW_UI ? [{ key: 'logs' as const, label: 'Logs', icon: Activity }] : []),
+        { key: 'settings', label: 'Settings', icon: Settings, badge: pendingLiveNowSessions.length },
+    ];
+
+    const previewDestinationFor = (item: PreviewItem) => destinations.find((destination) => destination.id === item.destinationID);
+
+    const previewImageSource = (dataURL: string, url: string) => dataURL.trim() || url.trim();
+
+    const renderLinkPreviewCard = (item: PreviewItem, label: string) => {
+        if (!item.linkPreview) {
+            return null;
+        }
+
+        return (
+            <section className="platform-preview platform-preview-card" aria-label={`${label} link preview`}>
+                <strong>{label}</strong>
+                <div className={item.linkPreview.imageURL ? 'platform-link-card has-image' : 'platform-link-card'}>
+                    {item.linkPreview.imageURL ? <img src={item.linkPreview.imageURL} alt="" /> : null}
+                    <div>
+                        <span>{item.linkPreview.title || item.linkPreview.url}</span>
+                        {item.linkPreview.description ? <p>{item.linkPreview.description}</p> : null}
+                        <small>{item.linkPreview.siteName || item.linkPreview.url}</small>
+                    </div>
+                </div>
+            </section>
+        );
+    };
+
+    const renderPlatformPreview = (item: PreviewItem) => {
+        const destination = previewDestinationFor(item);
+        if (!destination) {
+            return null;
+        }
+
+        const form = toDestinationFormState(destination);
+        const platform = item.platform.toLowerCase();
+        const discordImage = platform === 'discord' ? previewImageSource(form.discordCardThumbnailDataURL, form.discordCardThumbnailURL) : '';
+        const blueskyCardImage = platform === 'bluesky' ? previewImageSource(form.blueskyCardThumbnailDataURL, form.blueskyCardThumbnailURL) : '';
+        const blueskyAttachedImage = platform === 'bluesky' ? previewImageSource(form.blueskyAdditionalImageDataURL, form.blueskyAdditionalImageURL) : '';
+        const mastodonImage = platform === 'mastodon' ? previewImageSource(form.mastodonAdditionalImageDataURL, form.mastodonAdditionalImageURL) : '';
+
+        if (platform === 'discord' && item.linkPreview) {
+            return (
+                <div className="platform-preview-stack">
+                    {renderLinkPreviewCard(item, 'Approximate Discord Link Preview')}
+                    {discordImage ? (
+                        <section className="platform-preview platform-preview-discord" aria-label="Configured Discord image embed preview">
+                            <strong>Configured Image Embed</strong>
+                            <img src={discordImage} alt="" />
+                        </section>
+                    ) : null}
+                </div>
+            );
+        }
+
+        if (platform === 'discord' && discordImage) {
+            return (
+                <section className="platform-preview platform-preview-discord" aria-label="Approximate Discord preview">
+                    <strong>Approximate Preview</strong>
+                    <img src={discordImage} alt="" />
+                </section>
+            );
+        }
+
+        if (platform === 'bluesky' && announcement.streamURL.trim()) {
+            return (
+                <section className="platform-preview platform-preview-card" aria-label="Approximate Bluesky preview">
+                    <strong>Approximate Preview</strong>
+                    <div className={blueskyCardImage ? 'platform-link-card has-image' : 'platform-link-card'}>
+                        {blueskyCardImage ? <img src={blueskyCardImage} alt="" /> : null}
+                        <div>
+                            <span>{announcement.streamTitle.trim() || 'Stream link'}</span>
+                            <p>{announcement.message.trim() || announcement.streamURL}</p>
+                            <small>{announcement.streamURL}</small>
+                        </div>
+                    </div>
+                </section>
+            );
+        }
+
+        if (platform === 'bluesky' && blueskyAttachedImage) {
+            return (
+                <section className="platform-preview" aria-label="Approximate Bluesky image preview">
+                    <strong>Approximate Preview</strong>
+                    <img src={blueskyAttachedImage} alt="" />
+                </section>
+            );
+        }
+
+        if (platform === 'mastodon' && item.linkPreview) {
+            return (
+                <div className="platform-preview-stack">
+                    {renderLinkPreviewCard(item, 'Approximate Mastodon Link Preview')}
+                    {mastodonImage ? (
+                        <section className="platform-preview" aria-label="Configured Mastodon image attachment preview">
+                            <strong>Configured Image Attachment</strong>
+                            <img src={mastodonImage} alt="" />
+                        </section>
+                    ) : null}
+                </div>
+            );
+        }
+
+        if (platform === 'mastodon' && mastodonImage) {
+            return (
+                <section className="platform-preview" aria-label="Approximate Mastodon image preview">
+                    <strong>Approximate Preview</strong>
+                    <img src={mastodonImage} alt="" />
+                </section>
+            );
+        }
+
+        return null;
+    };
+
+    const renderPreviewItem = (item: PreviewItem) => (
+        <details key={`${item.destinationID}-${item.previewLabel || 'preview'}`} className="preview-card preview-disclosure">
+            <summary className="preview-summary">
+                <span className="entity-row">
+                    <PlatformIcon platform={item.platform} />
+                    <span>
+                        <strong>{item.destinationName}</strong>
+                        <small>{item.previewLabel || 'Preview'} · {platformLabel(item.platform)}</small>
+                    </span>
+                </span>
+                <span className="preview-summary-meta">
+                    <span>{item.characterCount} chars</span>
+                    {item.validationNotes.length > 0 ? <span>{item.validationNotes.length} notes</span> : null}
+                    <StatusBadge status={item.validationState} label={item.validationState} />
+                </span>
+            </summary>
+            <div className="preview-body">
+                <pre className="preview-content">{item.content || '(empty content)'}</pre>
+                {renderPlatformPreview(item)}
+                {item.validationNotes.length > 0 ? <ul className="note-list">{item.validationNotes.map((note) => <li key={note}>{note}</li>)}</ul> : <p className="success-copy">Ready from a validation standpoint.</p>}
+            </div>
+        </details>
+    );
+
+    const renderExecutionPanel = () => {
+        if (!shouldShowExecutionPanel(executionSummary, executionError, pendingGoLiveConfirmation)) {
+            return null;
+        }
+
+        const detailsOpen = shouldOpenExecutionDetails(executionSummary);
+        const statusClass = executionError ? 'publish-status-card status-error' : executionSummary?.status === 'SUCCESS' ? 'publish-status-card status-success' : executionSummary ? 'publish-status-card status-warning' : 'publish-status-card';
+
+        return (
+            <article className="panel dashboard-panel">
+                <div className="panel-header compact-header">
+                    <div>
+                        
+                        <h2>Publish Status</h2>
+                    </div>
+                    <StatusBadge status={executionSummary?.status ?? 'idle'} label={executionSummary?.status ?? 'Idle'} />
+                </div>
+                {executionError ? <p className="error-banner">{executionError}</p> : null}
+                <section className={statusClass}>
+                    <div>
+                        <strong>{executionSummary ? executionModeLabel(executionSummary.mode) : 'Ready'}</strong>
+                        <p>{executionError ?? publishStatusMessage(executionSummary)}</p>
+                    </div>
+                </section>
+                {pendingGoLiveConfirmation ? (
+                    <div className="warning-banner stacked-callout">
+                        <p>{executionSummary?.duplicateWarningMessage}</p>
+                        <button type="button" className="primary-button gold-button" onClick={() => void onConfirmGoLive()} disabled={executionLoading !== null}>
+                            {executionLoading === 'go_live' ? 'Confirming...' : 'Confirm Go Live'}
+                        </button>
+                    </div>
+                ) : null}
+                {!executionSummary || executionSummary.results.length === 0 ? (
+                    <div className="empty-state compact-empty-state">
+                        <h3>No publish results yet</h3>
+                        <p>Run Go Live or End Stream to see destination status.</p>
+                    </div>
+                ) : (
+                    <details className="result-details" open={detailsOpen}>
+                        <summary>
+                            <span>Details</span>
+                            <small>{executionSummary.results.length} destination{executionSummary.results.length === 1 ? '' : 's'}</small>
+                        </summary>
+                        <div className="compact-list">
+                            {executionSummary.results.map((result) => (
+                                <section className="activity-card" key={`${result.destinationID}-${result.state}-${result.message}`}>
+                                    <PlatformIcon platform={result.platform} />
+                                    <div>
+                                        <strong>{result.destinationName}</strong>
+                                        <p className="log-context">{executionResultKind(executionSummary.mode, result.message)} · {result.platform}</p><p>{result.message}</p>
+                                        {result.content ? <p className="log-content-preview">{result.content}</p> : null}
+                                    </div>
+                                    <StatusBadge status={result.state} />
+                                </section>
+                            ))}
+                        </div>
+                    </details>
+                )}
+            </article>
+        );
+    };
+
+    const renderPlatformConnectionFields = () => (
+        <>
+            {destinationForm.platform === 'discord' ? (
+                <div className="form-grid">
+                    <label className="field">
+                        <span>Server Name</span>
+                        <input aria-label="Server Name" value={destinationForm.discordServerName} onChange={(event) => updateDestination('discordServerName', event.target.value)} placeholder="My Discord Server" />
+                    </label>
+                    <label className="field">
+                        <span>Channel Name</span>
+                        <input aria-label="Channel Name" value={destinationForm.discordChannelName} onChange={(event) => updateDestination('discordChannelName', event.target.value)} placeholder="go-live" />
+                    </label>
+                    <label className="field panel-wide">
+                        <span>Webhook URL</span>
+                        <input aria-label="Webhook URL" value={destinationForm.discordWebhookKey} onChange={(event) => updateDestination('discordWebhookKey', event.target.value)} placeholder="https://discord.com/api/webhooks/..." />
+                    </label>
+                </div>
+            ) : null}
+            {destinationForm.platform === 'bluesky' ? (
+                <div className="form-grid">
+                    <label className="field">
+                        <span>Account Identifier</span>
+                        <input aria-label="Account Identifier" value={destinationForm.blueskyAccountIdentifier} onChange={(event) => updateDestination('blueskyAccountIdentifier', event.target.value)} placeholder="handle.bsky.social" />
+                    </label>
+                    <label className="field">
+                        <span>App Password</span>
+                        <input aria-label="App Password" value={destinationForm.blueskyCredentialKey} onChange={(event) => updateDestination('blueskyCredentialKey', event.target.value)} placeholder="Paste Bluesky app password" />
+                    </label>
+                </div>
+            ) : null}
+            {destinationForm.platform === 'mastodon' ? (
+                <div className="form-grid">
+                    <label className="field">
+                        <span>Account Identifier</span>
+                        <input aria-label="Mastodon Account Identifier" value={destinationForm.mastodonAccountIdentifier} onChange={(event) => updateDestination('mastodonAccountIdentifier', event.target.value)} placeholder="@streamer@mastodon.social" />
+                    </label>
+                    <label className="field">
+                        <span>Instance URL</span>
+                        <input aria-label="Instance URL" value={destinationForm.mastodonInstanceURL} onChange={(event) => updateDestination('mastodonInstanceURL', event.target.value)} placeholder="https://mastodon.social" />
+                    </label>
+                    <label className="field">
+                        <span>Access Token</span>
+                        <input aria-label="Access Token" value={destinationForm.mastodonCredentialKey} onChange={(event) => updateDestination('mastodonCredentialKey', event.target.value)} placeholder="Paste Mastodon access token" />
+                    </label>
+                </div>
+            ) : null}
+        </>
+    );
+
+    const renderAdvancedFields = () => (
+        <details className="config-section" data-testid="destination-advanced-section">
+            <summary>
+                <span><Wrench aria-hidden="true" /> Advanced</span>
+                <small>Images, Live Now, and end stream options</small>
+            </summary>
+            <div className="config-section-body">
+                <section className="mini-panel template-helper-panel">
+                    <div className="template-helper-header">
+                        <h3>End Stream Message</h3>
+                        <label className="checkbox-field">
+                            <input type="checkbox" aria-label="End Stream Enabled" checked={destinationForm.endStreamEnabled} onChange={(event) => updateDestination('endStreamEnabled', event.target.checked)} />
+                            <span>Post when ending stream</span>
+                        </label>
+                    </div>
+                    <label className="field">
+                        <span>End Stream Template</span>
+                        <textarea ref={endStreamTemplateInputRef} aria-label="End Stream Template" value={destinationForm.endStreamTemplate} onFocus={() => { activeTemplateInputRef.current = endStreamTemplateInputRef.current; }} onChange={(event) => updateDestination('endStreamTemplate', event.target.value)} rows={3} />
+                        <small>{destinationForm.endStreamEnabled ? 'This message will be posted when you end a stream.' : 'Saved for later. Enable "Post when ending stream" to send it during End Stream.'}</small>
+                    </label>
+                </section>
+                {destinationForm.platform === 'bluesky' ? (
+                    <section className="mini-panel template-helper-panel">
+                        <div className="template-helper-header">
+                            <h3>Bluesky Live Now</h3>
+                            <label className="checkbox-field">
+                                <input type="checkbox" aria-label="Bluesky Live Status Enabled" checked={destinationForm.blueskyLiveStatusEnabled} onChange={(event) => updateDestination('blueskyLiveStatusEnabled', event.target.checked)} />
+                                <span>Set Live Now status on Go Live</span>
+                            </label>
+                        </div>
+                        <div className="form-grid">
+                            <label className="field"><span>Live Status Template</span><input aria-label="Live Status Template" value={destinationForm.blueskyLiveStatusTemplate} onChange={(event) => updateDestination('blueskyLiveStatusTemplate', event.target.value)} placeholder="Live now: {{stream_title}}" /></label>
+                            <label className="field"><span>Live Now Duration (Minutes)</span><input aria-label="Live Now Duration Minutes" value={destinationForm.blueskyLiveNowDurationMinutes} onChange={(event) => updateDestination('blueskyLiveNowDurationMinutes', event.target.value)} placeholder="120" /></label>
+                        </div>
+                    </section>
+                ) : null}
+                {destinationForm.platform === 'discord' ? (
+                    <><label className="field"><span>Card Thumbnail URL</span><input aria-label="Discord Card Thumbnail URL" value={destinationForm.discordCardThumbnailURL} onChange={(event) => { updateDestination('discordCardThumbnailURL', event.target.value); if (event.target.value.trim() !== '') clearDiscordThumbnailImage(); }} placeholder="https://static-cdn.jtvnw.net/..." /></label><label className="field"><span>Card Thumbnail Upload</span><input ref={discordThumbnailInputRef} aria-label="Discord Card Thumbnail Upload" type="file" accept="image/*" onChange={(event) => void onDiscordThumbnailUpload(event.target.files?.[0])} /><small>Used when no thumbnail URL is set.</small></label></>
+                ) : null}
+                {destinationForm.platform === 'bluesky' ? (
+                    <><label className="field"><span>Card Thumbnail URL</span><input aria-label="Bluesky Card Thumbnail URL" value={destinationForm.blueskyCardThumbnailURL} onChange={(event) => { updateDestination('blueskyCardThumbnailURL', event.target.value); if (event.target.value.trim() !== '') clearBlueskyThumbnailImage(); }} placeholder="https://static-cdn.jtvnw.net/..." /></label><label className="field"><span>Card Thumbnail Upload</span><input ref={blueskyThumbnailInputRef} aria-label="Bluesky Card Thumbnail Upload" type="file" accept="image/*" onChange={(event) => void onBlueskyThumbnailUpload(event.target.files?.[0])} /><small>Images are resized for Bluesky card limits.</small></label><label className="field"><span>Additional Image URL</span><input aria-label="Bluesky Additional Image URL" value={destinationForm.blueskyAdditionalImageURL} onChange={(event) => { updateDestination('blueskyAdditionalImageURL', event.target.value); if (event.target.value.trim() !== '') clearBlueskyAdditionalImage(); }} placeholder="https://static-cdn.jtvnw.net/..." /></label><label className="field"><span>Additional Image Upload</span><input ref={blueskyAdditionalImageInputRef} aria-label="Bluesky Additional Image Upload" type="file" accept="image/*" onChange={(event) => void onBlueskyAdditionalImageUpload(event.target.files?.[0])} /><small>Optional image attached to the post.</small></label></>
+                ) : null}
+                {destinationForm.platform === 'mastodon' ? (
+                    <><label className="field"><span>Additional Image URL</span><input aria-label="Mastodon Additional Image URL" value={destinationForm.mastodonAdditionalImageURL} onChange={(event) => { updateDestination('mastodonAdditionalImageURL', event.target.value); if (event.target.value.trim() !== '') clearMastodonAdditionalImage(); }} placeholder="https://static-cdn.jtvnw.net/..." /></label><label className="field"><span>Additional Image Upload</span><input ref={mastodonAdditionalImageInputRef} aria-label="Mastodon Additional Image Upload" type="file" accept="image/*" onChange={(event) => void onMastodonAdditionalImageUpload(event.target.files?.[0])} /><small>Large images are resized before posting.</small></label></>
+                ) : null}
+            </div>
+        </details>
+    );
 
     return (
         <main className="app-shell">
+            <aside className="app-sidebar" aria-label="Primary navigation"><div className="sidebar-brand-stack"><div className="sidebar-brand"><img src={streamSignalIcon} alt="" className="app-logo" aria-hidden="true" /><div><h1>StreamSignal</h1></div></div>{SHOW_DEBUG_WORKFLOW_UI ? <span className="debug-build-badge">Debug Build</span> : null}</div><nav className="sidebar-nav">{sidebarItems.map((item) => { const Icon = item.icon; return <button key={item.key} type="button" className={selectedTab === item.key ? 'sidebar-nav-item active' : 'sidebar-nav-item'} onClick={() => setSelectedTab(item.key)} aria-current={selectedTab === item.key ? 'page' : undefined}><Icon aria-hidden="true" /><span>{item.label}</span>{item.badge ? <strong className="nav-badge">{item.badge}</strong> : null}</button>; })}</nav></aside>
             <div className="app-frame">
-                <header className="panel app-header">
-                    <div className="app-header-copy">
-                        <img src={streamSignalIcon} alt="" className="app-logo" aria-hidden="true" />
-                        <h1>StreamSignal</h1>
-                    </div>
-                    <nav className="tab-bar" aria-label="Primary navigation">
-                            <button
-                                aria-label="Home"
-                                className={selectedTab === 'home' ? 'tab-button active' : 'tab-button'}
-                                onClick={() => setSelectedTab('home')}
-                            >
-                                Home
-                            </button>
-                            <button
-                                aria-label="Destinations"
-                                className={selectedTab === 'destinations' ? 'tab-button active' : 'tab-button'}
-                                onClick={() => setSelectedTab('destinations')}
-                            >
-                                Destinations
-                            </button>
-                            <button
-                                aria-label="Settings"
-                                className={selectedTab === 'settings' ? 'tab-button active' : 'tab-button'}
-                                onClick={() => setSelectedTab('settings')}
-                            >
-                                Settings
-                            </button>
-                            {SHOW_DEBUG_WORKFLOW_UI ? (
-                                <button
-                                    aria-label="Logs"
-                                    className={selectedTab === 'logs' ? 'tab-button active' : 'tab-button'}
-                                    onClick={() => setSelectedTab('logs')}
-                                >
-                                    Logs
-                                </button>
-                            ) : null}
-                    </nav>
-                </header>
-
-                <section className="content-stack">
-                        {selectedTab === 'home' ? (
-                            <>
-                                <article className="panel home-session-panel">
-                                    <div className="panel-header">
-                                        <div>
-                                            <h2>Live Session</h2>
-                                            <p>Set up the announcement, validate it, then publish when you are ready.</p>
-                                        </div>
-                                        <div className="panel-header-actions">
-                                            <div className="home-status-inline">
-                                                {pendingLiveNowSessions.length > 0 ? (
-                                                    <span className="status-pill">{pendingLiveNowSessions.length} recovery pending</span>
-                                                ) : null}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className="ghost-button small-button"
-                                                onClick={() => {
-                                                    setAnnouncement(initialAnnouncement);
-                                                    setPreviewError(null);
-                                                    setPreviewItems([]);
-                                                }}
-                                            >
-                                                Reset
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <form className="announcement-form" onSubmit={onPreviewSubmit}>
-                                        <div className="form-grid">
-                                            <div className="field">
-                                                <div className="field-label-row">
-                                                    <label htmlFor="stream-title">Stream Title</label>
-                                                    <button
-                                                        type="button"
-                                                        className="info-tooltip"
-                                                        aria-label="Stream Title information"
-                                                    >
-                                                        i
-                                                        <span role="tooltip">Required for Bluesky Live Now Use</span>
-                                                    </button>
-                                                </div>
-                                                <input
-                                                    id="stream-title"
-                                                    aria-label="Stream Title"
-                                                    value={announcement.streamTitle}
-                                                    onChange={(event) => updateAnnouncement('streamTitle', event.target.value)}
-                                                    placeholder="Late Night Variety"
-                                                />
-                                            </div>
-
-                                            <label className="field">
-                                                <span>Stream URL</span>
-                                                <input
-                                                    aria-label="Stream URL"
-                                                    value={announcement.streamURL}
-                                                    onChange={(event) => updateAnnouncement('streamURL', event.target.value)}
-                                                    placeholder="https://example.com/live"
-                                                />
-                                            </label>
-
-                                            <label className="field">
-                                                <span>Category / Game</span>
-                                                <input
-                                                    aria-label="Category / Game"
-                                                    value={announcement.category}
-                                                    onChange={(event) => updateAnnouncement('category', event.target.value)}
-                                                    placeholder="Music, FFXIV, Variety..."
-                                                />
-                                            </label>
-
-                                            <label className="field">
-                                                <span>Hashtags</span>
-                                                <input
-                                                    aria-label="Hashtags"
-                                                    value={announcement.hashtags}
-                                                    onChange={(event) => updateAnnouncement('hashtags', event.target.value)}
-                                                    placeholder="#vtuber #music"
-                                                />
-                                            </label>
-                                        </div>
-
-                                        <label className="field">
-                                            <span>Optional Message</span>
-                                            <textarea
-                                                aria-label="Optional Message"
-                                                value={announcement.message}
-                                                onChange={(event) => updateAnnouncement('message', event.target.value)}
-                                                placeholder="What are we getting into tonight?"
-                                                rows={4}
-                                            />
-                                        </label>
-
-                                        <section className="session-destination-panel">
-                                            <div className="session-destination-header">
-                                                <div>
-                                                    <h3>Send To</h3>
-                                                    <p>
-                                                        {configuredDestinationCount === 0
-                                                            ? 'Add destinations in the Destinations tab first.'
-                                                            : `${selectedDestinationCount} of ${configuredDestinationCount} selected for this session.`}
-                                                        {pendingLiveNowSessions.length > 0 ? ` ${pendingLiveNowSessions.length} Live Now recovery item${pendingLiveNowSessions.length === 1 ? ' is' : 's are'} still pending.` : ''}
-                                                    </p>
-                                                </div>
-                                                {configuredDestinationCount > 0 ? (
-                                                    <div className="session-destination-actions">
-                                                        <button
-                                                            type="button"
-                                                            className="ghost-button"
-                                                            onClick={() => setSelectedDestinationIDs(destinations.map((destination) => destination.id))}
-                                                        >
-                                                            All
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="ghost-button"
-                                                            onClick={() => setSelectedDestinationIDs([])}
-                                                        >
-                                                            None
-                                                        </button>
-                                                    </div>
-                                                ) : null}
-                                            </div>
-
-                                            {configuredDestinationCount > 0 ? (
-                                                <div className="session-destination-list">
-                                                    {destinations.map((destination) => (
-                                                        <label key={destination.id} className="session-destination-option">
-                                                            <input
-                                                                type="checkbox"
-                                                                aria-label={destination.name}
-                                                                checked={selectedDestinationIDs.includes(destination.id)}
-                                                                onChange={() => toggleSessionDestination(destination.id)}
-                                                            />
-                                                            <span className="session-destination-copy">
-                                                                <strong>{destination.name}</strong>
-                                                                <small>
-                                                                    {destinationSendToMetadata(destination)}
-                                                                </small>
-                                                            </span>
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </section>
-
-                                        <div className="workflow-actions">
-                                            <button type="submit" className="primary-button" disabled={previewLoading}>
-                                                {previewLoading ? 'Generating...' : 'Generate Preview'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="primary-button"
-                                                onClick={() => void runGoLive()}
-                                                disabled={executionLoading !== null}
-                                            >
-                                                {executionLoading === 'go_live' ? 'Running Go Live...' : 'Go Live'}
-                                            </button>
-                                            <span className="button-tooltip-wrap">
-                                                <button
-                                                    type="button"
-                                                    className="ghost-button"
-                                                    onClick={() => void onEndStream()}
-                                                    disabled={executionLoading !== null}
-                                                    aria-describedby="end-stream-action-hint"
-                                                >
-                                                    {executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}
-                                                </button>
-                                                <span id="end-stream-action-hint" className="button-tooltip" role="tooltip">
-                                                    {selectedDestinationCount > 0
-                                                        ? endStreamActionHint(selectedEndStreamPostCount, selectedLiveNowClearCount)
-                                                        : 'Select destinations to enable End Stream actions.'}
-                                                </span>
-                                            </span>
-                                        </div>
-
-                                        {!SHOW_DEBUG_WORKFLOW_UI ? (
-                                            <section className="release-workflow-status" aria-live="polite">
-                                                {executionError ? <p className="error-banner">{executionError}</p> : null}
-                                                {executionStatusMessage(executionSummary) ? (
-                                                    <div className={executionSummary?.status === 'PARTIAL' ? 'error-banner' : 'warning-banner'}>
-                                                        <p>{executionStatusMessage(executionSummary)}</p>
-                                                    </div>
-                                                ) : null}
-                                                {pendingGoLiveConfirmation ? (
-                                                    <div className="warning-banner">
-                                                        <p>{executionSummary?.duplicateWarningMessage}</p>
-                                                        <div className="form-actions">
-                                                            <button
-                                                                type="button"
-                                                                className="primary-button"
-                                                                onClick={() => void onConfirmGoLive()}
-                                                                disabled={executionLoading !== null}
-                                                            >
-                                                                {executionLoading === 'go_live' ? 'Confirming...' : 'Confirm Go Live'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : null}
-                                                {executionSummary && !pendingGoLiveConfirmation && !executionStatusMessage(executionSummary) ? (
-                                                    <p className="success-banner">
-                                                        {executionSummary.mode === 'end_stream' ? 'End Stream completed.' : 'Go Live completed.'}
-                                                    </p>
-                                                ) : null}
-                                            </section>
-                                        ) : null}
-                                    </form>
-                                </article>
-
-                                <article className="panel">
-                                        <div className="panel-header">
-                                            <div>
-                                                <h2>Preview Panel</h2>
-                                                <p>See the exact message each selected destination will receive.</p>
-                                            </div>
-                                            <span>{previewItems.length} messages</span>
-                                        </div>
-
-                                    {previewError ? <p className="error-banner">{previewError}</p> : null}
-
-                                    {previewItems.length === 0 ? (
-                                        <div className="empty-state">
-                                            <h3>No previews yet</h3>
-                                            <p>
-                                                {destinations.length === 0
-                                                    ? 'Add at least one destination first, then generate a preview to see per-destination content.'
-                                                    : selectedDestinationIDs.length === 0
-                                                      ? 'Select at least one destination for this session, then generate a preview to see per-destination content.'
-                                                      : 'Generate a preview to see per-destination content, character counts, and validation state.'}
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="preview-list">
-                                            {previewItems.map((item) => (
-                                                <section key={`${item.destinationID}-${item.previewLabel || 'preview'}`} className="preview-card">
-                                                    <div className="preview-topline">
-                                                        <div>
-                                                            <h3>{item.destinationName}</h3>
-                                                            <p className="preview-platform">
-                                                                {item.previewLabel || 'Preview'} · {item.platform}
-                                                            </p>
-                                                        </div>
-                                                        <span className={`preview-status status-${item.validationState.toLowerCase()}`}>
-                                                            {item.validationState}
-                                                        </span>
-                                                    </div>
-
-                                                    <pre className="preview-content">{item.content || '(empty content)'}</pre>
-
-                                                    <div className="preview-meta">
-                                                        <span>{item.characterCount} characters</span>
-                                                        <span>{item.validationNotes.length} notes</span>
-                                                    </div>
-
-                                                    {item.validationNotes.length > 0 ? (
-                                                        <ul className="note-list">
-                                                            {item.validationNotes.map((note) => (
-                                                                <li key={note}>{note}</li>
-                                                            ))}
-                                                        </ul>
-                                                    ) : (
-                                                        <p className="success-copy">This preview is ready from a validation standpoint.</p>
-                                                    )}
-                                                </section>
-                                            ))}
-                                        </div>
-                                    )}
-                                </article>
-
-                                {SHOW_DEBUG_WORKFLOW_UI ? (
-                                <article className="panel">
-                                    <div className="panel-header">
-                                        <h2>Execution Results</h2>
-                                        <span className={executionSummary ? `status-pill status-${executionSummary.status.toLowerCase()}` : 'status-pill'}>
-                                            {executionSummary?.status ?? executionSummary?.mode ?? 'idle'}
-                                        </span>
-                                    </div>
-                            {executionError ? <p className="error-banner">{executionError}</p> : null}
-                            {executionStatusMessage(executionSummary) ? (
-                                <div className={executionSummary?.status === 'PARTIAL' ? 'error-banner' : 'warning-banner'}>
-                                    <p>{executionStatusMessage(executionSummary)}</p>
-                                </div>
-                            ) : null}
-                            {pendingGoLiveConfirmation ? (
-                                <div className="warning-banner">
-                                    <p>{executionSummary?.duplicateWarningMessage}</p>
-                                    <div className="form-actions">
-                                        <button
-                                            type="button"
-                                            className="primary-button"
-                                            onClick={() => void onConfirmGoLive()}
-                                            disabled={executionLoading !== null}
-                                        >
-                                            {executionLoading === 'go_live' ? 'Confirming...' : 'Confirm Go Live'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : null}
-                            {!executionSummary ? (
-                                <div className="empty-state">
-                                    <h3>No execution results yet</h3>
-                                    <p>Run Go Live or End Stream to see per-destination execution results.</p>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="execution-summary-grid">
-                                        <section className="mini-panel">
-                                            <h3>Total</h3>
-                                            <p className="summary-metric">{executionSummary.totalCount}</p>
-                                        </section>
-                                        <section className="mini-panel">
-                                            <h3>Success</h3>
-                                            <p className="summary-metric">{executionSummary.successCount}</p>
-                                        </section>
-                                        <section className="mini-panel">
-                                            <h3>Failed</h3>
-                                            <p className="summary-metric">{executionSummary.failedCount}</p>
-                                        </section>
-                                        <section className="mini-panel">
-                                            <h3>Validation</h3>
-                                            <p className="summary-metric">{executionSummary.validationErrorCount}</p>
-                                        </section>
-                                        <section className="mini-panel">
-                                            <h3>Skipped</h3>
-                                            <p className="summary-metric">{executionSummary.skippedCount}</p>
-                                        </section>
-                                    </div>
-
-                                    {executionSummary.results.length === 0 ? (
-                                        <div className="empty-state">
-                                            <h3>No per-destination rows yet</h3>
-                                            <p>Execution warnings can appear before any live publish attempt is made.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="logs-list">
-                                            {executionSummary.results.map((result) => (
-                                                <section className="log-row" key={`${result.destinationID}-${result.state}`}>
-                                                    <div className="log-summary">
-                                                        <strong>{result.destinationName}</strong>
-                                                        <span>{result.state}</span>
-                                                    </div>
-                                                    <p className="log-context">
-                                                        {executionResultKind(executionSummary.mode, result.message)} · {result.platform}
-                                                    </p>
-                                                    <p>{result.message}</p>
-                                                    {result.content ? <p className="log-content-preview">{result.content}</p> : null}
-                                                </section>
-                                            ))}
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                                </article>
-                                ) : null}
-                            </>
-                        ) : null}
-
-                        {selectedTab === 'destinations' ? (
-                            <>
-                                <article className="panel panel-wide">
-                                    <div className="panel-header">
-                                        <div>
-                                            <h2>Saved Destinations</h2>
-                                            <p>Pick one to edit, or start a fresh destination setup.</p>
-                                        </div>
-                                        <div className="form-actions">
-                                            <span>{configuredDestinationCount} configured</span>
-                                            <button
-                                                type="button"
-                                                className="ghost-button"
-                                                onClick={() => resetDestinationForm()}
-                                            >
-                                                Reset Form
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {destinationError ? <p className="error-banner">{destinationError}</p> : null}
-
-                                    <div className="saved-destinations-grid">
-                                        {destinations.length === 0 ? (
-                                            <div className="empty-state">
-                                                <h3>No destinations yet</h3>
-                                                <p>Create a destination to start building platform-specific previews and go-live targets.</p>
-                                            </div>
-                                        ) : (
-                                            destinations.map((item) => (
-                                                <button
-                                                    key={item.id}
-                                                    className={destinationForm.id === item.id ? 'destination-item active' : 'destination-item'}
-                                                    onClick={() => {
-                                                        const form = toDestinationFormState(item);
-                                                        setDestinationSecrets(destinationSecretCacheFrom(form));
-                                                        setDestinationForm(toMaskedDestinationForm(form));
-                                                        setDestinationConnectionResult(null);
-                                                        setDestinationHelperStatus(null);
-                                                    }}
-                                                >
-                                                    <strong>{item.name}</strong>
-                                                    <span>
-                                                        {item.platform} · {destinationEnvironmentLabel(destinationEnvironmentFrom(item))}
-                                                    </span>
-                                                </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </article>
-
-                                <article className="panel panel-wide">
-                                        <div className="panel-header">
-                                            <div>
-                                                <h2>{destinationForm.id ? 'Edit Destination' : 'New Destination'}</h2>
-                                                <p>
-                                                    {destinationForm.id
-                                                        ? 'Save changes to the selected destination.'
-                                                        : 'Create mode clears after save so the next destination starts fresh.'}
-                                                </p>
-                                                <div className="destination-mode-indicator">
-                                                    {destinationForm.id ? `Editing: ${destinationForm.name || 'Selected destination'}` : 'New destination'}
-                                                </div>
-                                            </div>
-                                            <div className="form-actions">
-                                                <span>Posting setup</span>
-                                                <button type="button" className="ghost-button" onClick={() => setShowGuidedSetup(true)}>
-                                                    Setup Help
-                                                </button>
-                                            </div>
-                                        </div>
-
-                            <form className="announcement-form" onSubmit={onDestinationSubmit}>
-                                <div className="form-grid">
-                                <label className="field">
-                                    <span>Platform</span>
-                                    <select
-                                        aria-label="Platform"
-                                        value={destinationForm.platform}
-                                        onChange={(event) => {
-                                            setDestinationSecrets({
-                                                discordWebhookKey: '',
-                                                blueskyCredentialKey: '',
-                                                mastodonCredentialKey: '',
-                                            });
-                                            setDestinationConnectionResult(null);
-                                            setDestinationForm((current) => ({
-                                                ...createEmptyDestinationForm(event.target.value as DestinationInput['platform']),
-                                                id: current.id,
-                                                name: current.name,
-                                                environment: current.environment,
-                                                createdAt: current.createdAt,
-                                                updatedAt: current.updatedAt,
-                                            }));
-                                        }}
-                                    >
-                                        <option value="discord">Discord</option>
-                                        <option value="bluesky">Bluesky</option>
-                                        <option value="mastodon">Mastodon</option>
-                                    </select>
-                                </label>
-
-                                <label className="field">
-                                    <span>Friendly Name</span>
-                                    <input
-                                        aria-label="Friendly Name"
-                                        value={destinationForm.name}
-                                        onChange={(event) => updateDestination('name', event.target.value)}
-                                        placeholder="Main Discord"
-                                    />
-                                </label>
-
-                                <label className="field">
-                                    <span>Destination Type</span>
-                                    <select
-                                        aria-label="Destination Type"
-                                        value={destinationForm.environment}
-                                        onChange={(event) => updateDestination('environment', event.target.value as DestinationFormState['environment'])}
-                                    >
-                                        <option value="production">Production</option>
-                                        <option value="test">Test</option>
-                                    </select>
-                                </label>
-
-                                </div>
-
-                                <label className="field">
-                                    <span>{destinationTemplateLabel(destinationForm.platform)}</span>
-                                    <textarea
-                                        aria-label={destinationTemplateLabel(destinationForm.platform)}
-                                        value={destinationForm.template}
-                                        onChange={(event) => updateDestination('template', event.target.value)}
-                                        placeholder="{{stream_title}}"
-                                        rows={5}
-                                    />
-                                </label>
-
-                                <section className="mini-panel template-helper-panel">
-                                    <div className="template-helper-header">
-                                        <h3>How This Template Works</h3>
-                                        <button
-                                            type="button"
-                                            className="ghost-button"
-                                            onClick={() => updateDestination('template', defaultTemplateForPlatform(destinationForm.platform))}
-                                        >
-                                            Reset to Starter Template
-                                        </button>
-                                    </div>
-                                    <p>Only fields referenced in this template will appear in the published post. The announcement form does not automatically include every field unless the template asks for it.</p>
-                                    <p>
-                                        Uses:{' '}
-                                        {usedTemplateVariables(destinationForm.template).length > 0
-                                            ? usedTemplateVariables(destinationForm.template).join(', ')
-                                            : 'no announcement fields yet'}
-                                    </p>
-                                    {destinationHelperStatus ? <p className="success-copy">{destinationHelperStatus}</p> : null}
-                                    <div className="template-token-list" role="list" aria-label="Available template variables">
-                                        {TEMPLATE_VARIABLES.map((variable) => (
-                                            <button
-                                                key={variable}
-                                                type="button"
-                                                className="template-token"
-                                                onClick={() => void onCopyTemplateVariable(variable)}
-                                            >
-                                                {variable}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </section>
-
-                                <section className="mini-panel template-helper-panel">
-                                    <div className="template-helper-header">
-                                        <h3>End Stream Message</h3>
-                                        <label className="checkbox-field">
-                                            <input
-                                                type="checkbox"
-                                                aria-label="End Stream Enabled"
-                                                checked={destinationForm.endStreamEnabled}
-                                                onChange={(event) => updateDestination('endStreamEnabled', event.target.checked)}
-                                            />
-                                            <span>Post End Stream Message</span>
-                                        </label>
-                                    </div>
-                                    <label className="field">
-                                        <span>End Stream Template</span>
-                                        <textarea
-                                            aria-label="Destination End Stream Template"
-                                            value={destinationForm.endStreamTemplate}
-                                            onChange={(event) => updateDestination('endStreamTemplate', event.target.value)}
-                                            rows={3}
-                                        />
-                                    </label>
-                                    <p>
-                                        Uses:{' '}
-                                        {usedTemplateVariables(destinationForm.endStreamTemplate).length > 0
-                                            ? usedTemplateVariables(destinationForm.endStreamTemplate).join(', ')
-                                            : 'no announcement fields yet'}
-                                    </p>
-                                </section>
-
-                                {destinationForm.platform === 'discord' ? (
-                                    <>
-                                        <label className="field">
-                                            <span>Server Name</span>
-                                            <input
-                                                aria-label="Server Name"
-                                                value={destinationForm.discordServerName}
-                                                onChange={(event) => updateDestination('discordServerName', event.target.value)}
-                                                placeholder="My Discord Server"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Channel Name</span>
-                                            <input
-                                                aria-label="Channel Name"
-                                                value={destinationForm.discordChannelName}
-                                                onChange={(event) => updateDestination('discordChannelName', event.target.value)}
-                                                placeholder="go-live"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Webhook URL</span>
-                                            <input
-                                                aria-label="Webhook URL"
-                                                value={destinationForm.discordWebhookKey}
-                                                onChange={(event) => updateDestination('discordWebhookKey', event.target.value)}
-                                                placeholder="https://discord.com/api/webhooks/..."
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Additional Image URL</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Discord additional image information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Discord may show this image instead of its native link preview.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                aria-label="Discord Additional Image URL"
-                                                value={destinationForm.discordCardThumbnailURL}
-                                                onChange={(event) => {
-                                                    updateDestination('discordCardThumbnailURL', event.target.value);
-                                                    if (event.target.value.trim() !== '') {
-                                                        clearDiscordThumbnailImage();
-                                                    }
-                                                }}
-                                                placeholder="https://static-cdn.jtvnw.net/..."
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Additional Image Upload</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Discord additional image upload information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Discord may show this image instead of its native link preview.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                ref={discordThumbnailInputRef}
-                                                aria-label="Discord Additional Image Upload"
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(event) => void onDiscordThumbnailUpload(event.target.files?.[0])}
-                                            />
-                                            <small>Large images are resized before posting.</small>
-                                        </label>
-                                        {destinationForm.discordCardThumbnailDataURL ? (
-                                            <div className="form-actions">
-                                                <span>Uploaded image selected</span>
-                                                <button
-                                                    type="button"
-                                                    className="ghost-button"
-                                                    onClick={clearDiscordThumbnailImage}
-                                                >
-                                                    Clear Image
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </>
-                                ) : null}
-
-                                {destinationForm.platform === 'bluesky' ? (
-                                    <>
-                                        <label className="field">
-                                            <span>Account Identifier</span>
-                                            <input
-                                                aria-label="Account Identifier"
-                                                value={destinationForm.blueskyAccountIdentifier}
-                                                onChange={(event) => updateDestination('blueskyAccountIdentifier', event.target.value)}
-                                                placeholder="handle.bsky.social"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>App Password</span>
-                                            <input
-                                                aria-label="App Password"
-                                                value={destinationForm.blueskyCredentialKey}
-                                                onChange={(event) => updateDestination('blueskyCredentialKey', event.target.value)}
-                                                placeholder="xxxx-xxxx-xxxx-xxxx"
-                                            />
-                                        </label>
-                                        <label className="field checkbox-field">
-                                            <input
-                                                type="checkbox"
-                                                aria-label="Live Status Enabled"
-                                                checked={destinationForm.blueskyLiveStatusEnabled}
-                                                onChange={(event) => updateDestination('blueskyLiveStatusEnabled', event.target.checked)}
-                                            />
-                                            <span>Live Status Enabled</span>
-                                        </label>
-                                        <label className="field">
-                                            <span>Live Status Template</span>
-                                            <textarea
-                                                aria-label="Live Status Template"
-                                                value={destinationForm.blueskyLiveStatusTemplate}
-                                                onChange={(event) => updateDestination('blueskyLiveStatusTemplate', event.target.value)}
-                                                placeholder="LIVE {{stream_title}}"
-                                                rows={4}
-                                                disabled={!destinationForm.blueskyLiveStatusEnabled}
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Live Now Duration (Minutes)</span>
-                                            <input
-                                                aria-label="Live Now Duration (Minutes)"
-                                                type="number"
-                                                min="1"
-                                                value={destinationForm.blueskyLiveNowDurationMinutes}
-                                                onChange={(event) => updateDestination('blueskyLiveNowDurationMinutes', event.target.value)}
-                                                placeholder="120"
-                                                disabled={!destinationForm.blueskyLiveStatusEnabled}
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Preview Card Image URL</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Bluesky preview card image information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Bluesky only. Used as the stream link preview card image.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                aria-label="Bluesky Preview Card Image URL"
-                                                value={destinationForm.blueskyCardThumbnailURL}
-                                                onChange={(event) => {
-                                                    updateDestination('blueskyCardThumbnailURL', event.target.value);
-                                                    if (event.target.value.trim() !== '') {
-                                                        clearBlueskyThumbnailImage();
-                                                    }
-                                                }}
-                                                placeholder="https://static-cdn.jtvnw.net/..."
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Preview Card Image Upload</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Bluesky preview card image upload information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Bluesky only. Used as the stream link preview card image.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                ref={blueskyThumbnailInputRef}
-                                                aria-label="Bluesky Preview Card Image Upload"
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(event) => void onBlueskyThumbnailUpload(event.target.files?.[0])}
-                                            />
-                                            <small>Large images are resized for Bluesky before posting.</small>
-                                        </label>
-                                        {destinationForm.blueskyCardThumbnailDataURL ? (
-                                            <div className="form-actions">
-                                                <span>Uploaded preview card image selected</span>
-                                                <button
-                                                    type="button"
-                                                    className="ghost-button"
-                                                    onClick={clearBlueskyThumbnailImage}
-                                                >
-                                                    Clear Image
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Additional Image URL</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Bluesky additional image information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Attached as a Bluesky image when no stream preview card is posted.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                aria-label="Bluesky Additional Image URL"
-                                                value={destinationForm.blueskyAdditionalImageURL}
-                                                onChange={(event) => {
-                                                    updateDestination('blueskyAdditionalImageURL', event.target.value);
-                                                    if (event.target.value.trim() !== '') {
-                                                        clearBlueskyAdditionalImage();
-                                                    }
-                                                }}
-                                                placeholder="https://static-cdn.jtvnw.net/..."
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <div className="field-label-row">
-                                                <span>Additional Image Upload</span>
-                                                <button
-                                                    type="button"
-                                                    className="info-tooltip"
-                                                    aria-label="Bluesky additional image upload information"
-                                                >
-                                                    i
-                                                    <span role="tooltip">Attached as a Bluesky image when no stream preview card is posted.</span>
-                                                </button>
-                                            </div>
-                                            <input
-                                                ref={blueskyAdditionalImageInputRef}
-                                                aria-label="Bluesky Additional Image Upload"
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(event) => void onBlueskyAdditionalImageUpload(event.target.files?.[0])}
-                                            />
-                                            <small>Large images are resized before posting.</small>
-                                        </label>
-                                        {destinationForm.blueskyAdditionalImageDataURL ? (
-                                            <div className="form-actions">
-                                                <span>Uploaded additional image selected</span>
-                                                <button
-                                                    type="button"
-                                                    className="ghost-button"
-                                                    onClick={clearBlueskyAdditionalImage}
-                                                >
-                                                    Clear Image
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </>
-                                ) : null}
-
-                                {destinationForm.platform === 'mastodon' ? (
-                                    <>
-                                        <label className="field">
-                                            <span>Account Identifier</span>
-                                            <input
-                                                aria-label="Account Identifier"
-                                                value={destinationForm.mastodonAccountIdentifier}
-                                                onChange={(event) => updateDestination('mastodonAccountIdentifier', event.target.value)}
-                                                placeholder="@streamer@example.social"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Instance URL</span>
-                                            <input
-                                                aria-label="Instance URL"
-                                                value={destinationForm.mastodonInstanceURL}
-                                                onChange={(event) => updateDestination('mastodonInstanceURL', event.target.value)}
-                                                placeholder="https://mastodon.social"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Access Token</span>
-                                            <input
-                                                aria-label="Access Token"
-                                                value={destinationForm.mastodonCredentialKey}
-                                                onChange={(event) => updateDestination('mastodonCredentialKey', event.target.value)}
-                                                placeholder="Paste Mastodon access token"
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Additional Image URL</span>
-                                            <input
-                                                aria-label="Mastodon Additional Image URL"
-                                                value={destinationForm.mastodonAdditionalImageURL}
-                                                onChange={(event) => {
-                                                    updateDestination('mastodonAdditionalImageURL', event.target.value);
-                                                    if (event.target.value.trim() !== '') {
-                                                        clearMastodonAdditionalImage();
-                                                    }
-                                                }}
-                                                placeholder="https://static-cdn.jtvnw.net/..."
-                                            />
-                                        </label>
-                                        <label className="field">
-                                            <span>Additional Image Upload</span>
-                                            <input
-                                                ref={mastodonAdditionalImageInputRef}
-                                                aria-label="Mastodon Additional Image Upload"
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(event) => void onMastodonAdditionalImageUpload(event.target.files?.[0])}
-                                            />
-                                            <small>Large images are resized before posting.</small>
-                                        </label>
-                                        {destinationForm.mastodonAdditionalImageDataURL ? (
-                                            <div className="form-actions">
-                                                <span>Uploaded additional image selected</span>
-                                                <button
-                                                    type="button"
-                                                    className="ghost-button"
-                                                    onClick={clearMastodonAdditionalImage}
-                                                >
-                                                    Clear Image
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </>
-                                ) : null}
-
-                                <div className="action-cluster">
-                                    <div className="action-cluster-main">
-                                    <button type="submit" className="primary-button">
-                                        {destinationForm.id ? 'Save Changes' : 'Create Destination'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="ghost-button"
-                                        onClick={() => void onTestDestinationConnection()}
-                                        disabled={destinationConnectionLoading}
-                                    >
-                                        {destinationConnectionLoading ? 'Testing Connection...' : `Test ${credentialSetupLabel(destinationForm.platform)}`}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="danger-button"
-                                        onClick={() => void onDeleteDestination()}
-                                        disabled={!destinationForm.id}
-                                    >
-                                        Delete
-                                    </button>
-                                    </div>
-                                </div>
-
-                                {destinationConnectionResult && destinationConnectionResult.state !== 'SUCCESS' ? (
-                                        <p className="error-banner">
-                                            {destinationConnectionResult.message}
-                                        </p>
-                                ) : null}
-                            </form>
-                                </article>
-
-                                {showGuidedSetup ? (
-                                    <div className="modal-backdrop" role="presentation" onClick={() => setShowGuidedSetup(false)}>
-                                        <section
-                                            className="panel modal-panel"
-                                            role="dialog"
-                                            aria-modal="true"
-                                            aria-label="Guided Credential Setup"
-                                            onClick={(event) => event.stopPropagation()}
-                                        >
-                                            <div className="panel-header">
-                                                <div>
-                                                    <h2>{destinationForm.platform.charAt(0).toUpperCase() + destinationForm.platform.slice(1)} Setup</h2>
-                                                    <p>Use these steps, then come back and test the destination before saving.</p>
-                                                </div>
-                                                <button type="button" className="ghost-button" onClick={() => setShowGuidedSetup(false)}>
-                                                    Close
-                                                </button>
-                                            </div>
-                                            <div className="guided-setup-list">
-                                                {guidedSetupSteps(destinationForm.platform).map((step) => (
-                                                    <section className="guided-setup-step" key={step.title}>
-                                                        <strong>{step.title}</strong>
-                                                        <p>{step.detail}</p>
-                                                    </section>
-                                                ))}
-                                            </div>
-                                        </section>
-                                    </div>
-                                ) : null}
-                            </>
-                        ) : null}
-
-                        {selectedTab === 'settings' ? (
-                            <>
-                                <article className="panel panel-wide">
-                                    <div className="panel-header">
-                                        <div>
-                                            <h2>Settings</h2>
-                                            <p>Adjust defaults, route safe tests, and manage recovery tools.</p>
-                                        </div>
-                                        <span>App defaults and safety rails</span>
-                                    </div>
-                        {settingsError ? <p className="error-banner">{settingsError}</p> : null}
-                                </article>
-
-                                <section className="two-column-layout">
-                                    <article className="panel settings-panel">
-                                        <section className="mini-panel">
-                                            <h3>App Defaults</h3>
-                                            <p>Use test destinations in the Destinations tab when you want to publish to test accounts or channels.</p>
-                                        </section>
-
-                                        <form className="announcement-form settings-grid" onSubmit={onSettingsSubmit}>
-                            <label className="field checkbox-field">
-                                <input
-                                    aria-label="Duplicate Protection Enabled"
-                                    type="checkbox"
-                                    checked={settings.duplicateProtectionEnabled}
-                                    onChange={(event) => updateSettings('duplicateProtectionEnabled', event.target.checked)}
-                                />
-                                <span>Duplicate Protection Enabled</span>
-                            </label>
-
-                            <label className="field">
-                                <span>Default Stream URL</span>
-                                <input
-                                    aria-label="Default Stream URL"
-                                    value={settings.defaultStreamURL}
-                                    onChange={(event) => updateSettings('defaultStreamURL', event.target.value)}
-                                    placeholder="https://example.com/live"
-                                />
-                            </label>
-
-                            <label className="field">
-                                <span>Default Hashtags</span>
-                                <input
-                                    aria-label="Default Hashtags"
-                                    value={settings.defaultHashtags}
-                                    onChange={(event) => updateSettings('defaultHashtags', event.target.value)}
-                                    placeholder="#vtuber #music"
-                                />
-                            </label>
-
-                            <label className="field">
-                                <span>Duplicate Window (Minutes)</span>
-                                <input
-                                    aria-label="Duplicate Window (Minutes)"
-                                    type="number"
-                                    min={1}
-                                    value={settings.duplicateWindowMinutes}
-                                    onChange={(event) => updateSettings('duplicateWindowMinutes', Number(event.target.value))}
-                                />
-                            </label>
-
-                            <div className="form-actions panel-wide">
-                                <button type="submit" className="primary-button">
-                                    Save Settings
-                                </button>
-                            </div>
-                                        </form>
-                                    </article>
-
-                                    <article className="panel">
-                                        <section className="mini-panel">
-                                            <h3>Live Now Recovery</h3>
-                                            <p>Use this if Stream Signal closed before Bluesky Live Now was cleared, or if a pending session needs to be cleaned up manually.</p>
-                                            {recoveryError ? <p className="error-banner">{recoveryError}</p> : null}
-
-                                            {pendingLiveNowSessions.length === 0 ? (
-                                                <div className="empty-state compact-empty-state">
-                                                    <h3>No pending Live Now sessions.</h3>
-                                                    <p>When recovery is needed, each session will appear here with a one-click clear action.</p>
-                                                </div>
-                                            ) : (
-                                                <div className="logs-list">
-                                                    {pendingLiveNowSessions.map((session) => (
-                                                        <section className="log-row" key={session.destinationID}>
-                                                            <div className="log-summary">
-                                                                <strong>{session.destinationName}</strong>
-                                                                <span>{session.platform}</span>
-                                                            </div>
-                                                            <p>{session.streamTitle || 'Untitled stream'}</p>
-                                                            <p>{session.streamURL}</p>
-                                                            <button
-                                                                type="button"
-                                                                className="ghost-button"
-                                                                onClick={() => void onClearPendingLiveNow(session.destinationID)}
-                                                                disabled={recoveryLoadingId !== null}
-                                                            >
-                                                                {recoveryLoadingId === session.destinationID ? 'Recovering Live Now...' : 'Recover and Clear Live Now'}
-                                                            </button>
-                                                        </section>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </section>
-                                    </article>
-                                </section>
-                            </>
-                        ) : null}
-
-                        {SHOW_DEBUG_WORKFLOW_UI && selectedTab === 'logs' ? (
-                            <article className="panel panel-wide">
-                                <div className="panel-header">
-                                    <div>
-                                        <h2>Logs</h2>
-                                        <p>Review recent app activity and export diagnostics when you need support context.</p>
-                                    </div>
-                                    <span>
-                                        {filteredLogs.length} of {logs.length} recent entries
-                                    </span>
-                                </div>
-                        {logsError ? <p className="error-banner">{logsError}</p> : null}
-
-                        <div className="form-actions logs-actions">
-                            <button type="button" className="ghost-button" onClick={() => void refreshLogs()}>
-                                Refresh Logs
-                            </button>
-                            <button type="button" className="primary-button" onClick={() => void onCopyDiagnostics()}>
-                                Copy Diagnostics
-                            </button>
-                        </div>
-
-                        <div className="log-filter-panel" aria-label="Log filters">
-                            <div className="log-filter-group">
-                                <span>Category</span>
-                                <div className="segmented-control" role="group" aria-label="Log category filter">
-                                    {LOG_CATEGORY_FILTERS.map((filter) => (
-                                        <button
-                                            key={filter.value}
-                                            type="button"
-                                            className={logCategoryFilter === filter.value ? 'active' : ''}
-                                            onClick={() => setLogCategoryFilter(filter.value)}
-                                        >
-                                            {filter.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="log-filter-group">
-                                <span>Status</span>
-                                <div className="segmented-control" role="group" aria-label="Log status filter">
-                                    {LOG_STATUS_FILTERS.map((filter) => (
-                                        <button
-                                            key={filter.value}
-                                            type="button"
-                                            className={logStatusFilter === filter.value ? 'active' : ''}
-                                            onClick={() => setLogStatusFilter(filter.value)}
-                                        >
-                                            {filter.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {logs.length === 0 ? (
-                            <div className="empty-state">
-                                <h3>No logs yet</h3>
-                                <p>Workflow activity and validation outcomes will appear here as you use the app.</p>
-                            </div>
-                        ) : filteredLogs.length === 0 ? (
-                            <div className="empty-state">
-                                <h3>No matching logs</h3>
-                                <p>Adjust the filters to see more recent activity.</p>
-                            </div>
-                        ) : (
-                            <div className="logs-list">
-                                {filteredLogs.map((entry, index) => (
-                                    <section className="log-row" key={`${entry.timestamp}-${entry.action}-${index}`}>
-                                        <div className="log-summary">
-                                            <strong>{entry.destination}</strong>
-                                            <span>{entry.status}</span>
-                                        </div>
-                                        <p className="log-context">{logActionLabel(entry.action)}</p>
-                                        <p>{entry.message}</p>
-                                        <time dateTime={entry.timestamp}>{entry.timestamp}</time>
-                                    </section>
-                                ))}
-                            </div>
-                        )}
-                            </article>
-                        ) : null}
-                </section>
+                {selectedTab === 'home' ? <section className="content-stack home-dashboard"><div className="dashboard-top-grid"><article className="panel dashboard-panel session-editor"><div className="panel-header compact-header"><div><h2>Live Session</h2><p>Configure the announcement once, then preview and publish from the same workspace.</p></div><button type="button" className="ghost-button icon-button" aria-label="Reset" onClick={() => { streamURLTouched.current = false; setAnnouncement(applyAnnouncementDefaults(initialAnnouncement, settings, true)); setPreviewError(null); setPreviewItems([]); }}><RotateCcw aria-hidden="true" /></button></div><form className="announcement-form compact-form" onSubmit={onPreviewSubmit}><div className="form-grid"><div className="field"><div className="field-label-row"><label htmlFor="stream-title">Stream Title</label><button type="button" className="info-tooltip" aria-label="Stream Title information">i<span role="tooltip">Required for Bluesky Live Now Use</span></button></div><input id="stream-title" aria-label="Stream Title" value={announcement.streamTitle} onChange={(event) => updateAnnouncement('streamTitle', event.target.value)} placeholder="Late Night Variety" /></div><label className="field"><span>Stream URL</span><input aria-label="Stream URL" value={announcement.streamURL} onChange={(event) => updateAnnouncement('streamURL', event.target.value)} placeholder="https://example.com/live" /></label><label className="field"><span>Category / Game</span><input aria-label="Category / Game" value={announcement.category} onChange={(event) => updateAnnouncement('category', event.target.value)} placeholder="Music, FFXIV, Variety..." /></label><label className="field"><span>Hashtags</span><input aria-label="Hashtags" value={announcement.hashtags} onChange={(event) => updateAnnouncement('hashtags', event.target.value)} placeholder="#vtuber #music" /></label></div><label className="field"><span>Optional Message</span><textarea aria-label="Optional Message" value={announcement.message} onChange={(event) => updateAnnouncement('message', event.target.value)} placeholder="What are we getting into tonight?" rows={3} /></label><div className="workflow-actions command-actions"><button type="submit" className="ghost-button" disabled={previewLoading}><ClipboardList aria-hidden="true" />{previewLoading ? 'Generating...' : 'Generate Preview'}</button><button type="button" className="primary-button gold-button" onClick={() => void runGoLive()} disabled={executionLoading !== null}><Zap aria-hidden="true" />{executionLoading === 'go_live' ? 'Running Go Live...' : 'Go Live'}</button><span className="button-tooltip-wrap"><button type="button" className="ghost-button" onClick={() => void onEndStream()} disabled={executionLoading !== null} aria-describedby="end-stream-action-hint"><Square aria-hidden="true" />{executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}</button><span id="end-stream-action-hint" className="button-tooltip" role="tooltip">{selectedDestinationCount > 0 ? endStreamActionHint(selectedEndStreamPostCount, selectedLiveNowClearCount) : 'Select destinations to enable End Stream actions.'}</span></span></div></form></article><article className="panel dashboard-panel preview-panel"><div className="panel-header compact-header"><div><h2>Preview Content</h2><p>Validate destination-specific messages before publishing.</p></div><span>{previewItems.length} messages</span></div>{previewError ? <p className="error-banner">{previewError}</p> : null}{previewItems.length === 0 ? <div className="empty-state compact-empty-state"><h3>No previews yet</h3><p>{destinations.length === 0 ? 'Add at least one destination first, then generate a preview to see per-destination content.' : selectedDestinationIDs.length === 0 ? 'Select at least one destination for this session, then generate a preview to see per-destination content.' : 'Generate a preview to validate messages before publishing.'}</p></div> : <div className="preview-list dense-preview-list">{previewItems.map(renderPreviewItem)}</div>}</article><aside className="dashboard-side-stack"><section className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Destinations</h2><p>{configuredDestinationCount === 0 ? 'Add destinations first.' : `${selectedDestinationCount} of ${configuredDestinationCount} selected.`}</p></div>{configuredDestinationCount > 0 ? <div className="session-destination-actions"><button type="button" className="ghost-button small-button" onClick={() => setSelectedDestinationIDs(destinations.map((destination) => destination.id))}>Select All</button><button type="button" className="ghost-button small-button" onClick={() => setSelectedDestinationIDs([])}>Clear All</button></div> : null}</div><div className="destination-picker-list">{destinations.length === 0 ? <div className="empty-state compact-empty-state"><h3>No destinations yet</h3><p>Create one in Destinations to enable previews and publishing.</p></div> : destinations.map((destination) => <label key={destination.id} className={selectedDestinationIDs.includes(destination.id) ? 'destination-picker-card selected' : 'destination-picker-card'}><input type="checkbox" aria-label={destination.name} checked={selectedDestinationIDs.includes(destination.id)} onChange={() => toggleSessionDestination(destination.id)} /><PlatformIcon platform={destination.platform} /><span><strong>{destination.name}</strong><small>{destinationSendToMetadata(destination)}</small></span></label>)}</div></section><section className={pendingLiveNowSessions.length > 0 ? 'panel recovery-card recovery-pending' : 'panel recovery-card'}><ShieldAlert aria-hidden="true" /><div><strong>Recovery Status</strong><p>{pendingLiveNowSessions.length > 0 ? `${pendingLiveNowSessions.length} pending Live Now recovery item${pendingLiveNowSessions.length === 1 ? '' : 's'}.` : 'No pending Live Now recovery.'}</p></div><button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('settings')}>Open Settings</button></section></aside></div>{renderExecutionPanel()}{SHOW_DEBUG_WORKFLOW_UI ? <article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Recent Activity</h2></div>{SHOW_DEBUG_WORKFLOW_UI ? <button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('logs')}>View Logs</button> : null}</div>{recentActivity.length === 0 ? <div className="empty-state compact-empty-state"><h3>No recent activity</h3><p>Preview, publish, recovery, and settings events will appear here.</p></div> : <div className="compact-list">{recentActivity.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="activity-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination} · {entry.message}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><StatusBadge status={entry.status} /></section>; })}</div>}</article> : null}</section> : null}
+                {selectedTab === 'destinations' ? <section className="content-stack destinations-workspace"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Saved Destinations</h2><p>Manage integrations quickly, or load one into the editor.</p></div><div className="form-actions"><span>{configuredDestinationCount} configured</span><button type="button" className="ghost-button" onClick={() => resetDestinationForm()}><Send aria-hidden="true" />New Destination</button></div></div>{destinationError ? <p className="error-banner">{destinationError}</p> : null}<div className="destination-card-grid">{destinations.length === 0 ? <div className="empty-state"><h3>No destinations yet</h3><p>Create a destination to start building platform-specific previews and go-live targets.</p></div> : destinations.map((item) => <section key={item.id} className={destinationForm.id === item.id ? 'destination-manage-card active' : 'destination-manage-card'}><div className="entity-row"><PlatformIcon platform={item.platform} /><div><strong>{item.name}</strong><span>{item.platform} · {destinationEnvironmentLabel(destinationEnvironmentFrom(item))}</span></div></div><div className="quick-action-row"><button type="button" className="ghost-button small-button" onClick={() => editDestination(item)}>Edit</button><button type="button" className="ghost-button icon-button" aria-label="Duplicate" onClick={() => duplicateDestination(item)}><Copy aria-hidden="true" /></button><button type="button" className="ghost-button icon-button" aria-label="Test" onClick={() => void onTestSavedDestination(item)} disabled={destinationConnectionLoading}><Play aria-hidden="true" /></button><button type="button" className="danger-button icon-button" aria-label="Delete" onClick={() => void onDeleteSavedDestination(item)}><Trash2 aria-hidden="true" /></button></div></section>)}</div></article><div className="destination-editor-grid"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>{destinationForm.id ? 'Edit Destination' : 'New Destination'}</h2><p>{destinationForm.id ? 'Save changes to the selected integration.' : 'Create a new publishing integration.'}</p><div className="destination-mode-indicator">{destinationForm.id ? `Editing: ${destinationForm.name || 'Selected destination'}` : 'New destination'}</div></div><StatusBadge status={destinationConnectionResult?.state ?? 'pending'} label={destinationConnectionResult ? destinationConnectionResult.state : 'Not tested'} /></div><form className="announcement-form" onSubmit={onDestinationSubmit}><section className="config-section open-section"><div className="config-section-title"><span><ExternalLink aria-hidden="true" /> Connection</span><small>Platform and credential details</small></div><div className="config-section-body"><div className="form-grid"><label className="field"><span>Platform</span><select aria-label="Platform" value={destinationForm.platform} onChange={(event) => { setDestinationSecrets({ discordWebhookKey: '', blueskyCredentialKey: '', mastodonCredentialKey: '' }); setDestinationConnectionResult(null); setDestinationForm((current) => ({ ...createEmptyDestinationForm(event.target.value as DestinationInput['platform']), id: current.id, name: current.name, environment: current.environment, createdAt: current.createdAt, updatedAt: current.updatedAt })); }}><option value="discord">Discord</option><option value="bluesky">Bluesky</option><option value="mastodon">Mastodon</option></select></label><label className="field"><span>Friendly Name</span><input aria-label="Friendly Name" value={destinationForm.name} onChange={(event) => updateDestination('name', event.target.value)} placeholder="Main Discord" /></label><label className="field"><span>Destination Type</span><select aria-label="Destination Type" value={destinationForm.environment} onChange={(event) => updateDestination('environment', event.target.value as DestinationFormState['environment'])}><option value="production">Production</option><option value="test">Test</option></select></label></div>{renderPlatformConnectionFields()}</div></section><section className="config-section open-section"><div className="config-section-title"><span><FileText aria-hidden="true" /> Template</span><small>Message composition and token insertion</small></div><div className="config-section-body"><label className="field"><span>{destinationTemplateLabel(destinationForm.platform)}</span><textarea ref={templateInputRef} aria-label={destinationTemplateLabel(destinationForm.platform)} value={destinationForm.template} onFocus={() => { activeTemplateInputRef.current = templateInputRef.current; }} onChange={(event) => updateDestination('template', event.target.value)} placeholder="{{stream_title}}" rows={5} /></label><section className="mini-panel template-helper-panel"><div className="template-helper-header"><h3>How This Template Works</h3><button type="button" className="ghost-button" onClick={() => updateDestination('template', defaultTemplateForPlatform(destinationForm.platform))}>Reset to Starter Template</button></div><p>Only fields referenced in this template will appear in the published post.</p><p>Uses: {usedTemplateVariables(destinationForm.template).length > 0 ? usedTemplateVariables(destinationForm.template).join(', ') : 'no announcement fields yet'}</p>{destinationHelperStatus ? <p className="success-copy">{destinationHelperStatus}</p> : null}<div className="template-token-list" role="list" aria-label="Available template variables">{TEMPLATE_VARIABLES.map((variable) => <button key={variable} type="button" className="template-token" onClick={() => insertTemplateVariable(variable)}>{variable}</button>)}</div></section></div></section>{renderAdvancedFields()}<div className="action-cluster-main sticky-editor-actions"><button type="submit" className="primary-button gold-button">{destinationForm.id ? 'Save Changes' : 'Create Destination'}</button><button type="button" className="ghost-button" onClick={() => void onTestDestinationConnection()} disabled={destinationConnectionLoading}>{destinationConnectionLoading ? 'Testing Connection...' : `Test ${credentialSetupLabel(destinationForm.platform)}`}</button><button type="button" className="danger-button" onClick={() => void onDeleteDestination()} disabled={!destinationForm.id}>Delete</button></div>{destinationConnectionResult ? <p className={destinationConnectionResult.state === 'SUCCESS' ? 'success-banner' : 'error-banner'}>{destinationConnectionResult.message}</p> : null}</form></article><aside className="panel dashboard-panel setup-helper-panel" aria-label="Guided Credential Setup"><div className="panel-header compact-header"><div><h2>{platformLabel(destinationForm.platform)} Setup</h2><p>Use these steps, then test before saving.</p></div></div><div className="guided-setup-list">{guidedSetupSteps(destinationForm.platform).map((step) => <section className="guided-setup-step" key={step.title}><strong>{step.title}</strong><p>{step.detail}</p></section>)}</div></aside></div></section> : null}
+                {selectedTab === 'settings' ? <section className="content-stack"><article className="panel dashboard-panel settings-page-panel"><div className="panel-header compact-header"><div><h2>Settings</h2><p>Configure defaults and recovery behavior.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label={`${pendingLiveNowSessions.length} Pending Recovery`} /> : null}</div>{settingsError ? <p className="error-banner">{settingsError}</p> : null}<section className="two-column-layout"><article className="panel settings-panel"><div className="panel-header compact-header"><div><h2>Application Defaults</h2><p>Defaults prefill new sessions and protect against accidental duplicate publishes.</p></div></div><form className="announcement-form settings-grid" onSubmit={onSettingsSubmit}><label className="field checkbox-field"><input aria-label="Duplicate Protection Enabled" type="checkbox" checked={settings.duplicateProtectionEnabled} onChange={(event) => updateSettings('duplicateProtectionEnabled', event.target.checked)} /><span>Duplicate Protection Enabled<small>Warns when a similar Go Live action happens inside the duplicate window.</small></span></label><label className="field"><span>Default Stream URL</span><input aria-label="Default Stream URL" value={settings.defaultStreamURL} onChange={(event) => updateSettings('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /><small>Prefills new Home sessions until edited.</small></label><label className="field"><span>Default Hashtags</span><input aria-label="Default Hashtags" value={settings.defaultHashtags} onChange={(event) => updateSettings('defaultHashtags', event.target.value)} placeholder="#vtuber #music" /><small>Applied to new announcements until changed.</small></label><label className="field"><span>Duplicate Window (Minutes)</span><input aria-label="Duplicate Window (Minutes)" type="number" min={1} value={settings.duplicateWindowMinutes} onChange={(event) => updateSettings('duplicateWindowMinutes', Number(event.target.value))} /><small>How long StreamSignal watches for repeated publish attempts.</small></label><button type="submit" className="primary-button gold-button">Save Settings</button></form></article><article className={pendingLiveNowSessions.length > 0 ? 'panel recovery-center recovery-pending' : 'panel recovery-center'}><div className="panel-header compact-header"><div><h2>Recovery Center</h2><h3>Live Now Recovery</h3><p>Clear Bluesky Live Now states left active after interruptions.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label="Pending Recovery" /> : null}</div>{recoveryError ? <p className="error-banner">{recoveryError}</p> : null}{recoveryStatus ? <p className="success-banner">{recoveryStatus}</p> : null}{pendingLiveNowSessions.length === 0 ? <div className="empty-state compact-empty-state"><h3>No pending Live Now sessions.</h3><p>When recovery is needed, each session will appear here with a one-click clear action.</p></div> : <div className="compact-list">{pendingLiveNowSessions.map((session) => <section className="activity-card" key={session.destinationID}><PlatformIcon platform={session.platform} /><div><strong>{session.destinationName}</strong><p>{session.streamTitle || 'Untitled stream'} · {session.streamURL}</p><time dateTime={session.startedAt}>{session.startedAt}</time></div><button type="button" className="primary-button gold-button" onClick={() => void onClearPendingLiveNow(session.destinationID)} disabled={recoveryLoadingId !== null}>{recoveryLoadingId === session.destinationID ? 'Recovering Live Now...' : 'Recover and Clear Live Now'}</button></section>)}</div>}</article><article className="panel legal-notice-card"><div className="panel-header compact-header"><div><h2>Legal Notices</h2><p>{LEGAL_NOTICE}</p></div></div></article></section></article></section> : null}
+                {SHOW_DEBUG_WORKFLOW_UI && selectedTab === 'logs' ? <section className="content-stack"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Logs</h2><p>Newest activity first, optimized for quick scanning.</p></div><span>{filteredLogs.length} of {logs.length} recent entries</span></div>{logsError ? <p className="error-banner">{logsError}</p> : null}<div className="log-toolbar"><button type="button" className="ghost-button" onClick={() => void refreshLogs()}><RefreshCw aria-hidden="true" />Refresh Logs</button><button type="button" className="primary-button gold-button" onClick={() => void onCopyDiagnostics()}><ListChecks aria-hidden="true" />Copy Diagnostics</button></div><div className="log-filter-panel" aria-label="Log filters"><div className="log-filter-group"><span>Category</span><div className="segmented-control" role="group" aria-label="Log category filter">{LOG_CATEGORY_FILTERS.map((filter) => <button key={filter.value} type="button" className={logCategoryFilter === filter.value ? 'active' : ''} onClick={() => setLogCategoryFilter(filter.value)}>{filter.label}</button>)}</div></div><div className="log-filter-group"><span>Status</span><div className="segmented-control" role="group" aria-label="Log status filter">{LOG_STATUS_FILTERS.map((filter) => <button key={filter.value} type="button" className={logStatusFilter === filter.value ? 'active' : ''} onClick={() => setLogStatusFilter(filter.value)}>{filter.label}</button>)}</div></div></div>{logs.length === 0 ? <div className="empty-state"><h3>No logs yet</h3><p>Workflow activity and validation outcomes will appear here as you use the app.</p></div> : filteredLogs.length === 0 ? <div className="empty-state"><h3>No matching logs</h3><p>Adjust the filters to see more recent activity.</p></div> : <div className="log-card-list">{filteredLogs.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="log-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><p>{entry.message}</p><StatusBadge status={entry.status} /></section>; })}</div>}</article></section> : null}
             </div>
-            {workflowToast ? (
-                <div className="toast-region" aria-live="polite" aria-atomic="true">
-                    <div className={`workflow-toast toast-${workflowToast.kind}`} key={workflowToast.id}>
-                        {workflowToast.message}
-                    </div>
-                </div>
-            ) : null}
+            {workflowToast ? <div className="toast-region" aria-live="polite" aria-atomic="true"><div className={`workflow-toast toast-${workflowToast.kind}`} key={workflowToast.id}>{workflowToast.message}</div></div> : null}
         </main>
     );
+
 }
 
 export default App;

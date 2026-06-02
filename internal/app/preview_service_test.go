@@ -57,6 +57,12 @@ func (s *previewSessionRepositoryStub) Delete(context.Context, string) error {
 	panic("unexpected Delete call")
 }
 
+func newPreviewServiceForTest(destinations *destinationListStub, settings *settingsLoadStub, sessions *previewSessionRepositoryStub) *PreviewService {
+	service := NewPreviewService(destinations, settings, sessions)
+	service.linkPreview = nil
+	return service
+}
+
 func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 	destinations := &destinationListStub{
 		items: []domain.Destination{
@@ -82,12 +88,13 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 			DefaultHashtags:  "#default",
 		},
 	}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	now := time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)
 	service.clock = fixedClock{now: now}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
 		StreamTitle:    "Going Live",
+		StreamURL:      "https://example.com/live",
 		DestinationIDs: []string{"discord-main"},
 	})
 	if err != nil {
@@ -120,7 +127,7 @@ func TestPreviewServiceCarriesValidationNotesIntoPreviewItems(t *testing.T) {
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{})
@@ -144,6 +151,74 @@ func TestPreviewServiceCarriesValidationNotesIntoPreviewItems(t *testing.T) {
 	}
 }
 
+func TestPreviewServiceAttachesLinkPreviewMetadataForUnfurlPlatforms(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "discord-main",
+				Platform:   domain.PlatformDiscord,
+				Name:       "Main Discord",
+				Template:   "{{stream_title}} {{stream_url}}",
+				ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+			},
+			{
+				ID:         "mastodon-main",
+				Platform:   domain.PlatformMastodon,
+				Name:       "Main Mastodon",
+				Template:   "{{stream_title}} {{stream_url}}",
+				ConfigJSON: `{"accountIdentifier":"@streamer@example.social","instanceURL":"https://example.social","credentialKey":"mastodon/main"}`,
+			},
+			{
+				ID:         "bluesky-main",
+				Platform:   domain.PlatformBluesky,
+				Name:       "Main Bluesky",
+				Template:   "{{stream_title}} {{stream_url}}",
+				ConfigJSON: `{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+	fetchCount := 0
+	service.linkPreview = func(_ context.Context, streamURL string) (*domain.LinkPreview, error) {
+		fetchCount++
+		if streamURL != "https://example.com/live" {
+			t.Fatalf("unexpected stream URL %q", streamURL)
+		}
+		return &domain.LinkPreview{
+			URL:         streamURL,
+			Title:       "Going Live",
+			Description: "Preview description",
+			ImageURL:    "https://example.com/card.png",
+			SiteName:    "Example",
+		}, nil
+	}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{
+		StreamTitle: "Going Live",
+		StreamURL:   "https://example.com/live",
+	})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 preview items, got %d", len(items))
+	}
+	if fetchCount != 1 {
+		t.Fatalf("expected link preview to be cached, fetched %d times", fetchCount)
+	}
+	if items[0].LinkPreview == nil || items[0].LinkPreview.Title != "Going Live" {
+		t.Fatalf("expected Discord link preview metadata, got %+v", items[0].LinkPreview)
+	}
+	if items[1].LinkPreview == nil || items[1].LinkPreview.ImageURL != "https://example.com/card.png" {
+		t.Fatalf("expected Mastodon link preview metadata, got %+v", items[1].LinkPreview)
+	}
+	if items[2].LinkPreview != nil {
+		t.Fatalf("expected Bluesky to keep its existing card approximation path, got %+v", items[2].LinkPreview)
+	}
+}
+
 func TestPreviewServiceSkipsBlueskyLiveStatusValidationWhenDisabled(t *testing.T) {
 	destinations := &destinationListStub{
 		items: []domain.Destination{
@@ -157,7 +232,7 @@ func TestPreviewServiceSkipsBlueskyLiveStatusValidationWhenDisabled(t *testing.T
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
@@ -192,7 +267,7 @@ func TestPreviewServiceAppliesBlueskyLiveStatusValidationWhenEnabled(t *testing.
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
@@ -234,7 +309,7 @@ func TestPreviewServiceIncludesEnabledEndStreamMessages(t *testing.T) {
 			StreamURL:     "https://example.com/live",
 		}},
 	}
-	service := NewPreviewService(destinations, settings, sessions)
+	service := newPreviewServiceForTest(destinations, settings, sessions)
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
@@ -270,7 +345,7 @@ func TestPreviewServiceEndStreamUsesCurrentAnnouncementFields(t *testing.T) {
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
@@ -313,7 +388,7 @@ func TestPreviewServiceEndStreamValidationOnlyRequiresTemplateFields(t *testing.
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.GenerateEndStream(context.Background(), domain.Announcement{
@@ -348,7 +423,7 @@ func TestPreviewServiceIncludesDestinationSetupValidation(t *testing.T) {
 		},
 	}
 	settings := &settingsLoadStub{}
-	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.Generate(context.Background(), domain.Announcement{
@@ -399,7 +474,7 @@ func TestPreviewServiceGeneratesEndStreamItemsFromDestinationConfig(t *testing.T
 			StreamURL:     "https://example.com/live",
 		}},
 	}
-	service := NewPreviewService(destinations, settings, sessions)
+	service := newPreviewServiceForTest(destinations, settings, sessions)
 	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
 
 	items, err := service.GenerateEndStream(context.Background(), domain.Announcement{

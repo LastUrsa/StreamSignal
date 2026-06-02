@@ -19,9 +19,6 @@ var platformCharacterLimits = map[DestinationPlatform]int{
 
 func NormalizeAnnouncement(input Announcement, settings AppSettings) Announcement {
 	normalized := input
-	if strings.TrimSpace(normalized.StreamURL) == "" {
-		normalized.StreamURL = strings.TrimSpace(settings.DefaultStreamURL)
-	}
 	if strings.TrimSpace(normalized.Hashtags) == "" {
 		normalized.Hashtags = strings.TrimSpace(settings.DefaultHashtags)
 	}

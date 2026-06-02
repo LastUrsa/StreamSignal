@@ -8,11 +8,12 @@ This document records the Milestone 8 review of StreamSignal's automated tests a
 
 Release-candidate quality gate checked on June 2, 2026:
 
-- `go test ./...`: passed locally
-- `npm test --prefix frontend`: passed locally with 3 test files and 49 tests
+- `GOCACHE=/tmp/go-build-cache go test ./...`: passed locally
+- `GOCACHE=/tmp/go-build-cache go vet ./...`: passed locally
+- `npm test --prefix frontend`: passed locally with 3 test files and 51 tests
 - `npm run build --prefix frontend`: passed locally
 - `npm audit --prefix frontend`: passed locally with 0 vulnerabilities
-- `govulncheck ./...`: passed locally with no vulnerabilities found
+- `GOCACHE=/tmp/go-build-cache govulncheck ./...`: passed locally with no called vulnerabilities found after upgrading `golang.org/x/net` to `v0.38.0`
 - GitHub Actions `Quality Gate` on `main`: passed for run `26801640687`
   - `Backend Tests and Vulnerability Scan`: success
   - `Frontend Tests, Build, and Audit`: success
@@ -85,6 +86,19 @@ Frontend coverage from `npm run test:coverage`:
   - Go Live binding and summary logging
 - added tests for the unavailable publisher adapters so safe fallback semantics are explicit
 
+## UI Refresh Test Updates
+
+The `ui-update` pass added or updated coverage for:
+
+- sidebar navigation and production/debug tab visibility
+- Settings recovery badge and Home recovery status
+- destination quick actions, guided setup, advanced-section defaults, and token insertion
+- collapsible generated previews
+- default Stream URL prefill behavior that respects a user-cleared Home field
+- Discord/Mastodon link-preview metadata attachment in backend preview generation
+- platform logo/fallback rendering and platform legal notice visibility
+- newest-first log ordering and scan-friendly log cards
+
 ## Current Bluesky Coverage
 
 Recent workflow work added or updated tests for:
@@ -115,7 +129,17 @@ Recent workflow work added or updated tests for:
 - Discord image validation for non-HTTP image URLs and oversized uploaded images
 - destination-level End Stream enablement and template rendering
 - disabled End Stream destinations producing skipped execution results instead of posts
-- combined Preview output that includes Go Live messages plus enabled End Stream messages in one network-free preview pass
+- combined Preview output that includes Go Live messages plus enabled End Stream messages in one preview pass
+- approximate Discord link-preview metadata in generated preview items
+
+## Current Preview Link Metadata Coverage
+
+Recent workflow work added or updated tests for:
+
+- per-generation caching of fetched link metadata
+- attaching link-preview metadata only for Discord and Mastodon unfurl-style previews
+- preserving Bluesky's configured card/image preview path
+- respecting a user-cleared Home Stream URL instead of reapplying the Settings default
 
 ## Standard For Future Work
 

@@ -134,6 +134,15 @@ function toPreviewItem(item: domain.PreviewItem): PreviewItem {
         characterCount: item.characterCount,
         validationState: item.validationState,
         validationNotes: asArray(item.validationNotes),
+        linkPreview: item.linkPreview
+            ? {
+                  url: item.linkPreview.url,
+                  title: item.linkPreview.title,
+                  description: item.linkPreview.description,
+                  imageURL: item.linkPreview.imageURL,
+                  siteName: item.linkPreview.siteName,
+              }
+            : null,
     };
 }
 

@@ -70,6 +70,15 @@ type PreviewItem struct {
 	CharacterCount  int                 `json:"characterCount"`
 	ValidationState string              `json:"validationState"`
 	ValidationNotes []string            `json:"validationNotes"`
+	LinkPreview     *LinkPreview        `json:"linkPreview,omitempty"`
+}
+
+type LinkPreview struct {
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	ImageURL    string `json:"imageURL"`
+	SiteName    string `json:"siteName"`
 }
 
 type PostHistoryRecord struct {
