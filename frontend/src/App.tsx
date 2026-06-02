@@ -70,6 +70,25 @@ type WorkflowToast = {
     kind: 'success' | 'warning';
 };
 
+type LogCategoryFilter = 'all' | 'execution' | 'destinations' | 'settings' | 'preview';
+type LogStatusFilter = 'all' | 'failed' | 'validation' | 'warning' | 'success';
+
+const LOG_CATEGORY_FILTERS: Array<{ value: LogCategoryFilter; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'execution', label: 'Execution' },
+    { value: 'destinations', label: 'Destinations' },
+    { value: 'settings', label: 'Settings' },
+    { value: 'preview', label: 'Preview' },
+];
+
+const LOG_STATUS_FILTERS: Array<{ value: LogStatusFilter; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'validation', label: 'Validation' },
+    { value: 'warning', label: 'Warning' },
+    { value: 'success', label: 'Success' },
+];
+
 function executionModeLabel(mode: ExecutionSummary['mode']) {
     switch (mode) {
         case 'go_live':
@@ -97,16 +116,54 @@ function executionResultKind(mode: ExecutionSummary['mode'], message: string) {
     return executionModeLabel(mode);
 }
 
+function logCategoryForAction(action: string): LogCategoryFilter {
+    if (action.includes('go_live') || action.includes('end_stream') || action === 'clear_pending_live_now') {
+        return 'execution';
+    }
+    if (action.includes('destination') || action === 'test_destination_connection') {
+        return 'destinations';
+    }
+    if (action.includes('settings')) {
+        return 'settings';
+    }
+    if (action.includes('preview')) {
+        return 'preview';
+    }
+    return 'all';
+}
+
+function logMatchesStatusFilter(entry: LogEntry, filter: LogStatusFilter) {
+    const status = entry.status.toUpperCase();
+    switch (filter) {
+        case 'failed':
+            return status === 'FAILED' || status === 'PARTIAL';
+        case 'validation':
+            return status === 'VALIDATION_ERROR';
+        case 'warning':
+            return status === 'WARNING' || status === 'SKIPPED';
+        case 'success':
+            return status === 'SUCCESS';
+        default:
+            return true;
+    }
+}
+
 function logActionLabel(action: string) {
     switch (action) {
         case 'generate_preview':
             return 'Preview';
         case 'go_live':
             return 'Go Live';
+        case 'go_live_result':
+            return 'Go Live Result';
         case 'force_go_live':
             return 'Confirmed Go Live';
+        case 'force_go_live_result':
+            return 'Confirmed Go Live Result';
         case 'end_stream':
             return 'End Stream';
+        case 'end_stream_result':
+            return 'End Stream Result';
         case 'clear_pending_live_now':
             return 'Live Now Recovery';
         case 'save_destination':
@@ -409,6 +466,8 @@ function App() {
     const [settingsError, setSettingsError] = useState<string | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [logsError, setLogsError] = useState<string | null>(null);
+    const [logCategoryFilter, setLogCategoryFilter] = useState<LogCategoryFilter>('all');
+    const [logStatusFilter, setLogStatusFilter] = useState<LogStatusFilter>('all');
     const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null);
     const [workflowToast, setWorkflowToast] = useState<WorkflowToast | null>(null);
     const initializedSelection = useRef(false);
@@ -970,6 +1029,10 @@ function App() {
     const selectedDestinations = destinations.filter((destination) => selectedDestinationIDSet.has(destination.id));
     const selectedEndStreamPostCount = selectedDestinations.filter((destination) => toDestinationFormState(destination).endStreamEnabled).length;
     const selectedLiveNowClearCount = pendingLiveNowSessions.filter((session) => selectedDestinationIDSet.has(session.destinationID)).length;
+    const filteredLogs = logs.filter((entry) => {
+        const matchesCategory = logCategoryFilter === 'all' || logCategoryForAction(entry.action) === logCategoryFilter;
+        return matchesCategory && logMatchesStatusFilter(entry, logStatusFilter);
+    });
 
     return (
         <main className="app-shell">
@@ -2077,7 +2140,9 @@ function App() {
                                         <h2>Logs</h2>
                                         <p>Review recent app activity and export diagnostics when you need support context.</p>
                                     </div>
-                                    <span>{logs.length} recent entries</span>
+                                    <span>
+                                        {filteredLogs.length} of {logs.length} recent entries
+                                    </span>
                                 </div>
                         {logsError ? <p className="error-banner">{logsError}</p> : null}
 
@@ -2090,14 +2155,52 @@ function App() {
                             </button>
                         </div>
 
+                        <div className="log-filter-panel" aria-label="Log filters">
+                            <div className="log-filter-group">
+                                <span>Category</span>
+                                <div className="segmented-control" role="group" aria-label="Log category filter">
+                                    {LOG_CATEGORY_FILTERS.map((filter) => (
+                                        <button
+                                            key={filter.value}
+                                            type="button"
+                                            className={logCategoryFilter === filter.value ? 'active' : ''}
+                                            onClick={() => setLogCategoryFilter(filter.value)}
+                                        >
+                                            {filter.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="log-filter-group">
+                                <span>Status</span>
+                                <div className="segmented-control" role="group" aria-label="Log status filter">
+                                    {LOG_STATUS_FILTERS.map((filter) => (
+                                        <button
+                                            key={filter.value}
+                                            type="button"
+                                            className={logStatusFilter === filter.value ? 'active' : ''}
+                                            onClick={() => setLogStatusFilter(filter.value)}
+                                        >
+                                            {filter.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
                         {logs.length === 0 ? (
                             <div className="empty-state">
                                 <h3>No logs yet</h3>
                                 <p>Workflow activity and validation outcomes will appear here as you use the app.</p>
                             </div>
+                        ) : filteredLogs.length === 0 ? (
+                            <div className="empty-state">
+                                <h3>No matching logs</h3>
+                                <p>Adjust the filters to see more recent activity.</p>
+                            </div>
                         ) : (
                             <div className="logs-list">
-                                {logs.map((entry, index) => (
+                                {filteredLogs.map((entry, index) => (
                                     <section className="log-row" key={`${entry.timestamp}-${entry.action}-${index}`}>
                                         <div className="log-summary">
                                             <strong>{entry.destination}</strong>

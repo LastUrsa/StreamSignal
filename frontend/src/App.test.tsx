@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import * as api from './lib/api/streamsignal';
 import type { PreviewItem } from './types/preview';
@@ -779,6 +779,20 @@ describe('App', () => {
                 status: 'SUCCESS',
                 message: 'Generated 1 preview items.',
             },
+            {
+                timestamp: '2026-05-31T12:01:00Z',
+                destination: 'Main Discord',
+                action: 'go_live_result',
+                status: 'FAILED',
+                message: 'Discord webhook failed.',
+            },
+            {
+                timestamp: '2026-05-31T12:02:00Z',
+                destination: 'Main Bluesky',
+                action: 'save_destination',
+                status: 'SUCCESS',
+                message: 'Saved destination configuration.',
+            },
         ]);
 
         render(<App />);
@@ -786,7 +800,25 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Logs' }));
 
         expect(await screen.findByText('Generated 1 preview items.')).toBeInTheDocument();
-        expect(screen.getByText('Preview')).toBeInTheDocument();
+        expect(screen.getByText('Discord webhook failed.')).toBeInTheDocument();
+        expect(screen.getByText('Saved destination configuration.')).toBeInTheDocument();
+        expect(screen.getByText('Go Live Result')).toBeInTheDocument();
+
+        const categoryFilter = screen.getByRole('group', { name: 'Log category filter' });
+        fireEvent.click(within(categoryFilter).getByRole('button', { name: 'Execution' }));
+
+        expect(screen.queryByText('Generated 1 preview items.')).not.toBeInTheDocument();
+        expect(screen.getByText('Discord webhook failed.')).toBeInTheDocument();
+        expect(screen.queryByText('Saved destination configuration.')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Success' }));
+
+        expect(screen.getByText('No matching logs')).toBeInTheDocument();
+
+        fireEvent.click(within(categoryFilter).getByRole('button', { name: 'Destinations' }));
+
+        expect(screen.getByText('Saved destination configuration.')).toBeInTheDocument();
+        expect(screen.queryByText('Discord webhook failed.')).not.toBeInTheDocument();
     });
 
     it('copies diagnostics from the Logs tab', async () => {

@@ -715,6 +715,51 @@ body {
     align-content: start;
 }
 
+.log-filter-panel {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-soft);
+}
+
+.log-filter-group {
+    display: grid;
+    gap: 8px;
+}
+
+.log-filter-group > span {
+    color: var(--metadata);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.segmented-control {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.segmented-control button {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 0.86rem;
+    cursor: pointer;
+}
+
+.segmented-control button.active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--text);
+}
+
 .saved-destinations-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
