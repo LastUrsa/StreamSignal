@@ -56,9 +56,9 @@ Ship StreamSignal in a way that is:
   - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
   - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
 - [ ] verify macOS app signing, notarization, and Gatekeeper behavior
-- [ ] validate installer metadata, icon, and version information
-  - Installer metadata is set to `DRDohr`, `StreamSignal`, and `0.1.0`.
-  - App executable Windows details are still blank and need a Windows-resource follow-up before release.
+- [x] validate installer metadata, icon, and version information
+  - Installer and app executable metadata are set to `DRDohr`, `StreamSignal`, and `0.1.0`.
+  - The app executable reports populated Windows Details fields through `FileVersionInfo` and direct Win32 version-resource lookup.
 - [ ] verify install path behavior on a clean Windows machine or VM
   - Silent temp-directory install succeeded at `C:\Users\Don\AppData\Local\Temp\StreamSignalInstallTest`.
   - Default Program Files install path still needs a clean-machine or VM pass.

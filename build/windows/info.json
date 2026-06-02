@@ -1,13 +1,17 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "{{.Info.ProductVersion}}",
+		"product_version": "{{.Info.ProductVersion}}"
 	},
 	"info": {
-		"0000": {
+		"0409": {
 			"ProductVersion": "{{.Info.ProductVersion}}",
+			"FileVersion": "{{.Info.ProductVersion}}",
 			"CompanyName": "{{.Info.CompanyName}}",
 			"FileDescription": "{{.Info.ProductName}}",
+			"InternalName": "{{.OutputFilename}}",
 			"LegalCopyright": "{{.Info.Copyright}}",
+			"OriginalFilename": "{{.OutputFilename}}",
 			"ProductName": "{{.Info.ProductName}}",
 			"Comments": "{{.Info.Comments}}"
 		}
