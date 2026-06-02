@@ -64,6 +64,12 @@ type GuidedSetupStep = {
     detail: string;
 };
 
+type WorkflowToast = {
+    id: number;
+    message: string;
+    kind: 'success' | 'warning';
+};
+
 function executionModeLabel(mode: ExecutionSummary['mode']) {
     switch (mode) {
         case 'go_live':
@@ -348,6 +354,16 @@ function destinationEnvironmentFrom(destination: DestinationInput): DestinationF
     return toDestinationFormState(destination).environment;
 }
 
+function destinationSendToMetadata(destination: DestinationInput) {
+    const form = toDestinationFormState(destination);
+    const parts = [destination.platform, destinationEnvironmentLabel(form.environment)];
+    if (destination.platform === 'bluesky') {
+        parts.push(form.blueskyLiveStatusEnabled ? 'Live Status ON' : 'Live Status OFF');
+    }
+    parts.push(form.endStreamEnabled ? 'End Stream on' : 'End Stream off');
+    return parts.join(' · ');
+}
+
 function App() {
     const [selectedTab, setSelectedTab] = useState<TabKey>('home');
 
@@ -385,7 +401,9 @@ function App() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [logsError, setLogsError] = useState<string | null>(null);
     const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null);
+    const [workflowToast, setWorkflowToast] = useState<WorkflowToast | null>(null);
     const initializedSelection = useRef(false);
+    const workflowToastTimeout = useRef<number | null>(null);
     const discordThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyAdditionalImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -398,6 +416,14 @@ function App() {
             void refreshLogs();
         }
         void refreshPendingLiveNowSessions();
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (workflowToastTimeout.current !== null) {
+                window.clearTimeout(workflowToastTimeout.current);
+            }
+        };
     }, []);
 
     useEffect(() => {
@@ -450,6 +476,22 @@ function App() {
             const message = errorMessage(err, 'Unable to load pending Live Now sessions.');
             setRecoveryError(message);
         }
+    }
+
+    function showToast(message: string, kind: WorkflowToast['kind'] = 'success') {
+        if (workflowToastTimeout.current !== null) {
+            window.clearTimeout(workflowToastTimeout.current);
+        }
+
+        setWorkflowToast({
+            id: Date.now(),
+            message,
+            kind,
+        });
+        workflowToastTimeout.current = window.setTimeout(() => {
+            setWorkflowToast(null);
+            workflowToastTimeout.current = null;
+        }, 5000);
     }
 
     async function onPreviewSubmit(event: FormEvent<HTMLFormElement>) {
@@ -532,7 +574,7 @@ function App() {
                 return;
             }
 
-            const summary = await endStream(selectedDestinationIDs);
+            const summary = await endStream(announcement, selectedDestinationIDs);
             setExecutionSummary(summary);
             await refreshPendingLiveNowSessions();
         } catch (err: unknown) {
@@ -551,7 +593,8 @@ function App() {
         try {
             const result = await clearPendingLiveNowSession(destinationID);
             if (result.state === 'SUCCESS') {
-                setRecoveryStatus(result.message);
+                setRecoveryStatus(null);
+                showToast(result.message);
             } else {
                 setRecoveryError(result.message);
             }
@@ -568,6 +611,8 @@ function App() {
         event.preventDefault();
         setDestinationError(null);
         setDestinationStatus(null);
+        const wasEditingDestination = destinationForm.id !== '';
+        const savedPlatform = destinationForm.platform;
 
         try {
             const resolvedForm: DestinationFormState = {
@@ -578,14 +623,42 @@ function App() {
             };
             const saved = await saveDestination(toDestinationInput(resolvedForm));
             const savedForm = toDestinationFormState(saved);
-            setDestinationSecrets(destinationSecretCacheFrom(savedForm));
-            setDestinationForm(toMaskedDestinationForm(savedForm));
+            if (wasEditingDestination) {
+                setDestinationSecrets(destinationSecretCacheFrom(savedForm));
+                setDestinationForm(toMaskedDestinationForm(savedForm));
+            } else {
+                resetDestinationForm(savedPlatform);
+            }
             setSelectedDestinationIDs((current) => (current.includes(saved.id) ? current : [...current, saved.id]));
-            setDestinationStatus('Destination saved.');
+            setDestinationStatus(null);
+            showToast('Destination saved.');
             await refreshDestinations();
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to save destination.');
             setDestinationError(message);
+        }
+    }
+
+    function resetDestinationForm(platform = destinationForm.platform) {
+        setDestinationSecrets({
+            discordWebhookKey: '',
+            blueskyCredentialKey: '',
+            mastodonCredentialKey: '',
+        });
+        setDestinationForm(createEmptyDestinationForm(platform));
+        setDestinationConnectionResult(null);
+        setDestinationHelperStatus(null);
+        if (discordThumbnailInputRef.current) {
+            discordThumbnailInputRef.current.value = '';
+        }
+        if (blueskyThumbnailInputRef.current) {
+            blueskyThumbnailInputRef.current.value = '';
+        }
+        if (blueskyAdditionalImageInputRef.current) {
+            blueskyAdditionalImageInputRef.current.value = '';
+        }
+        if (mastodonAdditionalImageInputRef.current) {
+            mastodonAdditionalImageInputRef.current.value = '';
         }
     }
 
@@ -604,6 +677,9 @@ function App() {
             };
             const result = await testDestinationConnection(toDestinationInput(resolvedForm));
             setDestinationConnectionResult(result);
+            if (result.state === 'SUCCESS') {
+                showToast(result.message);
+            }
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to test destination connection.');
             setDestinationError(message);
@@ -630,7 +706,8 @@ function App() {
                 mastodonCredentialKey: '',
             });
             setSelectedDestinationIDs((current) => current.filter((id) => id !== deletedID));
-            setDestinationStatus('Destination deleted.');
+            setDestinationStatus(null);
+            showToast('Destination deleted.');
             await refreshDestinations();
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to delete destination.');
@@ -647,7 +724,8 @@ function App() {
             const saved = await saveSettings(settings);
             setSettings(saved);
             setAnnouncement((existing) => applyAnnouncementDefaults(existing, saved));
-            setSettingsStatus('Settings saved.');
+            setSettingsStatus(null);
+            showToast('Settings saved.');
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to save settings.');
             setSettingsError(message);
@@ -662,7 +740,8 @@ function App() {
             const diagnostics = await getDiagnostics();
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(diagnostics);
-                setDiagnosticsStatus('Diagnostics copied.');
+                setDiagnosticsStatus(null);
+                showToast('Diagnostics copied.');
             } else {
                 setLogsError('Clipboard is unavailable in this environment.');
             }
@@ -1059,8 +1138,7 @@ function App() {
                                                             <span className="session-destination-copy">
                                                                 <strong>{destination.name}</strong>
                                                                 <small>
-                                                                    {destination.platform} · {destinationEnvironmentLabel(destinationEnvironmentFrom(destination))} ·{' '}
-                                                                    {toDestinationFormState(destination).endStreamEnabled ? 'End Stream on' : 'End Stream off'}
+                                                                    {destinationSendToMetadata(destination)}
                                                                 </small>
                                                             </span>
                                                         </label>
@@ -1285,23 +1363,13 @@ function App() {
                                             <button
                                                 type="button"
                                                 className="ghost-button"
-                                                onClick={() => {
-                                                    setDestinationSecrets({
-                                                        discordWebhookKey: '',
-                                                        blueskyCredentialKey: '',
-                                                        mastodonCredentialKey: '',
-                                                    });
-                                                    setDestinationForm(createEmptyDestinationForm(destinationForm.platform));
-                                                    setDestinationConnectionResult(null);
-                                                    setDestinationHelperStatus(null);
-                                                }}
+                                                onClick={() => resetDestinationForm()}
                                             >
                                                 Reset Form
                                             </button>
                                         </div>
                                     </div>
                                     {destinationError ? <p className="error-banner">{destinationError}</p> : null}
-                                    {destinationStatus ? <p className="success-banner">{destinationStatus}</p> : null}
 
                                     <div className="saved-destinations-grid">
                                         {destinations.length === 0 ? (
@@ -1336,7 +1404,14 @@ function App() {
                                         <div className="panel-header">
                                             <div>
                                                 <h2>{destinationForm.id ? 'Edit Destination' : 'New Destination'}</h2>
-                                                <p>Fill in the platform details, test them, then save.</p>
+                                                <p>
+                                                    {destinationForm.id
+                                                        ? 'Save changes to the selected destination.'
+                                                        : 'Create mode clears after save so the next destination starts fresh.'}
+                                                </p>
+                                                <div className="destination-mode-indicator">
+                                                    {destinationForm.id ? `Editing: ${destinationForm.name || 'Selected destination'}` : 'New destination'}
+                                                </div>
                                             </div>
                                             <div className="form-actions">
                                                 <span>Posting setup</span>
@@ -1583,6 +1658,15 @@ function App() {
                                                 placeholder="xxxx-xxxx-xxxx-xxxx"
                                             />
                                         </label>
+                                        <label className="field checkbox-field">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Live Status Enabled"
+                                                checked={destinationForm.blueskyLiveStatusEnabled}
+                                                onChange={(event) => updateDestination('blueskyLiveStatusEnabled', event.target.checked)}
+                                            />
+                                            <span>Live Status Enabled</span>
+                                        </label>
                                         <label className="field">
                                             <span>Live Status Template</span>
                                             <textarea
@@ -1591,6 +1675,7 @@ function App() {
                                                 onChange={(event) => updateDestination('blueskyLiveStatusTemplate', event.target.value)}
                                                 placeholder="LIVE {{stream_title}}"
                                                 rows={4}
+                                                disabled={!destinationForm.blueskyLiveStatusEnabled}
                                             />
                                         </label>
                                         <label className="field">
@@ -1602,6 +1687,7 @@ function App() {
                                                 value={destinationForm.blueskyLiveNowDurationMinutes}
                                                 onChange={(event) => updateDestination('blueskyLiveNowDurationMinutes', event.target.value)}
                                                 placeholder="120"
+                                                disabled={!destinationForm.blueskyLiveStatusEnabled}
                                             />
                                         </label>
                                         <label className="field">
@@ -1793,7 +1879,7 @@ function App() {
                                 <div className="action-cluster">
                                     <div className="action-cluster-main">
                                     <button type="submit" className="primary-button">
-                                        Save Destination
+                                        {destinationForm.id ? 'Save Changes' : 'Create Destination'}
                                     </button>
                                     <button
                                         type="button"
@@ -1814,16 +1900,10 @@ function App() {
                                     </div>
                                 </div>
 
-                                {destinationConnectionResult ? (
-                                    destinationConnectionResult.state === 'SUCCESS' ? (
-                                        <p className="success-banner">
-                                            {destinationConnectionResult.message}
-                                        </p>
-                                    ) : (
+                                {destinationConnectionResult && destinationConnectionResult.state !== 'SUCCESS' ? (
                                         <p className="error-banner">
                                             {destinationConnectionResult.message}
                                         </p>
-                                    )
                                 ) : null}
                             </form>
                                 </article>
@@ -1871,11 +1951,10 @@ function App() {
                                         <span>App defaults and safety rails</span>
                                     </div>
                         {settingsError ? <p className="error-banner">{settingsError}</p> : null}
-                        {settingsStatus ? <p className="success-banner">{settingsStatus}</p> : null}
                                 </article>
 
                                 <section className="two-column-layout">
-                                    <article className="panel">
+                                    <article className="panel settings-panel">
                                         <section className="mini-panel">
                                             <h3>App Defaults</h3>
                                             <p>Use test destinations in the Destinations tab when you want to publish to test accounts or channels.</p>
@@ -1936,7 +2015,6 @@ function App() {
                                             <h3>Live Now Recovery</h3>
                                             <p>Use this if Stream Signal closed before Bluesky Live Now was cleared, or if a pending session needs to be cleaned up manually.</p>
                                             {recoveryError ? <p className="error-banner">{recoveryError}</p> : null}
-                                            {recoveryStatus ? <p className="success-banner">{recoveryStatus}</p> : null}
 
                                             {pendingLiveNowSessions.length === 0 ? (
                                                 <div className="empty-state compact-empty-state">
@@ -1981,7 +2059,6 @@ function App() {
                                     <span>{logs.length} recent entries</span>
                                 </div>
                         {logsError ? <p className="error-banner">{logsError}</p> : null}
-                        {diagnosticsStatus ? <p className="success-banner">{diagnosticsStatus}</p> : null}
 
                         <div className="form-actions logs-actions">
                             <button type="button" className="ghost-button" onClick={() => void refreshLogs()}>
@@ -2016,6 +2093,13 @@ function App() {
                         ) : null}
                 </section>
             </div>
+            {workflowToast ? (
+                <div className="toast-region" aria-live="polite" aria-atomic="true">
+                    <div className={`workflow-toast toast-${workflowToast.kind}`} key={workflowToast.id}>
+                        {workflowToast.message}
+                    </div>
+                </div>
+            ) : null}
         </main>
     );
 }

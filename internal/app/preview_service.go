@@ -43,6 +43,7 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 	for _, destination := range destinations {
 		content := templates.Render(destination.Template, normalized, destination.Platform, now)
 		notes := domain.ValidateAnnouncementForTemplate(normalized, destination.Template)
+		notes = append(notes, validateLiveStatusPreview(destination, normalized)...)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
 		if err := validateDestinationConfig(destination); err != nil {
 			notes = append(notes, err.Error())
@@ -60,13 +61,37 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 		})
 	}
 
-	endStreamItems, err := s.generateEndStream(ctx, settings, destinations, false)
+	endStreamItems, err := s.generateEndStream(ctx, destinations, normalized, false)
 	if err != nil {
 		return nil, err
 	}
 	items = append(items, endStreamItems...)
 
 	return items, nil
+}
+
+func validateLiveStatusPreview(destination domain.Destination, announcement domain.Announcement) []string {
+	if destination.Platform != domain.PlatformBluesky {
+		return nil
+	}
+	enabled, err := blueskyLiveStatusEnabledForDestination(destination)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	if !enabled {
+		return nil
+	}
+
+	var notes []string
+	status := normalizeBlueskyLiveNowStatus(domain.BlueskyLiveNowStatus{
+		URL:         announcement.StreamURL,
+		Title:       announcement.StreamTitle,
+		Description: announcement.Message,
+	})
+	if err := validateBlueskyLiveNowStatus(status); err != nil {
+		notes = append(notes, err.Error())
+	}
+	return notes
 }
 
 func (s *PreviewService) GenerateEndStream(ctx context.Context, announcement domain.Announcement) ([]domain.PreviewItem, error) {
@@ -81,10 +106,11 @@ func (s *PreviewService) GenerateEndStream(ctx context.Context, announcement dom
 	}
 	destinations = destinationsForSelection(destinations, announcement.DestinationIDs)
 
-	return s.generateEndStream(ctx, settings, destinations, true)
+	normalized := domain.NormalizeAnnouncement(announcement, settings)
+	return s.generateEndStream(ctx, destinations, normalized, true)
 }
 
-func (s *PreviewService) generateEndStream(ctx context.Context, settings domain.AppSettings, destinations []domain.Destination, includeDisabled bool) ([]domain.PreviewItem, error) {
+func (s *PreviewService) generateEndStream(ctx context.Context, destinations []domain.Destination, announcement domain.Announcement, includeDisabled bool) ([]domain.PreviewItem, error) {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
 		return nil, err
@@ -124,9 +150,7 @@ func (s *PreviewService) generateEndStream(ctx context.Context, settings domain.
 			continue
 		}
 
-		announcementForDestination := domain.NormalizeAnnouncement(domain.Announcement{
-			Message: endConfig.Template,
-		}, settings)
+		announcementForDestination := announcement
 		if session, ok := sessionByDestination[destination.ID]; ok {
 			announcementForDestination.StreamTitle = session.StreamTitle
 			announcementForDestination.StreamURL = session.StreamURL

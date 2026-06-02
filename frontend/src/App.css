@@ -41,7 +41,7 @@ body {
 
 .app-shell {
     min-height: 100vh;
-    padding: 28px;
+    padding: 28px 28px 112px;
     background:
         radial-gradient(circle at top left, rgba(98, 122, 150, 0.26), transparent 32%),
         radial-gradient(circle at 90% 0%, rgba(80, 101, 127, 0.22), transparent 28%),
@@ -123,7 +123,8 @@ body {
     flex: 0 0 auto;
     object-fit: contain;
     border-radius: 12px;
-    background: color-mix(in srgb, var(--surface-alt) 84%, white 16%);
+    border: 1px solid var(--border);
+    background: #d7e0ea;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
 }
 
@@ -195,6 +196,11 @@ body {
     width: 100%;
 }
 
+.settings-panel {
+    display: grid;
+    gap: 18px;
+}
+
 .two-column-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
@@ -220,6 +226,19 @@ body {
 .panel-header p {
     margin: 8px 0 0;
     color: var(--text-soft);
+}
+
+.destination-mode-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
+    background: color-mix(in srgb, var(--surface-strong) 86%, var(--accent) 14%);
+    color: var(--text);
+    font-size: 0.88rem;
+    font-weight: 700;
 }
 
 .panel-header span {
@@ -579,6 +598,49 @@ body {
     margin: 0;
 }
 
+.toast-region {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    z-index: 1200;
+    width: min(520px, calc(100vw - 32px));
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.workflow-toast {
+    padding: 14px 18px;
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--success) 48%, var(--border) 52%);
+    background: color-mix(in srgb, var(--surface-strong) 90%, var(--success) 10%);
+    color: var(--text);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+    text-align: center;
+    font-weight: 700;
+    animation: toast-lifetime 5s ease forwards;
+}
+
+.toast-warning {
+    border-color: color-mix(in srgb, var(--warning) 48%, var(--border) 52%);
+    background: color-mix(in srgb, var(--surface-strong) 88%, var(--warning) 12%);
+}
+
+@keyframes toast-lifetime {
+    0% {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    10%,
+    88% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
 .preview-list {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
@@ -777,7 +839,7 @@ body {
 
 @media (max-width: 820px) {
     .app-shell {
-        padding: 18px;
+        padding: 18px 18px 104px;
     }
 
     .app-header,

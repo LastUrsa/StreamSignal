@@ -316,6 +316,8 @@ describe('App', () => {
         expect(await screen.findByText('Main Discord')).toBeInTheDocument();
         expect(screen.getByText('discord · Production')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Reset Form' })).toBeInTheDocument();
+        expect(screen.getByText('New destination')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Create Destination' })).toBeInTheDocument();
     });
 
     it('treats a null destination list from Wails as empty', async () => {
@@ -347,7 +349,7 @@ describe('App', () => {
                 name: 'Main Bluesky',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}',
+                configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false}',
                 createdAt: '',
                 updatedAt: '',
             },
@@ -355,6 +357,7 @@ describe('App', () => {
 
         render(<App />);
 
+        expect(await screen.findByText('bluesky · Production · Live Status OFF · End Stream off')).toBeInTheDocument();
         fireEvent.click(await screen.findByLabelText('Main Bluesky'));
         fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
 
@@ -398,11 +401,20 @@ describe('App', () => {
 
         render(<App />);
 
+        fireEvent.change(await screen.findByLabelText('Stream Title'), {
+            target: { value: 'Going Live' },
+        });
         fireEvent.click(await screen.findByLabelText('Main Bluesky'));
         fireEvent.click(screen.getByRole('button', { name: 'End Stream' }));
 
         await waitFor(() => {
-            expect(mockedEndStream).toHaveBeenCalledWith(['discord-main']);
+            expect(mockedEndStream).toHaveBeenCalledWith(expect.objectContaining({
+                streamTitle: 'Going Live',
+                streamURL: '',
+                category: '',
+                message: '',
+                hashtags: '',
+            }), ['discord-main']);
         });
     });
 
@@ -428,6 +440,8 @@ describe('App', () => {
         expect(await screen.findByLabelText('Server Name')).toHaveValue('My Server');
         expect(screen.getByLabelText('Channel Name')).toHaveValue('go-live');
         expect(screen.getByLabelText('Webhook URL')).toHaveValue(STORED_SECRET_TOKEN);
+        expect(screen.getByText('Editing: Main Discord')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     });
 
     it('saves a destination from the Destinations tab form', async () => {
@@ -451,7 +465,7 @@ describe('App', () => {
             target: { value: 'discord/main' },
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save Destination' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Create Destination' }));
 
         await waitFor(() => {
             expect(mockedSaveDestination).toHaveBeenCalledWith({
@@ -467,6 +481,12 @@ describe('App', () => {
         });
 
         expect(await screen.findByText('Destination saved.')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByLabelText('Friendly Name')).toHaveValue('');
+        });
+        expect(screen.getByLabelText('Webhook URL')).toHaveValue('');
+        expect(screen.getByText('New destination')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Create Destination' })).toBeInTheDocument();
     });
 
     it('tests a discord destination connection before saving', async () => {
@@ -646,7 +666,7 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
         fireEvent.click(await screen.findByRole('button', { name: /Main Discord/i }));
-        fireEvent.click(await screen.findByRole('button', { name: 'Save Destination' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
 
         await waitFor(() => {
             expect(mockedSaveDestination).toHaveBeenCalledWith({
@@ -660,6 +680,8 @@ describe('App', () => {
                 updatedAt: '',
             });
         });
+        expect(screen.getByText('Editing: Main Discord')).toBeInTheDocument();
+        expect(screen.getByLabelText('Friendly Name')).toHaveValue('Main Discord');
     });
 
     it('shows and clears pending Live Now recovery sessions from Settings', async () => {

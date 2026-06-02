@@ -526,6 +526,47 @@ func TestExecutionServiceGoLiveReturnsFailureWhenBlueskyLiveNowUpdateFailsAfterP
 	}
 }
 
+func TestExecutionServiceGoLiveSkipsBlueskyLiveNowWhenDisabled(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	destRepo.items["bluesky-main"] = domain.Destination{
+		ID:         "bluesky-main",
+		Platform:   domain.PlatformBluesky,
+		Name:       "Main Bluesky",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"accountIdentifier":"streamer.main","credentialKey":"bluesky/main","liveStatusEnabled":false}`,
+	}
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	history := &postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}}
+	bluesky := &blueskyPublisherStub{}
+	sessions := &liveNowSessionRepositoryExecutionStub{}
+	service := NewExecutionService(destRepo, settingsRepo, history, sessions, &discordPublisherStub{}, bluesky, &mastodonPublisherStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	summary, err := service.GoLive(context.Background(), domain.Announcement{
+		StreamTitle: "Going Live",
+		StreamURL:   "https://example.com/live",
+	})
+	if err != nil {
+		t.Fatalf("go live: %v", err)
+	}
+	if len(summary.Results) != 1 || summary.Results[0].State != domain.ExecutionStateSuccess {
+		t.Fatalf("expected successful result, got %+v", summary.Results)
+	}
+	if summary.Results[0].Message != "Published successfully. Live Status off." {
+		t.Fatalf("unexpected message: %+v", summary.Results[0])
+	}
+	if len(bluesky.calls) != 1 {
+		t.Fatalf("expected bluesky post call, got %d", len(bluesky.calls))
+	}
+	if len(bluesky.liveNowSetCalls) != 0 {
+		t.Fatalf("expected no live now set calls, got %+v", bluesky.liveNowSetCalls)
+	}
+	if len(sessions.upserts) != 0 {
+		t.Fatalf("expected no live now tracking, got %+v", sessions.upserts)
+	}
+}
+
 func TestExecutionServiceEndStreamClearsBlueskyLiveNow(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
 	destRepo.listItems = []domain.Destination{
@@ -569,8 +610,8 @@ func TestExecutionServiceEndStreamClearsBlueskyLiveNow(t *testing.T) {
 	if len(bluesky.liveNowClearCalls) != 1 || bluesky.liveNowClearCalls[0].identifier != "streamer.main" || bluesky.liveNowClearCalls[0].key != "bluesky/main" {
 		t.Fatalf("expected live now clear call, got %+v", bluesky.liveNowClearCalls)
 	}
-	if len(summary.Results) != 3 || summary.Results[0].State != domain.ExecutionStateSuccess || summary.SkippedCount != 2 {
-		t.Fatalf("expected live now clear plus disabled post skips, got %+v", summary)
+	if len(summary.Results) != 1 || summary.Results[0].State != domain.ExecutionStateSuccess || summary.SkippedCount != 0 {
+		t.Fatalf("expected live now clear only, got %+v", summary)
 	}
 	if len(sessions.deletes) != 1 || sessions.deletes[0] != "bluesky-main" {
 		t.Fatalf("expected live now session delete, got %+v", sessions.deletes)
@@ -629,11 +670,11 @@ func TestExecutionServiceEndStreamOptionallyPublishesConfiguredPosts(t *testing.
 	if len(bluesky.calls) != 1 || bluesky.calls[0].content != "Thanks for hanging out at Going Live https://example.com/live" {
 		t.Fatalf("expected bluesky end stream post with tracked session details, got %+v", bluesky.calls)
 	}
-	if len(summary.Results) != 3 {
-		t.Fatalf("expected three end stream results, got %+v", summary.Results)
+	if len(summary.Results) != 2 {
+		t.Fatalf("expected live now clear and enabled end stream post results, got %+v", summary.Results)
 	}
-	if summary.SkippedCount != 1 {
-		t.Fatalf("expected one skipped disabled destination, got %+v", summary)
+	if summary.SkippedCount != 0 {
+		t.Fatalf("expected no skipped disabled destination results, got %+v", summary)
 	}
 }
 
@@ -703,6 +744,53 @@ func TestExecutionServiceEndStreamUsesSelectedDestinationTargets(t *testing.T) {
 	}
 }
 
+func TestExecutionServiceEndStreamUsesCurrentAnnouncementFields(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	destRepo.listItems = []domain.Destination{
+		{
+			ID:         "discord-main",
+			Platform:   domain.PlatformDiscord,
+			Name:       "Main Discord",
+			Enabled:    true,
+			Template:   "{{stream_title}}",
+			ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main","endStreamEnabled":true,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}`,
+		},
+		{
+			ID:         "mastodon-main",
+			Platform:   domain.PlatformMastodon,
+			Name:       "Main Mastodon",
+			Enabled:    true,
+			Template:   "{{stream_title}}",
+			ConfigJSON: `{"credentialKey":"mastodon/main","instanceURL":"https://mastodon.social","endStreamEnabled":false,"endStreamTemplate":"{{stream_title}}"}`,
+		},
+	}
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	discord := &discordPublisherStub{}
+	service := NewExecutionService(
+		destRepo,
+		settingsRepo,
+		&postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}},
+		&liveNowSessionRepositoryExecutionStub{},
+		discord,
+		&blueskyPublisherStub{},
+		&mastodonPublisherStub{},
+	)
+
+	summary, err := service.EndStream(context.Background(), domain.Announcement{
+		StreamTitle: "Going Live",
+		StreamURL:   "https://example.com/live",
+	})
+	if err != nil {
+		t.Fatalf("end stream: %v", err)
+	}
+	if len(discord.calls) != 1 || discord.calls[0].content != "Thanks for hanging out at Going Live https://example.com/live" {
+		t.Fatalf("expected discord end stream post with current fields, got %+v", discord.calls)
+	}
+	if len(summary.Results) != 1 || summary.Results[0].State != domain.ExecutionStateSuccess || summary.ValidationErrorCount != 0 {
+		t.Fatalf("expected only enabled discord success result, got %+v", summary)
+	}
+}
+
 func TestExecutionServiceEndStreamDoesNotClearWhenNoTrackedLiveNowSessionExists(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
 	destRepo.listItems = []domain.Destination{
@@ -727,8 +815,8 @@ func TestExecutionServiceEndStreamDoesNotClearWhenNoTrackedLiveNowSessionExists(
 	if len(bluesky.liveNowClearCalls) != 0 {
 		t.Fatalf("expected no live now clear call, got %+v", bluesky.liveNowClearCalls)
 	}
-	if len(summary.Results) != 1 || summary.Results[0].State != domain.ExecutionStateSkipped {
-		t.Fatalf("expected disabled end stream message skip without a tracked session, got %+v", summary.Results)
+	if len(summary.Results) != 0 {
+		t.Fatalf("expected no end stream results without an enabled post or tracked session, got %+v", summary.Results)
 	}
 }
 

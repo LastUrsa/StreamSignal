@@ -24,6 +24,7 @@ type discordDestinationConfig struct {
 type blueskyDestinationConfig struct {
 	AccountIdentifier      string `json:"accountIdentifier"`
 	CredentialKey          string `json:"credentialKey"`
+	LiveStatusEnabled      *bool  `json:"liveStatusEnabled"`
 	LiveStatusTemplate     string `json:"liveStatusTemplate"`
 	LiveNowDurationMinutes int    `json:"liveNowDurationMinutes"`
 	CardThumbnailURL       string `json:"cardThumbnailURL"`
@@ -198,13 +199,6 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 			continue
 		}
 		if !endConfig.Enabled {
-			results = append(results, domain.ExecutionResult{
-				DestinationID:   destination.ID,
-				DestinationName: destination.Name,
-				Platform:        destination.Platform,
-				State:           domain.ExecutionStateSkipped,
-				Message:         "End Stream message disabled for this destination.",
-			})
 			continue
 		}
 		if err := validateDestinationConfig(destination); err != nil {
@@ -219,7 +213,11 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 		}
 
 		announcementForDestination := domain.NormalizeAnnouncement(domain.Announcement{
-			Message: endConfig.Template,
+			StreamTitle: announcement.StreamTitle,
+			StreamURL:   announcement.StreamURL,
+			Category:    announcement.Category,
+			Message:     endConfig.Template,
+			Hashtags:    announcement.Hashtags,
 		}, settings)
 		if session, ok := sessionByDestination[destination.ID]; ok {
 			announcementForDestination.StreamTitle = session.StreamTitle
@@ -362,7 +360,8 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 		state := domain.ExecutionStateSuccess
 
 		if destination.Platform == domain.PlatformBluesky {
-			if err := s.applyBlueskyLiveNow(ctx, destination, normalized); err != nil {
+			liveStatusEnabled, err := blueskyLiveStatusEnabledForDestination(destination)
+			if err != nil {
 				if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
 					return nil, domain.AppSettings{}, nil, err
 				}
@@ -371,26 +370,44 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 					DestinationName: destination.Name,
 					Platform:        destination.Platform,
 					State:           domain.ExecutionStateFailed,
-					Message:         fmt.Sprintf("Published successfully, but Live Now update failed: %s", err.Error()),
+					Message:         fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", err.Error()),
 					Content:         content,
 				})
 				continue
 			}
-			if err := s.trackBlueskyLiveNowSession(ctx, destination, normalized, now); err != nil {
-				if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-					return nil, domain.AppSettings{}, nil, err
+			if !liveStatusEnabled {
+				message = "Published successfully. Live Status off."
+			} else {
+				if err := s.applyBlueskyLiveNow(ctx, destination, normalized); err != nil {
+					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
+						return nil, domain.AppSettings{}, nil, err
+					}
+					results = append(results, domain.ExecutionResult{
+						DestinationID:   destination.ID,
+						DestinationName: destination.Name,
+						Platform:        destination.Platform,
+						State:           domain.ExecutionStateFailed,
+						Message:         fmt.Sprintf("Published successfully, but Live Now update failed: %s", err.Error()),
+						Content:         content,
+					})
+					continue
 				}
-				results = append(results, domain.ExecutionResult{
-					DestinationID:   destination.ID,
-					DestinationName: destination.Name,
-					Platform:        destination.Platform,
-					State:           domain.ExecutionStateFailed,
-					Message:         fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", err.Error()),
-					Content:         content,
-				})
-				continue
+				if err := s.trackBlueskyLiveNowSession(ctx, destination, normalized, now); err != nil {
+					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
+						return nil, domain.AppSettings{}, nil, err
+					}
+					results = append(results, domain.ExecutionResult{
+						DestinationID:   destination.ID,
+						DestinationName: destination.Name,
+						Platform:        destination.Platform,
+						State:           domain.ExecutionStateFailed,
+						Message:         fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", err.Error()),
+						Content:         content,
+					})
+					continue
+				}
+				message = "Published successfully. Live Now set."
 			}
-			message = "Published successfully. Live Now set."
 		}
 
 		if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
@@ -441,6 +458,18 @@ func (s *ExecutionService) applyBlueskyLiveNow(ctx context.Context, destination 
 		Description:     announcement.Message,
 		DurationMinutes: blueskyLiveNowDuration(config.LiveNowDurationMinutes),
 	})
+}
+
+func blueskyLiveStatusEnabledForDestination(destination domain.Destination) (bool, error) {
+	var config blueskyDestinationConfig
+	if err := json.Unmarshal([]byte(destination.ConfigJSON), &config); err != nil {
+		return false, fmt.Errorf("invalid Bluesky config")
+	}
+	return blueskyLiveStatusEnabled(config), nil
+}
+
+func blueskyLiveStatusEnabled(config blueskyDestinationConfig) bool {
+	return config.LiveStatusEnabled == nil || *config.LiveStatusEnabled
 }
 
 func (s *ExecutionService) clearBlueskyLiveNow(ctx context.Context, destination domain.Destination, session domain.ActiveLiveNowSession) error {

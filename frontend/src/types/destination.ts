@@ -51,6 +51,7 @@ export interface DestinationFormState {
     discordCardThumbnailDataURL: string;
     blueskyAccountIdentifier: string;
     blueskyCredentialKey: string;
+    blueskyLiveStatusEnabled: boolean;
     blueskyLiveStatusTemplate: string;
     blueskyLiveNowDurationMinutes: string;
     blueskyCardThumbnailURL: string;
@@ -78,6 +79,7 @@ interface DiscordConfig {
 interface BlueskyConfig {
     accountIdentifier?: string;
     credentialKey?: string;
+    liveStatusEnabled?: boolean;
     liveStatusTemplate?: string;
     liveNowDurationMinutes?: number;
     cardThumbnailURL?: string;
@@ -147,6 +149,7 @@ export function createEmptyDestinationForm(platform: DestinationPlatform = 'disc
         discordCardThumbnailDataURL: '',
         blueskyAccountIdentifier: '',
         blueskyCredentialKey: '',
+        blueskyLiveStatusEnabled: true,
         blueskyLiveStatusTemplate: '',
         blueskyLiveNowDurationMinutes: '120',
         blueskyCardThumbnailURL: '',
@@ -190,6 +193,7 @@ export function toDestinationFormState(destination: DestinationInput): Destinati
         next.environment = parseEnvironment(config.environment);
         next.blueskyAccountIdentifier = config.accountIdentifier ?? '';
         next.blueskyCredentialKey = config.credentialKey ?? '';
+        next.blueskyLiveStatusEnabled = config.liveStatusEnabled ?? true;
         next.blueskyLiveStatusTemplate = config.liveStatusTemplate ?? '';
         next.blueskyLiveNowDurationMinutes = String(config.liveNowDurationMinutes ?? 120);
         next.blueskyCardThumbnailURL = config.cardThumbnailURL ?? '';
@@ -236,6 +240,7 @@ export function toDestinationInput(form: DestinationFormState): DestinationInput
             environment: form.environment,
             accountIdentifier: form.blueskyAccountIdentifier,
             credentialKey: form.blueskyCredentialKey,
+            liveStatusEnabled: form.blueskyLiveStatusEnabled,
             liveStatusTemplate: form.blueskyLiveStatusTemplate,
             liveNowDurationMinutes: Number.parseInt(form.blueskyLiveNowDurationMinutes, 10) || 120,
             cardThumbnailURL: form.blueskyCardThumbnailURL,

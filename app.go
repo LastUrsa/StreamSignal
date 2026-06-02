@@ -154,7 +154,7 @@ func (a *App) GetDiagnostics() (string, error) {
 func (a *App) GoLive(announcement domain.Announcement) (domain.ExecutionSummary, error) {
 	summary, err := a.executionSvc.GoLive(a.ctx, announcement)
 	if err == nil {
-		_ = a.logService.Append(a.ctx, "go_live", "go_live", executionLogStatus(summary), executionLogMessage("Go Live", summary))
+		a.appendExecutionLogs("Go Live", "go_live", "go_live_result", summary)
 	}
 	return summary, err
 }
@@ -162,7 +162,7 @@ func (a *App) GoLive(announcement domain.Announcement) (domain.ExecutionSummary,
 func (a *App) ForceGoLive(announcement domain.Announcement) (domain.ExecutionSummary, error) {
 	summary, err := a.executionSvc.ForceGoLive(a.ctx, announcement)
 	if err == nil {
-		_ = a.logService.Append(a.ctx, "go_live", "force_go_live", executionLogStatus(summary), executionLogMessage("Confirmed Go Live", summary))
+		a.appendExecutionLogs("Confirmed Go Live", "force_go_live", "force_go_live_result", summary)
 	}
 	return summary, err
 }
@@ -170,9 +170,20 @@ func (a *App) ForceGoLive(announcement domain.Announcement) (domain.ExecutionSum
 func (a *App) EndStream(announcement domain.Announcement) (domain.ExecutionSummary, error) {
 	summary, err := a.executionSvc.EndStream(a.ctx, announcement)
 	if err == nil {
-		_ = a.logService.Append(a.ctx, "end_stream", "end_stream", executionLogStatus(summary), executionLogMessage("End Stream", summary))
+		a.appendExecutionLogs("End Stream", "end_stream", "end_stream_result", summary)
 	}
 	return summary, err
+}
+
+func (a *App) appendExecutionLogs(actionLabel, summaryAction, resultAction string, summary domain.ExecutionSummary) {
+	_ = a.logService.Append(a.ctx, summaryAction, summaryAction, executionLogStatus(summary), executionLogMessage(actionLabel, summary))
+	for _, result := range summary.Results {
+		destination := result.DestinationName
+		if destination == "" {
+			destination = result.DestinationID
+		}
+		_ = a.logService.Append(a.ctx, destination, resultAction, string(result.State), executionResultLogMessage(result))
+	}
 }
 
 func (a *App) ListPendingLiveNowSessions() ([]domain.ActiveLiveNowSession, error) {
@@ -220,4 +231,15 @@ func executionLogMessage(action string, summary domain.ExecutionSummary) string 
 		return fmt.Sprintf("%s Duplicate confirmation required.", message)
 	}
 	return message
+}
+
+func executionResultLogMessage(result domain.ExecutionResult) string {
+	platform := string(result.Platform)
+	if platform == "" {
+		platform = "unknown"
+	}
+	if result.Message == "" {
+		return fmt.Sprintf("%s result for %s.", result.State, platform)
+	}
+	return fmt.Sprintf("%s result for %s: %s", result.State, platform, result.Message)
 }

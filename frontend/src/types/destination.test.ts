@@ -59,6 +59,7 @@ describe('destination mappings', () => {
         form.template = '{{stream_title}}';
         form.blueskyAccountIdentifier = 'streamer.test';
         form.blueskyCredentialKey = 'bluesky/main';
+        form.blueskyLiveStatusEnabled = false;
         form.blueskyLiveStatusTemplate = 'LIVE {{stream_title}}';
         form.blueskyLiveNowDurationMinutes = '90';
         form.blueskyCardThumbnailURL = 'https://example.com/avatar.png';
@@ -72,7 +73,7 @@ describe('destination mappings', () => {
 
         expect(destination.platform).toBe('bluesky');
         expect(destination.configJSON).toBe(
-            '{"environment":"production","accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":90,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
+            '{"environment":"production","accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false,"liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":90,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
         );
     });
 
@@ -83,7 +84,7 @@ describe('destination mappings', () => {
             name: 'Main Bluesky',
             enabled: true,
             template: '{{stream_title}}',
-            configJSON: '{"environment":"test","accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":45,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
+            configJSON: '{"environment":"test","accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false,"liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":45,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
             createdAt: '',
             updatedAt: '',
         };
@@ -92,6 +93,7 @@ describe('destination mappings', () => {
 
         expect(form.blueskyAccountIdentifier).toBe('streamer.test');
         expect(form.blueskyCredentialKey).toBe('bluesky/main');
+        expect(form.blueskyLiveStatusEnabled).toBe(false);
         expect(form.blueskyLiveStatusTemplate).toBe('LIVE {{stream_title}}');
         expect(form.blueskyLiveNowDurationMinutes).toBe('45');
         expect(form.blueskyCardThumbnailURL).toBe('https://example.com/avatar.png');
@@ -101,6 +103,21 @@ describe('destination mappings', () => {
         expect(form.endStreamEnabled).toBe(true);
         expect(form.endStreamTemplate).toBe('Bye {{stream_title}}');
         expect(form.environment).toBe('test');
+    });
+
+    it('defaults Bluesky Live Status to enabled for existing destination configs', () => {
+        const form = toDestinationFormState({
+            id: 'bluesky-main',
+            platform: 'bluesky',
+            name: 'Main Bluesky',
+            enabled: true,
+            template: '{{stream_title}}',
+            configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}',
+            createdAt: '',
+            updatedAt: '',
+        });
+
+        expect(form.blueskyLiveStatusEnabled).toBe(true);
     });
 
     it('serializes a Mastodon form state into destination config json', () => {

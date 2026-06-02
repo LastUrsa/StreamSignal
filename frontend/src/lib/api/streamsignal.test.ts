@@ -134,7 +134,7 @@ describe('streamsignal api wrappers', () => {
         await generatePreview(announcement, destinationIDs);
         await goLive(announcement, destinationIDs);
         await forceGoLive(announcement, destinationIDs);
-        await endStream(destinationIDs);
+        await endStream(announcement, destinationIDs);
         await listPendingLiveNowSessions();
         await clearPendingLiveNowSession('bluesky-main');
         await listDestinations();
@@ -149,7 +149,7 @@ describe('streamsignal api wrappers', () => {
         expect(bindings.GeneratePreview).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
         expect(bindings.GoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
         expect(bindings.ForceGoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
-        expect(bindings.EndStream).toHaveBeenCalledWith(expect.objectContaining({ destinationIDs }));
+        expect(bindings.EndStream).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
         expect(bindings.ListPendingLiveNowSessions).toHaveBeenCalled();
         expect(bindings.ClearPendingLiveNowSession).toHaveBeenCalledWith('bluesky-main');
         expect(bindings.ListDestinations).toHaveBeenCalled();

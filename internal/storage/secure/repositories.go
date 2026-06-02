@@ -42,6 +42,7 @@ type blueskyDestinationConfig struct {
 	Environment            string `json:"environment,omitempty"`
 	AccountIdentifier      string `json:"accountIdentifier,omitempty"`
 	CredentialKey          string `json:"credentialKey,omitempty"`
+	LiveStatusEnabled      *bool  `json:"liveStatusEnabled,omitempty"`
 	LiveStatusTemplate     string `json:"liveStatusTemplate,omitempty"`
 	LiveNowDurationMinutes int    `json:"liveNowDurationMinutes,omitempty"`
 	CardThumbnailURL       string `json:"cardThumbnailURL,omitempty"`

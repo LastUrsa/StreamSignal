@@ -161,14 +161,8 @@ export function forceGoLive(announcement: AnnouncementInput, destinationIDs: str
     return ForceGoLive(toAnnouncementModel(announcement, destinationIDs)).then(toExecutionSummary);
 }
 
-export function endStream(destinationIDs: string[] = []): Promise<ExecutionSummary> {
-    return EndStream(toAnnouncementModel({
-        streamTitle: '',
-        streamURL: '',
-        category: '',
-        message: '',
-        hashtags: '',
-    }, destinationIDs)).then(toExecutionSummary);
+export function endStream(announcement: AnnouncementInput, destinationIDs: string[] = []): Promise<ExecutionSummary> {
+    return EndStream(toAnnouncementModel(announcement, destinationIDs)).then(toExecutionSummary);
 }
 
 export function listPendingLiveNowSessions(): Promise<ActiveLiveNowSession[]> {

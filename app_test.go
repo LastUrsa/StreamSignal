@@ -93,6 +93,19 @@ func TestExecutionLogMessageIncludesCountsAndConfirmationState(t *testing.T) {
 	}
 }
 
+func TestExecutionResultLogMessageIncludesDestinationFailure(t *testing.T) {
+	got := executionResultLogMessage(domain.ExecutionResult{
+		Platform: domain.PlatformBluesky,
+		State:    domain.ExecutionStateFailed,
+		Message:  "Bluesky card thumbnail must be 1 MB or smaller",
+	})
+
+	want := "FAILED result for bluesky: Bluesky card thumbnail must be 1 MB or smaller"
+	if got != want {
+		t.Fatalf("executionResultLogMessage() = %q, want %q", got, want)
+	}
+}
+
 func TestAppSaveSettingsPersistsAndLogs(t *testing.T) {
 	app := newTestApp(t)
 

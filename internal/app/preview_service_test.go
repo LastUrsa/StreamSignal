@@ -144,6 +144,76 @@ func TestPreviewServiceCarriesValidationNotesIntoPreviewItems(t *testing.T) {
 	}
 }
 
+func TestPreviewServiceSkipsBlueskyLiveStatusValidationWhenDisabled(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "bluesky-main",
+				Platform:   domain.PlatformBluesky,
+				Name:       "Main Bluesky",
+				Template:   "{{message}}",
+				ConfigJSON: `{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{
+		Message: "Going live soon",
+	})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 preview item, got %d", len(items))
+	}
+	item := items[0]
+	if item.ValidationState != domain.PreviewValidationValid {
+		t.Fatalf("expected valid preview, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+	if slices.Contains(item.ValidationNotes, "Bluesky Live Now URL must be a valid absolute URL") || slices.Contains(item.ValidationNotes, "Bluesky Live Now title is required") {
+		t.Fatalf("expected Live Status validation to be skipped, got %v", item.ValidationNotes)
+	}
+}
+
+func TestPreviewServiceAppliesBlueskyLiveStatusValidationWhenEnabled(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "bluesky-main",
+				Platform:   domain.PlatformBluesky,
+				Name:       "Main Bluesky",
+				Template:   "{{message}}",
+				ConfigJSON: `{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":true}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{
+		Message: "Going live soon",
+	})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 preview item, got %d", len(items))
+	}
+	item := items[0]
+	if item.ValidationState != domain.PreviewValidationInvalid {
+		t.Fatalf("expected invalid preview, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+	if !slices.Contains(item.ValidationNotes, "Bluesky Live Now URL must be a valid absolute URL") {
+		t.Fatalf("expected Live Status URL validation, got %v", item.ValidationNotes)
+	}
+}
+
 func TestPreviewServiceIncludesEnabledEndStreamMessages(t *testing.T) {
 	destinations := &destinationListStub{
 		items: []domain.Destination{
@@ -184,6 +254,84 @@ func TestPreviewServiceIncludesEnabledEndStreamMessages(t *testing.T) {
 	}
 	if items[1].PreviewLabel != "End Stream" || items[1].Content != "Thanks for watching Going Live" {
 		t.Fatalf("unexpected end stream preview: %+v", items[1])
+	}
+}
+
+func TestPreviewServiceEndStreamUsesCurrentAnnouncementFields(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "discord-main",
+				Platform:   domain.PlatformDiscord,
+				Name:       "Main Discord",
+				Template:   "{{stream_title}} {{stream_url}}",
+				ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main","endStreamEnabled":true,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{
+		StreamTitle:    "Testy Test",
+		StreamURL:      "https://twitch.tv/lastursa",
+		DestinationIDs: []string{"discord-main"},
+	})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected go live and end stream previews, got %d: %+v", len(items), items)
+	}
+
+	item := items[1]
+	if item.PreviewLabel != "End Stream" {
+		t.Fatalf("expected end stream preview, got %+v", item)
+	}
+	if item.Content != "Thanks for hanging out at Testy Test https://twitch.tv/lastursa" {
+		t.Fatalf("unexpected end stream content %q", item.Content)
+	}
+	if item.ValidationState != domain.PreviewValidationValid {
+		t.Fatalf("expected valid end stream preview, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+	if slices.Contains(item.ValidationNotes, "Stream title is required.") {
+		t.Fatalf("expected current stream title to satisfy validation, got %v", item.ValidationNotes)
+	}
+}
+
+func TestPreviewServiceEndStreamValidationOnlyRequiresTemplateFields(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "discord-main",
+				Platform:   domain.PlatformDiscord,
+				Name:       "Main Discord",
+				Template:   "{{stream_title}} {{stream_url}}",
+				ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main","endStreamEnabled":true,"endStreamTemplate":"Stream ended. Thanks for watching."}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := NewPreviewService(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.GenerateEndStream(context.Background(), domain.Announcement{
+		DestinationIDs: []string{"discord-main"},
+	})
+	if err != nil {
+		t.Fatalf("generate end stream preview: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 preview item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.ValidationState != domain.PreviewValidationValid {
+		t.Fatalf("expected valid end stream preview, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+	if slices.Contains(item.ValidationNotes, "Stream title is required.") || slices.Contains(item.ValidationNotes, "Stream URL is required.") {
+		t.Fatalf("expected unused title and url fields to be ignored, got %v", item.ValidationNotes)
 	}
 }
 

@@ -65,6 +65,35 @@ func TestSecureDestinationRepositoryStoresOnlySecretReferencesInSQLite(t *testin
 	}
 }
 
+func TestSecureDestinationRepositoryPreservesBlueskyLiveStatusDisabled(t *testing.T) {
+	db := openTestDB(t)
+	repository := NewDestinationRepository(sqlitestore.NewDestinationRepository(db), memory.NewStore())
+	now := time.Now().UTC().Round(time.Microsecond)
+
+	expected := domain.Destination{
+		ID:         "bluesky-main",
+		Platform:   domain.PlatformBluesky,
+		Name:       "Main Bluesky",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"accountIdentifier":"streamer.main","credentialKey":"bluesky-app-password","liveStatusEnabled":false}`,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	if err := repository.Save(context.Background(), expected); err != nil {
+		t.Fatalf("save destination: %v", err)
+	}
+
+	var rawConfig string
+	if err := db.QueryRow(`select config_json from destinations where id = ?`, expected.ID).Scan(&rawConfig); err != nil {
+		t.Fatalf("query raw destination config: %v", err)
+	}
+	if !strings.Contains(rawConfig, `"liveStatusEnabled":false`) {
+		t.Fatalf("expected disabled Live Status flag to be preserved, got %s", rawConfig)
+	}
+}
+
 func TestSecureDestinationRepositoryMigratesLegacySQLiteSecretsOnRead(t *testing.T) {
 	db := openTestDB(t)
 	rawRepository := sqlitestore.NewDestinationRepository(db)
