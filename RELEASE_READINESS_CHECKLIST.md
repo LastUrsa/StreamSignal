@@ -67,8 +67,10 @@ Ship StreamSignal in a way that is:
   - Default Program Files install path still needs a clean-machine or VM pass.
 - [x] verify first launch after install succeeds without manual setup steps
 - [ ] verify upgrade behavior from one build to the next
-- [ ] decide how release artifacts will be attached to GitHub releases
-  - The Release Build workflow currently uploads `StreamSignal-0.1.0-windows-amd64-installer.exe` and `StreamSignal-0.1.0-macos-universal.dmg` as workflow artifacts.
+- [x] decide how release artifacts will be attached to GitHub releases
+  - The Release Build workflow uploads `StreamSignal-0.1.0-windows-amd64-installer.exe` and `StreamSignal-0.1.0-macos-universal.dmg` as workflow artifacts.
+  - On `v*` tag pushes, the Release Build workflow creates a GitHub Release and attaches both artifacts.
+  - Manual dispatch can publish a guarded draft/prerelease by setting `publish_release` to `true`.
   - Release Build run `26802453873` uploaded artifact `streamsignal-0.1.0-windows-amd64-installer` at 8,000,959 bytes.
 
 ## Secrets And Local Security
@@ -107,6 +109,7 @@ Ship StreamSignal in a way that is:
 - [x] validate the Release Build workflow on a tag or manual dispatch
   - Manual dispatch for version `0.1.0` completed successfully in Release Build run `26802453873`.
   - Windows Installer and macOS DMG jobs both completed successfully.
+- [ ] validate GitHub Release creation with attached Windows and macOS artifacts
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly

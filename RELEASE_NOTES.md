@@ -23,7 +23,7 @@ Planned artifact names:
 - `StreamSignal-0.1.0-windows-amd64-installer.exe`
 - `StreamSignal-0.1.0-macos-universal.dmg`
 
-The GitHub release build workflow uploads matching build artifacts:
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
 
 - `streamsignal-0.1.0-windows-amd64-installer`
 - `streamsignal-0.1.0-macos-universal-dmg`
