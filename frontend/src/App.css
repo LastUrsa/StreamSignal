@@ -477,6 +477,39 @@ body {
     gap: 12px;
 }
 
+.button-tooltip-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.button-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    z-index: 5;
+    width: max-content;
+    max-width: min(280px, 80vw);
+    transform: translateX(-50%) translateY(4px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-strong);
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.25;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: var(--shadow);
+    transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.button-tooltip-wrap:hover .button-tooltip,
+.button-tooltip-wrap:focus-within .button-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 .action-cluster-main,
 .workflow-actions {
     flex-wrap: wrap;

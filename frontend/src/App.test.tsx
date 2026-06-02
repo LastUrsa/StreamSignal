@@ -357,7 +357,7 @@ describe('App', () => {
 
         render(<App />);
 
-        expect(await screen.findByText('bluesky · Production · Live Status OFF · End Stream off')).toBeInTheDocument();
+        expect(await screen.findByText('bluesky · Production · Go Live ON · Live Status OFF · Post End Stream OFF')).toBeInTheDocument();
         fireEvent.click(await screen.findByLabelText('Main Bluesky'));
         fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
 
@@ -383,7 +383,7 @@ describe('App', () => {
                 name: 'Main Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"webhookKey":"discord/main"}',
+                configJSON: '{"webhookKey":"discord/main","endStreamEnabled":true,"endStreamTemplate":"Thanks for hanging out at {{stream_title}}"}',
                 createdAt: '',
                 updatedAt: '',
             },
@@ -404,7 +404,9 @@ describe('App', () => {
         fireEvent.change(await screen.findByLabelText('Stream Title'), {
             target: { value: 'Going Live' },
         });
+        expect(await screen.findByText('End Stream will post to 1 destination.')).toBeInTheDocument();
         fireEvent.click(await screen.findByLabelText('Main Bluesky'));
+        expect(await screen.findByText('End Stream will post to 1 destination.')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'End Stream' }));
 
         await waitFor(() => {

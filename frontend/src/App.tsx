@@ -356,12 +356,21 @@ function destinationEnvironmentFrom(destination: DestinationInput): DestinationF
 
 function destinationSendToMetadata(destination: DestinationInput) {
     const form = toDestinationFormState(destination);
-    const parts = [destination.platform, destinationEnvironmentLabel(form.environment)];
+    const parts = [destination.platform, destinationEnvironmentLabel(form.environment), 'Go Live ON'];
     if (destination.platform === 'bluesky') {
         parts.push(form.blueskyLiveStatusEnabled ? 'Live Status ON' : 'Live Status OFF');
     }
-    parts.push(form.endStreamEnabled ? 'End Stream on' : 'End Stream off');
+    parts.push(form.endStreamEnabled ? 'Post End Stream ON' : 'Post End Stream OFF');
     return parts.join(' · ');
+}
+
+function endStreamActionHint(postCount: number, liveNowClearCount: number) {
+    const postLabel = `${postCount} destination${postCount === 1 ? '' : 's'}`;
+    if (liveNowClearCount > 0) {
+        const liveNowLabel = `${liveNowClearCount} Live Now status${liveNowClearCount === 1 ? '' : 'es'}`;
+        return `End Stream will post to ${postLabel} and clear ${liveNowLabel}.`;
+    }
+    return `End Stream will post to ${postLabel}.`;
 }
 
 function App() {
@@ -957,6 +966,10 @@ function App() {
 
     const configuredDestinationCount = destinations.length;
     const selectedDestinationCount = selectedDestinationIDs.length;
+    const selectedDestinationIDSet = new Set(selectedDestinationIDs);
+    const selectedDestinations = destinations.filter((destination) => selectedDestinationIDSet.has(destination.id));
+    const selectedEndStreamPostCount = selectedDestinations.filter((destination) => toDestinationFormState(destination).endStreamEnabled).length;
+    const selectedLiveNowClearCount = pendingLiveNowSessions.filter((session) => selectedDestinationIDSet.has(session.destinationID)).length;
 
     return (
         <main className="app-shell">
@@ -1159,14 +1172,22 @@ function App() {
                                             >
                                                 {executionLoading === 'go_live' ? 'Running Go Live...' : 'Go Live'}
                                             </button>
-                                            <button
-                                                type="button"
-                                                className="ghost-button"
-                                                onClick={() => void onEndStream()}
-                                                disabled={executionLoading !== null}
-                                            >
-                                                {executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}
-                                            </button>
+                                            <span className="button-tooltip-wrap">
+                                                <button
+                                                    type="button"
+                                                    className="ghost-button"
+                                                    onClick={() => void onEndStream()}
+                                                    disabled={executionLoading !== null}
+                                                    aria-describedby="end-stream-action-hint"
+                                                >
+                                                    {executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}
+                                                </button>
+                                                <span id="end-stream-action-hint" className="button-tooltip" role="tooltip">
+                                                    {selectedDestinationCount > 0
+                                                        ? endStreamActionHint(selectedEndStreamPostCount, selectedLiveNowClearCount)
+                                                        : 'Select destinations to enable End Stream actions.'}
+                                                </span>
+                                            </span>
                                         </div>
 
                                         {!SHOW_DEBUG_WORKFLOW_UI ? (
@@ -1529,7 +1550,7 @@ function App() {
                                                 checked={destinationForm.endStreamEnabled}
                                                 onChange={(event) => updateDestination('endStreamEnabled', event.target.checked)}
                                             />
-                                            <span>Enabled</span>
+                                            <span>Post End Stream Message</span>
                                         </label>
                                     </div>
                                     <label className="field">
