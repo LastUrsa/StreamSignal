@@ -49,6 +49,13 @@ Ship StreamSignal in a way that is:
 
 - [x] produce a clean Windows release build with `wails build`
 - [x] produce a clean Windows NSIS installer with `wails build -platform windows/amd64 -nsis`
+- [ ] produce a macOS app bundle on macOS with `wails build -platform darwin/universal`
+  - Wails v2.12.0 reports that cross-compiling to Mac from Windows is not currently supported.
+  - The macOS build needs a Mac runner or Mac tester with Xcode command line tools, Node, Go, and Wails installed.
+- [ ] produce a macOS DMG from the tested `.app` bundle
+  - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
+  - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
+- [ ] verify macOS app signing, notarization, and Gatekeeper behavior
 - [ ] validate installer metadata, icon, and version information
   - Installer metadata is set to `DRDohr`, `StreamSignal`, and `0.1.0`.
   - App executable Windows details are still blank and need a Windows-resource follow-up before release.
@@ -62,6 +69,8 @@ Ship StreamSignal in a way that is:
 ## Secrets And Local Security
 
 - [x] verify Windows Credential Manager entries are created, reused, and updated correctly
+- [ ] verify macOS Keychain entries are created, reused, updated, and retained or removed as expected
+  - This must be checked on macOS because the implementation shells out to the macOS `security` command.
 - [x] verify secrets never appear in SQLite, logs, or diagnostics
 - [x] verify masked secret-edit UX works in release builds
 - [x] verify uninstall behavior expectations for retained or removed secrets are documented
@@ -101,6 +110,7 @@ Before calling the app release-ready, confirm:
 
 - [ ] packaging is repeatable
 - [x] installer behavior is understood
+- [ ] macOS DMG behavior is understood
 - [x] first-run setup is documented
 - [x] usability and workflow validation are complete enough that the app can be trusted by a first-time real user
 - [ ] quality gate is green

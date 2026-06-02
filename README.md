@@ -12,7 +12,7 @@ Current product status:
 - Bluesky posting has been validated with app-password auth, rich stream links, external cards, configurable `Live Now` duration, an opt-out for Live Status changes, End Stream clearing, and manual recovery if the app closes mid-stream
 - Mastodon posting has been validated with manual access-token auth and optional additional image attachment
 - Preview is network-free and shows both Go Live messages and enabled destination-level End Stream messages when available
-- runtime secrets are stored through Windows Credential Manager rather than directly in SQLite
+- runtime secrets are stored through the OS credential store rather than directly in SQLite
 - remote image URL fetches for Bluesky and Mastodon are guarded against local/private-network targets
 - automated backend and frontend tests are part of the normal workflow
 
@@ -38,7 +38,7 @@ The app is past core workflow validation and is now in release-prep polish: docu
 - Wails desktop shell
 - React + TypeScript frontend
 - SQLite for application data
-- Windows Credential Manager for secrets
+- Windows Credential Manager and macOS Keychain for secrets
 
 ## Development
 
@@ -53,6 +53,14 @@ Build the desktop app:
 ```bash
 wails build
 ```
+
+Build a macOS app bundle on a Mac:
+
+```bash
+wails build -platform darwin/universal
+```
+
+Wails v2 does not cross-compile macOS app bundles from Windows. A DMG release artifact should be created on macOS after the `.app` bundle is built, signed, and tested.
 
 Run the automated test suites:
 

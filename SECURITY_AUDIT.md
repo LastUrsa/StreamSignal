@@ -4,7 +4,7 @@
 
 This document records the public-facing security summary for StreamSignal.
 
-Latest review: June 1, 2026.
+Latest review: June 2, 2026.
 
 Review focus:
 
@@ -20,7 +20,7 @@ The highest-severity issue found in this pass was that secret values could previ
 
 That issue has been remediated:
 
-- runtime secrets are now stored through Windows Credential Manager
+- runtime secrets are now stored through the OS credential store: Windows Credential Manager on Windows and Keychain on macOS
 - SQLite stores only secret references instead of raw secret values
 - legacy SQLite rows are migrated away from raw-secret storage when the app reads them
 - automated tests verify that raw secrets are not left in SQLite
@@ -48,7 +48,7 @@ Why it mattered:
 Remediation:
 
 - added a secret-store-backed persistence layer
-- wired the runtime app to Windows Credential Manager
+- wired the runtime app to Windows Credential Manager on Windows and Keychain on macOS
 - kept only secret references in SQLite
 - added automatic migration for older raw-secret rows when read through the app
 
