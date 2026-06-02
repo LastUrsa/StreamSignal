@@ -57,7 +57,7 @@ Ship StreamSignal in a way that is:
   - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
   - The planned release artifact name is `StreamSignal-0.2.0-macos-universal.dmg`.
   - Previous `0.1.0` Release Build run `26802453873` uploaded a macOS DMG artifact successfully.
-  - A fresh `0.2.0` release-build run still needs to validate the final artifact size and packaging output.
+  - Guarded `0.2.0` Release Build run `26848331505` uploaded artifact `streamsignal-0.2.0-macos-universal-dmg` at 12,572,130 bytes.
   - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
 - [ ] verify macOS app signing, notarization, and Gatekeeper behavior
 - [x] validate installer metadata, icon, and version information
@@ -73,7 +73,7 @@ Ship StreamSignal in a way that is:
   - On `v*` tag pushes, the Release Build workflow creates a GitHub Release and attaches both artifacts.
   - Manual dispatch can publish a guarded draft/prerelease by setting `publish_release` to `true`.
   - Previous `0.1.0` Release Build run `26802453873` uploaded a Windows installer artifact successfully.
-  - A fresh `0.2.0` release-build run still needs to validate the final artifact size and packaging output.
+  - Guarded `0.2.0` Release Build run `26848331505` uploaded artifact `streamsignal-0.2.0-windows-amd64-installer` at 8,014,439 bytes.
 
 ## Secrets And Local Security
 
@@ -108,9 +108,11 @@ Ship StreamSignal in a way that is:
 ## CI And Maintenance
 
 - [x] keep the GitHub quality gate green on `main`
-- [ ] validate the Release Build workflow for `0.2.0` on a tag or manual dispatch
+- [x] validate the Release Build workflow for `0.2.0` on a tag or manual dispatch
   - Previous `0.1.0` manual dispatch completed successfully in Release Build run `26802453873`.
   - Windows Installer and macOS DMG jobs both completed successfully in the previous release path.
+  - Guarded `0.2.0` manual dispatch completed successfully in Release Build run `26848331505`.
+  - Windows Installer and macOS DMG jobs both completed successfully, with release publishing intentionally disabled.
 - [ ] validate GitHub Release creation with attached Windows and macOS artifacts for `0.2.0`
   - Previous `0.1.0` draft-release and tag-push paths were validated successfully.
   - For `0.2.0`, run a guarded manual dispatch first or create tag `v0.2.0` when ready to publish.
