@@ -15,4 +15,13 @@ export interface PreviewItem {
     characterCount: number;
     validationState: string;
     validationNotes: string[];
+    linkPreview?: LinkPreviewMetadata | null;
+}
+
+export interface LinkPreviewMetadata {
+    url: string;
+    title: string;
+    description: string;
+    imageURL: string;
+    siteName: string;
 }

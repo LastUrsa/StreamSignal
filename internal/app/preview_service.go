@@ -13,6 +13,7 @@ type PreviewService struct {
 	settings     ports.SettingsRepository
 	sessions     ports.LiveNowSessionRepository
 	clock        Clock
+	linkPreview  linkPreviewFetcher
 }
 
 func NewPreviewService(destinations ports.DestinationRepository, settings ports.SettingsRepository, sessions ports.LiveNowSessionRepository) *PreviewService {
@@ -21,6 +22,7 @@ func NewPreviewService(destinations ports.DestinationRepository, settings ports.
 		settings:     settings,
 		sessions:     sessions,
 		clock:        systemClock{},
+		linkPreview:  fetchLinkPreview,
 	}
 }
 
@@ -38,6 +40,7 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 
 	normalized := domain.NormalizeAnnouncement(announcement, settings)
 	now := s.clock.Now()
+	linkPreviewCache := make(map[string]*domain.LinkPreview)
 
 	items := make([]domain.PreviewItem, 0, len(destinations)*2)
 	for _, destination := range destinations {
@@ -58,6 +61,7 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 			CharacterCount:  len(content),
 			ValidationState: domain.PreviewValidationState(notes),
 			ValidationNotes: notes,
+			LinkPreview:     s.linkPreviewFor(ctx, normalized.StreamURL, destination.Platform, linkPreviewCache),
 		})
 	}
 
@@ -121,6 +125,7 @@ func (s *PreviewService) generateEndStream(ctx context.Context, destinations []d
 	}
 
 	now := s.clock.Now()
+	linkPreviewCache := make(map[string]*domain.LinkPreview)
 	items := make([]domain.PreviewItem, 0, len(destinations))
 	for _, destination := range destinations {
 		endConfig, err := endStreamConfigForDestination(destination)
@@ -172,8 +177,29 @@ func (s *PreviewService) generateEndStream(ctx context.Context, destinations []d
 			CharacterCount:  len(content),
 			ValidationState: domain.PreviewValidationState(notes),
 			ValidationNotes: notes,
+			LinkPreview:     s.linkPreviewFor(ctx, announcementForDestination.StreamURL, destination.Platform, linkPreviewCache),
 		})
 	}
 
 	return items, nil
+}
+
+func (s *PreviewService) linkPreviewFor(ctx context.Context, streamURL string, platform domain.DestinationPlatform, cache map[string]*domain.LinkPreview) *domain.LinkPreview {
+	if s.linkPreview == nil || !platformUsesUnfurlPreview(platform) || streamURL == "" {
+		return nil
+	}
+	if preview, ok := cache[streamURL]; ok {
+		return preview
+	}
+	preview, err := s.linkPreview(ctx, streamURL)
+	if err != nil {
+		cache[streamURL] = nil
+		return nil
+	}
+	cache[streamURL] = preview
+	return preview
+}
+
+func platformUsesUnfurlPreview(platform domain.DestinationPlatform) bool {
+	return platform == domain.PlatformDiscord || platform == domain.PlatformMastodon
 }

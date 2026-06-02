@@ -13,6 +13,7 @@ Review focus:
 - logs and diagnostics
 - outbound integration safety
 - dependency review
+- link-preview metadata fetch safety
 
 ## Executive Summary
 
@@ -123,26 +124,27 @@ Validation on June 1, 2026:
 - `npm audit` reported `0` vulnerabilities
 - remaining npm outdated entries are React 18 to React 19 migration items, not security fixes
 
-### Fixed: Go vulnerability scan reported a non-reachable vulnerable module
+### Fixed: Go vulnerability scan reported vulnerable Go modules
 
 Severity:
 
-- low
+- low to medium
 
 What was checked:
 
-- `govulncheck -show verbose ./...`
+- `govulncheck ./...`
 
 Finding:
 
-- `golang.org/x/sys v0.34.0` was present with GO-2026-5024
-- govulncheck reported no reachable vulnerable symbols in StreamSignal code
+- an earlier pass found `golang.org/x/sys v0.34.0` present with GO-2026-5024, with no reachable vulnerable symbols
+- the UI refresh/link-preview pass then found reachable GO-2025-3595 through `golang.org/x/net/html` in `internal/app/link_preview.go`
 
 Remediation:
 
 - upgraded `golang.org/x/sys` to `v0.44.0`, the fixed version reported by govulncheck
+- upgraded `golang.org/x/net` to `v0.38.0`, which also upgraded related `golang.org/x/crypto` and `golang.org/x/text` versions
 
-Validation on June 1, 2026:
+Validation on June 2, 2026:
 
 - `govulncheck ./...` reported no vulnerabilities
 
@@ -255,6 +257,34 @@ Assessment:
 - no high-severity security concerns were found in the Mastodon/image changes
 - the previous open image-fetch caution has been remediated with explicit public-address URL validation before Bluesky and Mastodon image fetches
 
+### Reviewed: preview link metadata fetching
+
+Severity:
+
+- medium
+
+What was checked:
+
+- Discord and Mastodon approximate link previews
+- Open Graph/Twitter metadata parsing
+- redirect handling
+- remote image URL handling
+- failure behavior during preview generation
+
+Result:
+
+- link-preview metadata fetching is best-effort and non-fatal; preview generation continues when metadata fetch fails, times out, redirects too many times, returns non-HTML content, or returns no usable metadata
+- stream URLs and discovered preview image URLs are validated as public HTTP/HTTPS URLs before use
+- localhost, private network ranges, link-local ranges, unspecified addresses, and multicast addresses are rejected through the existing netguard validation path
+- metadata fetches use a short `4s` HTTP timeout, a redirect limit, and a `1 MB` HTML body limit
+- preview image URLs discovered from metadata are also validated before being sent to the frontend
+- generated UI labels these renders as approximate previews rather than exact platform output
+
+Assessment:
+
+- no high-severity security concerns were found in the link-preview implementation after dependency remediation
+- remaining imported/module vulnerabilities reported by `govulncheck` are not called by StreamSignal code as of the June 2, 2026 scan
+
 ## OWASP Alignment Notes
 
 This pass especially aligns with:
@@ -274,3 +304,4 @@ This pass especially aligns with:
 1. consider whether diagnostics export needs multiple redaction tiers before broader release
 2. continue reviewing destination targeting, recovery, and outbound adapters whenever new platforms or workflows are added
 3. keep the Go toolchain and GitHub Action versions current as part of regular maintenance
+4. keep link-preview fetching best-effort and public-network-only if future preview rendering becomes richer

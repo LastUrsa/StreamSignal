@@ -11,12 +11,24 @@ Current product status:
 - Discord webhook posting has been manually validated, including selected-destination targeting, optional additional image embeds, and destination-level End Stream enablement
 - Bluesky posting has been validated with app-password auth, rich stream links, external cards, configurable `Live Now` duration, an opt-out for Live Status changes, End Stream clearing, and manual recovery if the app closes mid-stream
 - Mastodon posting has been validated with manual access-token auth and optional additional image attachment
-- Preview is network-free and shows both Go Live messages and enabled destination-level End Stream messages when available
+- Preview shows Go Live messages and enabled destination-level End Stream messages in compact expandable rows, with best-effort approximate link previews for Discord and Mastodon
+- link-preview metadata fetches are optional, non-fatal, timeout-limited, size-limited, and guarded against local/private-network targets
 - runtime secrets are stored through the OS credential store rather than directly in SQLite
 - remote image URL fetches for Bluesky and Mastodon are guarded against local/private-network targets
 - automated backend and frontend tests are part of the normal workflow
 
 The app is past core workflow validation and is now in release-prep polish: documentation, packaging, installer behavior, and final release-candidate checks.
+
+## UI Overview
+
+The current UI is a desktop-first creator control panel:
+
+- **Home** is the command center for session setup, destination selection, preview, Go Live, End Stream, and recovery awareness.
+- **Destinations** manages Discord, Bluesky, and Mastodon integrations with quick actions and an in-place editor.
+- **Settings** contains application defaults, Live Now recovery, and platform legal notices.
+- **Logs** are available in debug builds for scan-first workflow diagnostics.
+
+Default Stream URL may prefill a fresh Home session. If the user edits or clears the Home Stream URL field, that session value is respected for preview and publish actions.
 
 ## Quickstart
 
@@ -27,7 +39,7 @@ The app is past core workflow validation and is now in release-prep polish: docu
    - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
 3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags.
 4. Use **Send To** to choose which destinations are included in the current session.
-5. Click **Generate Preview** to inspect the exact Go Live and enabled End Stream messages before anything is sent.
+5. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
 6. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
 7. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
 8. Use **Settings > Live Now Recovery** if StreamSignal closed before it could clear a pending Bluesky Live Now status.
@@ -66,14 +78,16 @@ Run the automated test suites:
 
 ```bash
 cd frontend && npm run build
-go test ./...
 npm test --prefix frontend
+GOCACHE=/tmp/go-build-cache go test ./...
+GOCACHE=/tmp/go-build-cache go vet ./...
 ```
 
-Run the frontend dependency audit:
+Run dependency and vulnerability checks:
 
 ```bash
 npm audit --prefix frontend
+GOCACHE=/tmp/go-build-cache govulncheck ./...
 ```
 
 ## Project Docs
@@ -81,6 +95,7 @@ npm audit --prefix frontend
 - [RELEASE_NOTES.md](./RELEASE_NOTES.md): release notes draft and artifact naming
 - [SECURITY.md](./SECURITY.md): vulnerability reporting policy
 - [SECURITY_AUDIT.md](./SECURITY_AUDIT.md): public-facing security posture summary
+- [BRAND_USAGE.md](./BRAND_USAGE.md): platform name, logo, and legal notice guardrails
 - [INTEGRATION_LIMITATIONS.md](./INTEGRATION_LIMITATIONS.md): current platform integration constraints and boundaries
 - [TEST_VALIDATION.md](./TEST_VALIDATION.md): testing strategy and PR quality-gate guidance
 - [RELEASE_READINESS_CHECKLIST.md](./RELEASE_READINESS_CHECKLIST.md): release and packaging checklist for the next phase

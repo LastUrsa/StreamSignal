@@ -133,6 +133,8 @@ describe('App', () => {
 
         render(<App />);
 
+        expect(screen.getByText('Debug Build')).toBeInTheDocument();
+
         fireEvent.change(await screen.findByLabelText('Stream Title'), {
             target: { value: 'Going Live' },
         });
@@ -272,6 +274,35 @@ describe('App', () => {
         expect(screen.getByLabelText('Hashtags')).toHaveValue('#vtuber');
     });
 
+    it('respects a user-cleared default stream URL when generating previews', async () => {
+        mockedGetSettings.mockResolvedValue({
+            defaultStreamURL: 'https://example.com/live',
+            defaultHashtags: '#vtuber',
+            duplicateProtectionEnabled: true,
+            duplicateWindowMinutes: 10,
+        });
+        mockedGeneratePreview.mockResolvedValue([]);
+
+        render(<App />);
+
+        const streamURL = await screen.findByLabelText('Stream URL');
+        expect(streamURL).toHaveValue('https://example.com/live');
+
+        fireEvent.change(streamURL, {
+            target: { value: '' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+        await waitFor(() => {
+            expect(mockedGeneratePreview).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    streamURL: '',
+                }),
+                [],
+            );
+        });
+    });
+
     it('does not overwrite Home fields typed before settings finish loading', async () => {
         const pendingSettings = deferred<AppSettings>();
         mockedGetSettings.mockReturnValue(pendingSettings.promise);
@@ -315,7 +346,7 @@ describe('App', () => {
 
         expect(await screen.findByText('Main Discord')).toBeInTheDocument();
         expect(screen.getByText('discord · Production')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Reset Form' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'New Destination' })).toBeInTheDocument();
         expect(screen.getByText('New destination')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Create Destination' })).toBeInTheDocument();
     });
@@ -437,7 +468,7 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
-        fireEvent.click(await screen.findByRole('button', { name: /Main Discord/i }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
         expect(await screen.findByLabelText('Server Name')).toHaveValue('My Server');
         expect(screen.getByLabelText('Channel Name')).toHaveValue('go-live');
@@ -523,7 +554,7 @@ describe('App', () => {
             });
         });
 
-        expect(await screen.findByText('Discord webhook verified successfully.')).toBeInTheDocument();
+        expect(await screen.findAllByText('Discord webhook verified successfully.')).toHaveLength(2);
     });
 
     it('shows which announcement fields a destination template uses and can reset to the starter template', async () => {
@@ -545,21 +576,14 @@ describe('App', () => {
         expect(screen.getByText('Uses: title, stream URL, message, hashtags')).toBeInTheDocument();
     });
 
-    it('opens guided setup in a modal instead of leaving it expanded on the page', async () => {
+    it('shows guided setup persistently on the destinations page', async () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Setup Help' }));
 
-        expect(await screen.findByRole('dialog', { name: 'Guided Credential Setup' })).toBeInTheDocument();
-        expect(screen.getByText('Step 1: Create and name a channel webhook')).toBeInTheDocument();
+        expect(await screen.findByLabelText('Guided Credential Setup')).toBeInTheDocument();
+        expect(screen.getByText('Create and name a channel webhook')).toBeInTheDocument();
         expect(screen.getByText(/name it StreamSignal or the messenger name/i)).toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-        await waitFor(() => {
-            expect(screen.queryByRole('dialog', { name: 'Guided Credential Setup' })).not.toBeInTheDocument();
-        });
     });
 
     it('shows Mastodon app setup details in guided setup', async () => {
@@ -569,15 +593,14 @@ describe('App', () => {
         fireEvent.change(await screen.findByLabelText('Platform'), {
             target: { value: 'mastodon' },
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Setup Help' }));
 
-        expect(await screen.findByText('Step 3: Set the redirect URI')).toBeInTheDocument();
+        expect(await screen.findByText('Set the redirect URI')).toBeInTheDocument();
         expect(screen.getByText(/urn:ietf:wg:oauth:2.0:oob/)).toBeInTheDocument();
         expect(screen.getByText(/write:statuses/)).toBeInTheDocument();
         expect(screen.getByText(/read:accounts/)).toBeInTheDocument();
     });
 
-    it('copies template variables from the destination helper', async () => {
+    it('inserts template variables from the destination helper', async () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         Object.assign(navigator, {
             clipboard: {
@@ -588,13 +611,31 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+        fireEvent.focus(screen.getByLabelText('Template'));
         fireEvent.click(screen.getByRole('button', { name: '{{stream_url}}' }));
 
-        await waitFor(() => {
-            expect(writeText).toHaveBeenCalledWith('{{stream_url}}');
-        });
+        expect(screen.getByLabelText('Template')).toHaveValue('{{stream_url}}{{stream_title}}\n{{stream_url}}\n{{message}}\n{{hashtags}}');
+        expect(writeText).not.toHaveBeenCalled();
+        expect(await screen.findByText('Inserted {{stream_url}}')).toBeInTheDocument();
+    });
 
-        expect(await screen.findByText('Copied {{stream_url}}')).toBeInTheDocument();
+    it('allows editing the end stream template before end stream posting is enabled', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+        fireEvent.click(screen.getByText('Advanced'));
+
+        const endStreamTemplate = screen.getByLabelText('End Stream Template');
+        expect(endStreamTemplate).toBeEnabled();
+        expect(screen.getByText('Saved for later. Enable "Post when ending stream" to send it during End Stream.')).toBeInTheDocument();
+
+        fireEvent.change(endStreamTemplate, {
+            target: { value: 'Thanks for watching {{stream_title}}' },
+        });
+        expect(endStreamTemplate).toHaveValue('Thanks for watching {{stream_title}}');
+
+        fireEvent.click(screen.getByLabelText('End Stream Enabled'));
+        expect(screen.getByText('This message will be posted when you end a stream.')).toBeInTheDocument();
     });
 
     it('shows validation feedback when destination connection testing fails', async () => {
@@ -611,9 +652,7 @@ describe('App', () => {
             target: { value: 'bluesky' },
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Setup Help' }));
-        expect(await screen.findByText('Step 1: Create an app password')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(await screen.findByText('Create an app password')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Test Bluesky app password' }));
 
@@ -633,6 +672,8 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
 
         expect(await screen.findByLabelText('Default Stream URL')).toHaveValue('https://example.com/live');
+        expect(screen.getByText('Legal Notices')).toBeInTheDocument();
+        expect(screen.getByText(/StreamSignal is an independent tool and is not affiliated with, endorsed by, or sponsored by Discord, Bluesky, Mastodon/i)).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Duplicate Window (Minutes)'), {
             target: { value: '15' },
@@ -668,7 +709,7 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
-        fireEvent.click(await screen.findByRole('button', { name: /Main Discord/i }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
 
         await waitFor(() => {
@@ -706,7 +747,7 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
 
         expect(await screen.findByText('Live Now Recovery')).toBeInTheDocument();
-        expect(screen.getByText('Going Live')).toBeInTheDocument();
+        expect(screen.getByText(/Going Live/)).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Recover and Clear Live Now' }));
 
@@ -890,7 +931,7 @@ describe('App', () => {
 
         expect(await screen.findByText('Discord integration is not connected yet')).toBeInTheDocument();
         expect(screen.getByText('SKIPPED')).toBeInTheDocument();
-        expect(screen.getByText(/completed with warnings\. One or more destinations were skipped/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/completed with warnings\. One or more destinations were skipped/i).length).toBeGreaterThan(0);
     });
 
     it('shows partial execution guidance when some destinations fail and others need validation', async () => {
@@ -930,10 +971,10 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
         expect(
-            await screen.findByText(
+            (await screen.findAllByText(
                 'Execution finished with issues. Some destinations failed after execution began, and others still need validation before retrying.',
-            ),
-        ).toBeInTheDocument();
+            )).length,
+        ).toBeGreaterThan(0);
         expect(screen.getByText('Discord request failed.')).toBeInTheDocument();
         expect(screen.getByText('Stream URL is required.')).toBeInTheDocument();
     });
@@ -967,8 +1008,8 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
         expect(
-            await screen.findByText('Execution finished with issues. Some destinations failed after execution began.'),
-        ).toBeInTheDocument();
+            (await screen.findAllByText('Execution finished with issues. Some destinations failed after execution began.')).length,
+        ).toBeGreaterThan(0);
     });
 
     it('shows partial execution guidance when destinations still need validation', async () => {
@@ -1000,8 +1041,8 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
         expect(
-            await screen.findByText('Execution needs attention. Some destinations still have validation issues before they can run.'),
-        ).toBeInTheDocument();
+            (await screen.findAllByText('Execution needs attention. Some destinations still have validation issues before they can run.')).length,
+        ).toBeGreaterThan(0);
     });
 
     it('labels end-stream post rows distinctly from Live Now clear rows', async () => {
@@ -1032,8 +1073,9 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'End Stream' }));
 
-        expect(await screen.findByText('End stream post published successfully.')).toBeInTheDocument();
-        expect(screen.getByText('End Stream Post · mastodon')).toBeInTheDocument();
+        expect(await screen.findByText('End Stream completed successfully for 1 destination.')).toBeInTheDocument();
+        expect(screen.queryByText('End stream post published successfully.')).not.toBeInTheDocument();
+        expect(screen.queryByText('End Stream Post · mastodon')).not.toBeInTheDocument();
     });
 
     it('shows Bluesky Live Now messaging after Go Live succeeds', async () => {
@@ -1064,8 +1106,9 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
-        expect(await screen.findByText('Published successfully. Live Now set.')).toBeInTheDocument();
-        expect(screen.getByText('Go Live + Live Now · bluesky')).toBeInTheDocument();
+        expect(await screen.findByText('Go Live completed successfully for 1 destination.')).toBeInTheDocument();
+        expect(screen.queryByText('Published successfully. Live Now set.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Go Live + Live Now · bluesky')).not.toBeInTheDocument();
     });
 
     it('runs End Stream and shows Live Now clear results', async () => {
@@ -1100,8 +1143,9 @@ describe('App', () => {
             expect(mockedEndStream).toHaveBeenCalled();
         });
 
-        expect(await screen.findByText('Live Now cleared successfully.')).toBeInTheDocument();
-        expect(screen.getByText('Live Now Clear · bluesky')).toBeInTheDocument();
+        expect(await screen.findByText('End Stream completed successfully for 1 destination.')).toBeInTheDocument();
+        expect(screen.queryByText('Live Now cleared successfully.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Live Now Clear · bluesky')).not.toBeInTheDocument();
     });
 
     it('shows duplicate confirmation before confirmed Go Live execution', async () => {
