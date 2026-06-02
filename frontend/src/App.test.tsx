@@ -552,7 +552,8 @@ describe('App', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Setup Help' }));
 
         expect(await screen.findByRole('dialog', { name: 'Guided Credential Setup' })).toBeInTheDocument();
-        expect(screen.getByText('Step 1: Create a channel webhook')).toBeInTheDocument();
+        expect(screen.getByText('Step 1: Create and name a channel webhook')).toBeInTheDocument();
+        expect(screen.getByText(/name it StreamSignal or the messenger name/i)).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 

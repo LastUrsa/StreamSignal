@@ -340,12 +340,12 @@ function guidedSetupSteps(platform: DestinationInput['platform']): GuidedSetupSt
         case 'discord':
             return [
                 {
-                    title: 'Step 1: Create a channel webhook',
-                    detail: 'In Discord, open Server Settings > Integrations > Webhooks, create a webhook for your go-live channel, and copy the webhook URL.',
+                    title: 'Step 1: Create and name a channel webhook',
+                    detail: 'In Discord, open Server Settings > Integrations > Webhooks, create a webhook for your go-live channel, and name it StreamSignal or the messenger name you want shown in chat.',
                 },
                 {
                     title: 'Step 2: Paste the webhook URL below',
-                    detail: 'Use the full Discord webhook URL. StreamSignal stores it in Windows Credential Manager, not plain text app storage.',
+                    detail: 'Copy the full webhook URL into StreamSignal. Messages sent through this destination will appear in Discord as the webhook app/bot you named.',
                 },
                 {
                     title: 'Step 3: Test before saving',
