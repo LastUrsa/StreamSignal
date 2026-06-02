@@ -113,6 +113,7 @@ Ship StreamSignal in a way that is:
   - Manual dispatch run `26803097005` created a draft `StreamSignal 0.1.0` release with `prerelease` set to `false`.
   - The draft release attached `StreamSignal-0.1.0-windows-amd64-installer.exe` at 8,033,486 bytes and `StreamSignal-0.1.0-macos-universal.dmg` at 12,589,691 bytes.
   - The test draft release was deleted after validation, and no `v0.1.0` tag ref remained.
+  - Tag push run `26803575479` created public release `v0.1.0` with both final artifacts attached.
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly
@@ -122,7 +123,7 @@ Ship StreamSignal in a way that is:
 
 Before calling the app release-ready, confirm:
 
-- [ ] packaging is repeatable
+- [x] packaging is repeatable
 - [x] installer behavior is understood
 - [ ] macOS DMG behavior is understood
 - [x] first-run setup is documented
