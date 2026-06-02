@@ -49,13 +49,14 @@ Ship StreamSignal in a way that is:
 
 - [x] produce a clean Windows release build with `wails build`
 - [x] produce a clean Windows NSIS installer with `wails build -platform windows/amd64 -nsis`
-- [ ] produce a macOS app bundle on macOS with `wails build -platform darwin/universal`
+- [x] produce a macOS app bundle on macOS with `wails build -platform darwin/universal`
   - Wails v2.12.0 reports that cross-compiling to Mac from Windows is not currently supported.
   - The macOS build needs a Mac runner or Mac tester with Xcode command line tools, Node, Go, and Wails installed.
-  - The Release Build workflow is configured to create this bundle on `macos-latest`; the first successful run still needs review.
-- [ ] produce a macOS DMG from the tested `.app` bundle
+  - Release Build run `26802453873` created the app bundle successfully on `macos-latest`.
+- [x] produce a macOS DMG from the CI-built `.app` bundle
   - Wails packages a `.app` bundle for macOS; DMG creation needs a macOS packaging step such as `hdiutil` after the app bundle exists.
   - The planned release artifact name is `StreamSignal-0.1.0-macos-universal.dmg`.
+  - Release Build run `26802453873` uploaded artifact `streamsignal-0.1.0-macos-universal-dmg` at 12,540,884 bytes.
   - Decide whether the first Mac artifact is an unsigned tester DMG, an ad-hoc signed DMG, or a Developer ID signed and notarized DMG.
 - [ ] verify macOS app signing, notarization, and Gatekeeper behavior
 - [x] validate installer metadata, icon, and version information
@@ -68,6 +69,7 @@ Ship StreamSignal in a way that is:
 - [ ] verify upgrade behavior from one build to the next
 - [ ] decide how release artifacts will be attached to GitHub releases
   - The Release Build workflow currently uploads `StreamSignal-0.1.0-windows-amd64-installer.exe` and `StreamSignal-0.1.0-macos-universal.dmg` as workflow artifacts.
+  - Release Build run `26802453873` uploaded artifact `streamsignal-0.1.0-windows-amd64-installer` at 8,000,959 bytes.
 
 ## Secrets And Local Security
 
@@ -102,8 +104,9 @@ Ship StreamSignal in a way that is:
 ## CI And Maintenance
 
 - [x] keep the GitHub quality gate green on `main`
-- [ ] validate the Release Build workflow on a tag or manual dispatch
-  - The workflow is configured to build a Windows NSIS installer and macOS DMG, but the macOS runner output still needs a real run before it is considered proven.
+- [x] validate the Release Build workflow on a tag or manual dispatch
+  - Manual dispatch for version `0.1.0` completed successfully in Release Build run `26802453873`.
+  - Windows Installer and macOS DMG jobs both completed successfully.
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly
