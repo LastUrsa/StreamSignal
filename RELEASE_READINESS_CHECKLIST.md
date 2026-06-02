@@ -109,7 +109,10 @@ Ship StreamSignal in a way that is:
 - [x] validate the Release Build workflow on a tag or manual dispatch
   - Manual dispatch for version `0.1.0` completed successfully in Release Build run `26802453873`.
   - Windows Installer and macOS DMG jobs both completed successfully.
-- [ ] validate GitHub Release creation with attached Windows and macOS artifacts
+- [x] validate GitHub Release creation with attached Windows and macOS artifacts
+  - Manual dispatch run `26803097005` created a draft `StreamSignal 0.1.0` release with `prerelease` set to `false`.
+  - The draft release attached `StreamSignal-0.1.0-windows-amd64-installer.exe` at 8,033,486 bytes and `StreamSignal-0.1.0-macos-universal.dmg` at 12,589,691 bytes.
+  - The test draft release was deleted after validation, and no `v0.1.0` tag ref remained.
 - [x] keep required branch protection checks aligned with the live job names
 - [ ] keep Go toolchain and GitHub Action versions current
 - [x] review `govulncheck` and `npm audit` output regularly
