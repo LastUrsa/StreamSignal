@@ -15,6 +15,16 @@ npm audit --prefix frontend
 govulncheck ./...
 ```
 
+The frontend test suite includes mocked UI workflow coverage. It does not publish real posts.
+
+Provider-backed workflow E2E runs separately because it creates real test-account posts and deletes them afterward:
+
+```bash
+STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
+```
+
+In GitHub Actions, `Provider Workflow E2E` runs on a schedule and as a release-build prerequisite when the test-account secrets are configured.
+
 If dependency manifests change, also confirm:
 
 ```bash

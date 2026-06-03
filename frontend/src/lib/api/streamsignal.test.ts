@@ -3,17 +3,26 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 vi.mock('../../../wailsjs/go/main/App', () => ({
     ClearPendingLiveNowSession: vi.fn(),
     DeleteDestination: vi.fn(),
+    DeleteDestinationGroup: vi.fn(),
+    DuplicateDestinationGroup: vi.fn(),
     EndStream: vi.fn(),
     ForceGoLive: vi.fn(),
     GeneratePreview: vi.fn(),
+    GetDestinationGroup: vi.fn(),
+    GetDestinationGroupIDs: vi.fn(),
     GetDiagnostics: vi.fn(),
+    GetGroupDestinations: vi.fn(),
     GetLogs: vi.fn(),
     GetSettings: vi.fn(),
     GoLive: vi.fn(),
+    ListDestinationGroups: vi.fn(),
     ListPendingLiveNowSessions: vi.fn(),
     ListDestinations: vi.fn(),
     SaveDestination: vi.fn(),
+    SaveDestinationGroup: vi.fn(),
     SaveSettings: vi.fn(),
+    SetDestinationGroups: vi.fn(),
+    SetGroupDestinations: vi.fn(),
     TestDestinationConnection: vi.fn(),
 }));
 
@@ -29,6 +38,7 @@ import {
     getLogs,
     getSettings,
     goLive,
+    listDestinationGroups,
     listDestinations,
     listPendingLiveNowSessions,
     saveDestination,
@@ -49,7 +59,7 @@ describe('streamsignal api wrappers', () => {
             message: 'See you there',
             hashtags: '#vtuber',
         };
-        const destinationIDs = ['discord-main'];
+        const destinationGroupID = 'all-destinations';
         const destination = {
             id: 'discord-main',
             platform: 'discord',
@@ -65,6 +75,7 @@ describe('streamsignal api wrappers', () => {
             defaultHashtags: '',
             duplicateProtectionEnabled: true,
             duplicateWindowMinutes: 10,
+            selectedDestinationGroupID: destinationGroupID,
         };
 
         vi.mocked(bindings.GetLogs).mockResolvedValue([] as never);
@@ -119,6 +130,7 @@ describe('streamsignal api wrappers', () => {
             content: '',
         } as never);
         vi.mocked(bindings.ListDestinations).mockResolvedValue([] as never);
+        vi.mocked(bindings.ListDestinationGroups).mockResolvedValue([] as never);
         vi.mocked(bindings.SaveDestination).mockResolvedValue(destination as never);
         vi.mocked(bindings.DeleteDestination).mockResolvedValue(undefined as never);
         vi.mocked(bindings.GetSettings).mockResolvedValue(settings as never);
@@ -131,13 +143,14 @@ describe('streamsignal api wrappers', () => {
 
         await getLogs();
         await getDiagnostics();
-        await generatePreview(announcement, destinationIDs);
-        await goLive(announcement, destinationIDs);
-        await forceGoLive(announcement, destinationIDs);
-        await endStream(announcement, destinationIDs);
+        await generatePreview(announcement, destinationGroupID);
+        await goLive(announcement, destinationGroupID);
+        await forceGoLive(announcement, destinationGroupID);
+        await endStream(announcement, destinationGroupID);
         await listPendingLiveNowSessions();
         await clearPendingLiveNowSession('bluesky-main');
         await listDestinations();
+        await listDestinationGroups();
         await saveDestination(destination);
         await deleteDestination('discord-main');
         await getSettings();
@@ -146,13 +159,14 @@ describe('streamsignal api wrappers', () => {
 
         expect(bindings.GetLogs).toHaveBeenCalled();
         expect(bindings.GetDiagnostics).toHaveBeenCalled();
-        expect(bindings.GeneratePreview).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
-        expect(bindings.GoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
-        expect(bindings.ForceGoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
-        expect(bindings.EndStream).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationIDs }));
+        expect(bindings.GeneratePreview).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationGroupID }));
+        expect(bindings.GoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationGroupID }));
+        expect(bindings.ForceGoLive).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationGroupID }));
+        expect(bindings.EndStream).toHaveBeenCalledWith(expect.objectContaining({ ...announcement, destinationGroupID }));
         expect(bindings.ListPendingLiveNowSessions).toHaveBeenCalled();
         expect(bindings.ClearPendingLiveNowSession).toHaveBeenCalledWith('bluesky-main');
         expect(bindings.ListDestinations).toHaveBeenCalled();
+        expect(bindings.ListDestinationGroups).toHaveBeenCalled();
         expect(bindings.SaveDestination).toHaveBeenCalledWith(expect.objectContaining({
             id: destination.id,
             platform: destination.platform,
@@ -197,6 +211,7 @@ describe('streamsignal api wrappers', () => {
         vi.mocked(bindings.GeneratePreview).mockResolvedValue(null as never);
         vi.mocked(bindings.ListPendingLiveNowSessions).mockResolvedValue(null as never);
         vi.mocked(bindings.ListDestinations).mockResolvedValue(null as never);
+        vi.mocked(bindings.ListDestinationGroups).mockResolvedValue(null as never);
         vi.mocked(bindings.GoLive).mockResolvedValue({
             mode: 'go_live',
             status: 'SUCCESS',
@@ -215,6 +230,7 @@ describe('streamsignal api wrappers', () => {
         await expect(generatePreview(announcement)).resolves.toEqual([]);
         await expect(listPendingLiveNowSessions()).resolves.toEqual([]);
         await expect(listDestinations()).resolves.toEqual([]);
+        await expect(listDestinationGroups()).resolves.toEqual([]);
         await expect(goLive(announcement)).resolves.toEqual(
             expect.objectContaining({
                 results: [],

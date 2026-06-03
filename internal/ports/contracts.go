@@ -14,6 +14,20 @@ type DestinationRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
+type DestinationGroupRepository interface {
+	List(ctx context.Context) ([]domain.DestinationGroup, error)
+	Get(ctx context.Context, id string) (domain.DestinationGroup, error)
+	GetByName(ctx context.Context, name string) (domain.DestinationGroup, error)
+	Save(ctx context.Context, group domain.DestinationGroup) error
+	Delete(ctx context.Context, id string) error
+	ListDestinations(ctx context.Context, groupID string) ([]domain.Destination, error)
+	ListGroupIDsForDestination(ctx context.Context, destinationID string) ([]string, error)
+	SetDestinations(ctx context.Context, groupID string, destinationIDs []string) error
+	SetGroupsForDestination(ctx context.Context, destinationID string, groupIDs []string) error
+	AddDestination(ctx context.Context, groupID string, destinationID string) error
+	RemoveDestination(ctx context.Context, groupID string, destinationID string) error
+}
+
 type SettingsRepository interface {
 	Load(ctx context.Context) (domain.AppSettings, error)
 	Save(ctx context.Context, settings domain.AppSettings) error
@@ -59,6 +73,10 @@ type BlueskyPublisher interface {
 	PublishPost(ctx context.Context, accountIdentifier string, credentialKey string, content string, metadata domain.BlueskyPostMetadata) error
 }
 
+type BlueskyReceiptPublisher interface {
+	PublishPostWithReceipt(ctx context.Context, accountIdentifier string, credentialKey string, content string, metadata domain.BlueskyPostMetadata) (domain.PublishReceipt, error)
+}
+
 type BlueskyCredentialVerifier interface {
 	VerifyCredentials(ctx context.Context, accountIdentifier string, credentialKey string) error
 }
@@ -70,6 +88,10 @@ type BlueskyLiveNowManager interface {
 
 type MastodonPublisher interface {
 	PublishPost(ctx context.Context, credentialKey string, instanceURL string, content string, metadata domain.MastodonPostMetadata) error
+}
+
+type MastodonReceiptPublisher interface {
+	PublishPostWithReceipt(ctx context.Context, credentialKey string, instanceURL string, content string, metadata domain.MastodonPostMetadata) (domain.PublishReceipt, error)
 }
 
 type MastodonCredentialVerifier interface {

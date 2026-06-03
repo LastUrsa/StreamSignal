@@ -22,6 +22,11 @@ on:
         type: boolean
         required: true
         default: true
+      run_provider_e2e:
+        description: Run provider-backed workflow E2E before building artifacts
+        type: boolean
+        required: true
+        default: true
   push:
     tags:
       - 'v*'
@@ -33,8 +38,18 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  provider-workflow-e2e:
+    name: Provider Workflow E2E
+    uses: ./.github/workflows/e2e-workflow.yml
+    with:
+      enabled: ${{ github.event_name == 'push' || github.event.inputs.run_provider_e2e == 'true' }}
+      run_bluesky: true
+      run_mastodon: true
+    secrets: inherit
+
   windows-installer:
     name: Windows Installer
+    needs: provider-workflow-e2e
     runs-on: windows-latest
 
     steps:
@@ -110,6 +125,7 @@ jobs:
 
   macos-dmg:
     name: macOS DMG
+    needs: provider-workflow-e2e
     runs-on: macos-latest
 
     steps:

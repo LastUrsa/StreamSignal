@@ -1,5 +1,4 @@
 export type DestinationPlatform = 'discord' | 'bluesky' | 'mastodon';
-export type DestinationEnvironment = 'production' | 'test';
 
 export const TEMPLATE_VARIABLES = [
     '{{stream_title}}',
@@ -38,7 +37,6 @@ export interface DestinationFormState {
     id: string;
     platform: DestinationPlatform;
     name: string;
-    environment: DestinationEnvironment;
     template: string;
     endStreamEnabled: boolean;
     endStreamTemplate: string;
@@ -71,7 +69,6 @@ interface DiscordConfig {
     webhookKey?: string;
     cardThumbnailURL?: string;
     cardThumbnailDataURL?: string;
-    environment?: DestinationEnvironment;
     endStreamEnabled?: boolean;
     endStreamTemplate?: string;
 }
@@ -86,7 +83,6 @@ interface BlueskyConfig {
     cardThumbnailDataURL?: string;
     additionalImageURL?: string;
     additionalImageDataURL?: string;
-    environment?: DestinationEnvironment;
     endStreamEnabled?: boolean;
     endStreamTemplate?: string;
 }
@@ -97,7 +93,6 @@ interface MastodonConfig {
     credentialKey?: string;
     additionalImageURL?: string;
     additionalImageDataURL?: string;
-    environment?: DestinationEnvironment;
     endStreamEnabled?: boolean;
     endStreamTemplate?: string;
 }
@@ -108,10 +103,6 @@ function parseConfigJSON<T>(configJSON: string): T {
     } catch {
         return {} as T;
     }
-}
-
-function parseEnvironment(value?: string): DestinationEnvironment {
-    return value === 'test' ? 'test' : 'production';
 }
 
 export function defaultTemplateForPlatform(platform: DestinationPlatform): string {
@@ -136,7 +127,6 @@ export function createEmptyDestinationForm(platform: DestinationPlatform = 'disc
         id: '',
         platform,
         name: '',
-        environment: 'production',
         template: defaultTemplateForPlatform(platform),
         endStreamEnabled: false,
         endStreamTemplate: 'Thanks for hanging out at {{stream_title}} {{stream_url}}',
@@ -178,7 +168,6 @@ export function toDestinationFormState(destination: DestinationInput): Destinati
 
     if (destination.platform === 'discord') {
         const config = parseConfigJSON<DiscordConfig>(destination.configJSON);
-        next.environment = parseEnvironment(config.environment);
         next.discordServerName = config.serverName ?? '';
         next.discordChannelName = config.channelName ?? '';
         next.discordWebhookKey = config.webhookKey ?? '';
@@ -190,7 +179,6 @@ export function toDestinationFormState(destination: DestinationInput): Destinati
 
     if (destination.platform === 'bluesky') {
         const config = parseConfigJSON<BlueskyConfig>(destination.configJSON);
-        next.environment = parseEnvironment(config.environment);
         next.blueskyAccountIdentifier = config.accountIdentifier ?? '';
         next.blueskyCredentialKey = config.credentialKey ?? '';
         next.blueskyLiveStatusEnabled = config.liveStatusEnabled ?? true;
@@ -206,7 +194,6 @@ export function toDestinationFormState(destination: DestinationInput): Destinati
 
     if (destination.platform === 'mastodon') {
         const config = parseConfigJSON<MastodonConfig>(destination.configJSON);
-        next.environment = parseEnvironment(config.environment);
         next.mastodonAccountIdentifier = config.accountIdentifier ?? '';
         next.mastodonInstanceURL = config.instanceURL ?? '';
         next.mastodonCredentialKey = config.credentialKey ?? '';
@@ -224,7 +211,6 @@ export function toDestinationInput(form: DestinationFormState): DestinationInput
 
     if (form.platform === 'discord') {
         configJSON = JSON.stringify({
-            environment: form.environment,
             serverName: form.discordServerName,
             channelName: form.discordChannelName,
             webhookKey: form.discordWebhookKey,
@@ -237,7 +223,6 @@ export function toDestinationInput(form: DestinationFormState): DestinationInput
 
     if (form.platform === 'bluesky') {
         configJSON = JSON.stringify({
-            environment: form.environment,
             accountIdentifier: form.blueskyAccountIdentifier,
             credentialKey: form.blueskyCredentialKey,
             liveStatusEnabled: form.blueskyLiveStatusEnabled,
@@ -254,7 +239,6 @@ export function toDestinationInput(form: DestinationFormState): DestinationInput
 
     if (form.platform === 'mastodon') {
         configJSON = JSON.stringify({
-            environment: form.environment,
             accountIdentifier: form.mastodonAccountIdentifier,
             instanceURL: form.mastodonInstanceURL,
             credentialKey: form.mastodonCredentialKey,

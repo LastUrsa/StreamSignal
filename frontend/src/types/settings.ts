@@ -3,4 +3,5 @@ export interface AppSettings {
     defaultHashtags: string;
     duplicateProtectionEnabled: boolean;
     duplicateWindowMinutes: number;
+    selectedDestinationGroupID: string;
 }

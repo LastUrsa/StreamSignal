@@ -74,7 +74,7 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Run frontend tests
+      - name: Run frontend unit and UI workflow tests
         working-directory: frontend
         run: npm test
 

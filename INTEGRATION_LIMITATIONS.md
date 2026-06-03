@@ -43,9 +43,7 @@ This maintainer-facing reference records practical platform constraints that sha
 - StreamSignal is designed for automated outbound posting, not for reading back channel state from every platform.
 - Some integrations require server, instance, or account-level approval outside the app before StreamSignal can post.
 - Credential setup is currently guided manual entry plus connection testing, not full OAuth sign-in for every platform.
-- Test and Production are destination workflow labels, not provider sandbox modes.
-- The Home destination filter can scope Preview, Go Live, and End Stream actions to All, Production, or Test destinations.
-- Test destinations are configured as normal destinations with their own credentials, so test posts go only to the accounts or channels selected on Home.
+- Destination Groups are StreamSignal workflow labels. They do not create provider-level sandbox modes; each destination posts to the account, channel, or instance configured for that destination.
 
 ## Why This Exists
 

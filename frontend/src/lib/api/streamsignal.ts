@@ -1,21 +1,31 @@
 import {
     ClearPendingLiveNowSession,
     DeleteDestination,
+    DeleteDestinationGroup,
+    DuplicateDestinationGroup,
     EndStream,
     ForceGoLive,
     GeneratePreview,
+    GetDestinationGroup,
+    GetDestinationGroupIDs,
     GetDiagnostics,
+    GetGroupDestinations,
     GetLogs,
     GoLive,
+    ListDestinationGroups,
     GetSettings,
     ListPendingLiveNowSessions,
     ListDestinations,
     SaveDestination,
+    SaveDestinationGroup,
     SaveSettings,
+    SetDestinationGroups,
+    SetGroupDestinations,
     TestDestinationConnection,
 } from '../../../wailsjs/go/main/App';
 import { domain } from '../../../wailsjs/go/models';
 import type { CredentialCheckResult } from '../../types/credential-check';
+import type { DestinationGroupInput } from '../../types/destination-group';
 import type { DestinationInput, DestinationPlatform } from '../../types/destination';
 import type { ExecutionResult, ExecutionSummary } from '../../types/execution';
 import type { ActiveLiveNowSession, LiveNowRecoveryResult } from '../../types/live-now-recovery';
@@ -23,9 +33,10 @@ import type { LogEntry } from '../../types/log-entry';
 import type { AnnouncementInput, PreviewItem } from '../../types/preview';
 import type { AppSettings } from '../../types/settings';
 
-function toAnnouncementModel(announcement: AnnouncementInput, destinationIDs: string[] = []): domain.Announcement {
+function toAnnouncementModel(announcement: AnnouncementInput, destinationGroupID = '', destinationIDs: string[] = []): domain.Announcement {
     return {
         ...domain.Announcement.createFrom(announcement),
+        destinationGroupID,
         destinationIDs,
     } as unknown as domain.Announcement;
 }
@@ -61,6 +72,14 @@ function toExecutionResult(result: domain.ExecutionResult): ExecutionResult {
         state: result.state as ExecutionResult['state'],
         message: result.message,
         content: result.content,
+        receipt: result.receipt
+            ? {
+                  provider: result.receipt.provider,
+                  id: result.receipt.id,
+                  uri: result.receipt.uri,
+                  cid: result.receipt.cid,
+              }
+            : undefined,
     };
 }
 
@@ -90,6 +109,25 @@ function toDestinationInput(destination: domain.Destination): DestinationInput {
         configJSON: destination.configJSON,
         createdAt: destination.createdAt ? String(destination.createdAt) : '',
         updatedAt: destination.updatedAt ? String(destination.updatedAt) : '',
+    };
+}
+
+function toDestinationGroupModel(group: DestinationGroupInput): domain.DestinationGroup {
+    const { createdAt, updatedAt, ...rest } = group;
+    return domain.DestinationGroup.createFrom({
+        ...rest,
+        ...(createdAt ? { createdAt } : {}),
+        ...(updatedAt ? { updatedAt } : {}),
+    });
+}
+
+function toDestinationGroupInput(group: domain.DestinationGroup): DestinationGroupInput {
+    return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        createdAt: group.createdAt ? String(group.createdAt) : '',
+        updatedAt: group.updatedAt ? String(group.updatedAt) : '',
     };
 }
 
@@ -158,20 +196,20 @@ export function getDiagnostics(): Promise<string> {
     return GetDiagnostics();
 }
 
-export function generatePreview(announcement: AnnouncementInput, destinationIDs: string[] = []): Promise<PreviewItem[]> {
-    return GeneratePreview(toAnnouncementModel(announcement, destinationIDs)).then((items: domain.PreviewItem[] | null) => asArray(items).map(toPreviewItem));
+export function generatePreview(announcement: AnnouncementInput, destinationGroupID = '', destinationIDs: string[] = []): Promise<PreviewItem[]> {
+    return GeneratePreview(toAnnouncementModel(announcement, destinationGroupID, destinationIDs)).then((items: domain.PreviewItem[] | null) => asArray(items).map(toPreviewItem));
 }
 
-export function goLive(announcement: AnnouncementInput, destinationIDs: string[] = []): Promise<ExecutionSummary> {
-    return GoLive(toAnnouncementModel(announcement, destinationIDs)).then(toExecutionSummary);
+export function goLive(announcement: AnnouncementInput, destinationGroupID = '', destinationIDs: string[] = []): Promise<ExecutionSummary> {
+    return GoLive(toAnnouncementModel(announcement, destinationGroupID, destinationIDs)).then(toExecutionSummary);
 }
 
-export function forceGoLive(announcement: AnnouncementInput, destinationIDs: string[] = []): Promise<ExecutionSummary> {
-    return ForceGoLive(toAnnouncementModel(announcement, destinationIDs)).then(toExecutionSummary);
+export function forceGoLive(announcement: AnnouncementInput, destinationGroupID = '', destinationIDs: string[] = []): Promise<ExecutionSummary> {
+    return ForceGoLive(toAnnouncementModel(announcement, destinationGroupID, destinationIDs)).then(toExecutionSummary);
 }
 
-export function endStream(announcement: AnnouncementInput, destinationIDs: string[] = []): Promise<ExecutionSummary> {
-    return EndStream(toAnnouncementModel(announcement, destinationIDs)).then(toExecutionSummary);
+export function endStream(announcement: AnnouncementInput, destinationGroupID = '', destinationIDs: string[] = []): Promise<ExecutionSummary> {
+    return EndStream(toAnnouncementModel(announcement, destinationGroupID, destinationIDs)).then(toExecutionSummary);
 }
 
 export function listPendingLiveNowSessions(): Promise<ActiveLiveNowSession[]> {
@@ -198,12 +236,49 @@ export function deleteDestination(id: string): Promise<void> {
     return DeleteDestination(id);
 }
 
+export function listDestinationGroups(): Promise<DestinationGroupInput[]> {
+    return ListDestinationGroups().then((groups: domain.DestinationGroup[] | null) => asArray(groups).map(toDestinationGroupInput));
+}
+
+export function getDestinationGroup(id: string): Promise<DestinationGroupInput> {
+    return GetDestinationGroup(id).then(toDestinationGroupInput);
+}
+
+export function saveDestinationGroup(group: DestinationGroupInput): Promise<DestinationGroupInput> {
+    return SaveDestinationGroup(toDestinationGroupModel(group)).then(toDestinationGroupInput);
+}
+
+export function duplicateDestinationGroup(id: string): Promise<DestinationGroupInput> {
+    return DuplicateDestinationGroup(id).then(toDestinationGroupInput);
+}
+
+export function deleteDestinationGroup(id: string): Promise<void> {
+    return DeleteDestinationGroup(id);
+}
+
+export function getGroupDestinations(groupID: string): Promise<DestinationInput[]> {
+    return GetGroupDestinations(groupID).then((destinations: domain.Destination[] | null) => asArray(destinations).map(toDestinationInput));
+}
+
+export function setGroupDestinations(groupID: string, destinationIDs: string[]): Promise<void> {
+    return SetGroupDestinations(groupID, destinationIDs);
+}
+
+export function getDestinationGroupIDs(destinationID: string): Promise<string[]> {
+    return GetDestinationGroupIDs(destinationID).then((groupIDs: string[] | null) => asArray(groupIDs));
+}
+
+export function setDestinationGroups(destinationID: string, groupIDs: string[]): Promise<void> {
+    return SetDestinationGroups(destinationID, groupIDs);
+}
+
 export function getSettings(): Promise<AppSettings> {
     return GetSettings().then((settings: domain.AppSettings) => ({
         defaultStreamURL: settings.defaultStreamURL,
         defaultHashtags: settings.defaultHashtags,
         duplicateProtectionEnabled: settings.duplicateProtectionEnabled,
         duplicateWindowMinutes: settings.duplicateWindowMinutes,
+        selectedDestinationGroupID: settings.selectedDestinationGroupID,
     }));
 }
 
@@ -213,5 +288,6 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
         defaultHashtags: saved.defaultHashtags,
         duplicateProtectionEnabled: saved.duplicateProtectionEnabled,
         duplicateWindowMinutes: saved.duplicateWindowMinutes,
+        selectedDestinationGroupID: saved.selectedDestinationGroupID,
     }));
 }

@@ -5,6 +5,14 @@ export interface ExecutionResult {
     state: 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'VALIDATION_ERROR';
     message: string;
     content: string;
+    receipt?: PublishReceipt;
+}
+
+export interface PublishReceipt {
+    provider: string;
+    id?: string;
+    uri?: string;
+    cid?: string;
 }
 
 export interface ExecutionSummary {

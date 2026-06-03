@@ -92,6 +92,36 @@ create table if not exists bluesky_live_now_sessions (
   started_at text not null
 );`,
 	},
+	{
+		version: 7,
+		name:    "create_destination_groups",
+		sql: `
+create table if not exists destination_groups (
+  id text primary key,
+  name text not null,
+  description text not null,
+  created_at text not null,
+  updated_at text not null
+);
+create unique index if not exists destination_groups_name_unique on destination_groups(lower(name));
+create table if not exists destination_group_memberships (
+  group_id text not null,
+  destination_id text not null,
+  primary key (group_id, destination_id),
+  foreign key (group_id) references destination_groups(id) on delete cascade,
+  foreign key (destination_id) references destinations(id) on delete cascade
+);
+insert or ignore into destination_groups(id, name, description, created_at, updated_at)
+values('all-destinations', 'All Destinations', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+insert or ignore into destination_group_memberships(group_id, destination_id)
+select 'all-destinations', id from destinations;`,
+	},
+	{
+		version: 8,
+		name:    "add_selected_destination_group_to_settings",
+		sql: `
+alter table settings add column selected_destination_group_id text not null default 'all-destinations';`,
+	},
 }
 
 func ApplyMigrations(db *sql.DB) error {

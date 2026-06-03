@@ -10,6 +10,7 @@ import (
 
 type PreviewService struct {
 	destinations ports.DestinationRepository
+	groups       ports.DestinationGroupRepository
 	settings     ports.SettingsRepository
 	sessions     ports.LiveNowSessionRepository
 	clock        Clock
@@ -26,17 +27,20 @@ func NewPreviewService(destinations ports.DestinationRepository, settings ports.
 	}
 }
 
+func (s *PreviewService) UseDestinationGroups(groups ports.DestinationGroupRepository) {
+	s.groups = groups
+}
+
 func (s *PreviewService) Generate(ctx context.Context, announcement domain.Announcement) ([]domain.PreviewItem, error) {
 	settings, err := s.settings.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	destinations, err := s.destinations.List(ctx)
+	destinations, err := resolveAnnouncementDestinations(ctx, s.destinations, s.groups, announcement)
 	if err != nil {
 		return nil, err
 	}
-	destinations = destinationsForSelection(destinations, announcement.DestinationIDs)
 
 	normalized := domain.NormalizeAnnouncement(announcement, settings)
 	now := s.clock.Now()
@@ -104,11 +108,10 @@ func (s *PreviewService) GenerateEndStream(ctx context.Context, announcement dom
 		return nil, err
 	}
 
-	destinations, err := s.destinations.List(ctx)
+	destinations, err := resolveAnnouncementDestinations(ctx, s.destinations, s.groups, announcement)
 	if err != nil {
 		return nil, err
 	}
-	destinations = destinationsForSelection(destinations, announcement.DestinationIDs)
 
 	normalized := domain.NormalizeAnnouncement(announcement, settings)
 	return s.generateEndStream(ctx, destinations, normalized, true)

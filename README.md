@@ -10,13 +10,12 @@ It is intended for creators who want a repeatable Go Live and End Stream workflo
 - generates destination-specific previews before anything is sent
 - supports optional End Stream messages per destination
 - can set and clear Bluesky `Live Now` status, including recovery after an interrupted app session
-- separates Production and Test destinations as local workflow labels
 - supports default stream URLs and hashtags for fresh sessions
 
 ## App Areas
 
 - **Home**: session details, destination selection, preview, Go Live, End Stream, and recovery awareness.
-- **Destinations**: Discord, Bluesky, and Mastodon setup and testing.
+- **Destinations**: Discord, Bluesky, and Mastodon setup, testing, and Destination Groups.
 - **Settings**: defaults, Bluesky Live Now recovery, and legal notices.
 
 Debug builds also include **Logs** for development and workflow validation. Logs are not shown in production releases.
@@ -29,7 +28,7 @@ Debug builds also include **Logs** for development and workflow validation. Logs
    - **Bluesky**: create a Bluesky app password, enter the account identifier and app password, then choose whether StreamSignal should change Bluesky Live Status during Go Live.
    - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
 3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags.
-4. Use **Destinations** on Home to filter by **All**, **Production**, or **Test**, then choose which destinations are included in the current session.
+4. On Home, choose individual destinations or switch to a Destination Group for the current session. New destinations start in **All Destinations**.
 5. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
 6. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
 7. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
@@ -57,10 +56,16 @@ Run the app in development mode:
 wails dev
 ```
 
-Build the desktop app:
+Build the Windows desktop app from WSL:
 
 ```bash
-wails build
+./scripts/build-prod-windows.sh
+```
+
+Build and launch it for local review:
+
+```bash
+./scripts/build-prod-windows.sh --launch
 ```
 
 Build a macOS app bundle on a Mac:
@@ -79,6 +84,14 @@ npm run build --prefix frontend
 go test ./...
 go vet ./...
 ```
+
+Run provider-backed workflow E2E tests manually when you need to verify the real posting path outside GitHub Actions:
+
+```bash
+STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
+```
+
+The E2E tests create real posts through the StreamSignal execution workflow and then delete them. The GitHub `Provider Workflow E2E` action runs the same scenario on a schedule and before release artifact builds when the matching repo secrets are configured. Use test-only accounts with `E2E_BLUESKY_IDENTIFIER`, `E2E_BLUESKY_APP_PASSWORD`, `E2E_MASTODON_INSTANCE_URL`, and `E2E_MASTODON_ACCESS_TOKEN`. Mastodon tokens need `write:statuses`; add `write:media` only for future media-upload E2E coverage.
 
 Run dependency and vulnerability checks:
 

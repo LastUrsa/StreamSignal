@@ -21,6 +21,14 @@ type ExecutionResult struct {
 	State           ExecutionState      `json:"state"`
 	Message         string              `json:"message"`
 	Content         string              `json:"content"`
+	Receipt         *PublishReceipt     `json:"receipt,omitempty"`
+}
+
+type PublishReceipt struct {
+	Provider string `json:"provider"`
+	ID       string `json:"id,omitempty"`
+	URI      string `json:"uri,omitempty"`
+	CID      string `json:"cid,omitempty"`
 }
 
 type ExecutionSummary struct {

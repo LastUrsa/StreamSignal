@@ -470,7 +470,8 @@ button:focus-visible {
 }
 
 .small-button {
-    padding: 7px 10px;
+    min-height: 34px;
+    padding: 8px 12px;
     font-size: 0.82rem;
 }
 
@@ -603,24 +604,38 @@ button:focus-visible {
 .compact-segmented-control {
     flex: 1;
     min-width: 0;
+    margin-bottom: 12px;
 }
 
 .compact-segmented-control button {
     flex: 1;
     min-width: 0;
-    padding: 7px 8px;
+    min-height: 36px;
+    padding: 8px 12px;
 }
 
 .destination-picker-card {
     display: grid;
-    grid-template-columns: auto 28px 1fr;
-    gap: 10px;
-    align-items: center;
-    padding: 10px;
+    grid-template-columns: 18px 28px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 6px;
+    align-items: start;
+    padding: 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--surface-strong);
     cursor: pointer;
+}
+
+.destination-picker-card.readonly {
+    grid-template-columns: 28px minmax(0, 1fr);
+    cursor: default;
+}
+
+.destination-picker-card input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 3px;
 }
 
 .destination-picker-card.selected {
@@ -631,6 +646,26 @@ button:focus-visible {
 .destination-picker-card span {
     display: grid;
     gap: 3px;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.destination-picker-card strong,
+.destination-picker-card small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.destination-target-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 2px 0 10px;
+}
+
+.dashboard-side-stack .field + .destination-picker-list {
+    margin-top: 12px;
 }
 
 .recovery-card {
@@ -954,9 +989,14 @@ button:focus-visible {
     border-color: color-mix(in srgb, var(--accent-gold) 50%, var(--border) 50%);
 }
 
+.destinations-workspace .destination-card-grid + .announcement-form {
+    margin-top: 16px;
+}
+
 .quick-action-row {
     justify-content: flex-start;
     flex-wrap: wrap;
+    gap: 10px;
 }
 
 .destination-editor-grid {
@@ -1016,6 +1056,23 @@ button:focus-visible {
 .guided-setup-list {
     display: grid;
     gap: 10px;
+}
+
+.membership-checklist {
+    display: grid;
+    gap: 8px;
+}
+
+.membership-checklist .checkbox-field {
+    min-height: 34px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.membership-checklist .checkbox-field input {
+    width: 16px;
+    height: 16px;
 }
 
 .template-helper-header {
@@ -1144,7 +1201,8 @@ button:focus-visible {
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.04);
     color: var(--text-muted);
-    padding: 7px 9px;
+    min-height: 36px;
+    padding: 8px 12px;
     cursor: pointer;
 }
 

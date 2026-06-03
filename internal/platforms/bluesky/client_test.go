@@ -48,7 +48,7 @@ func TestPublisherCreatesSessionThenPublishesPost(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&createRecordPayload); err != nil {
 				t.Fatalf("decode createRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -129,7 +129,7 @@ func TestPublisherAddsHashtagFacets(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&createRecordPayload); err != nil {
 				t.Fatalf("decode createRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -237,7 +237,7 @@ func TestPublisherUploadsDataURLThumbnailForPostCard(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&createRecordPayload); err != nil {
 				t.Fatalf("decode createRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -294,7 +294,7 @@ func TestPublisherUploadsAdditionalImageWhenNoPostCardIsPresent(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&createRecordPayload); err != nil {
 				t.Fatalf("decode createRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -374,7 +374,7 @@ func TestPublisherCreatesSessionThenSetsLiveNow(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode putRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -439,7 +439,7 @@ func TestPublisherCreatesSessionThenClearsLiveNow(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode deleteRecord payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"uri":"at://did:plc:test/app.bsky.feed.post/e2e-test","cid":"bafy-test"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
