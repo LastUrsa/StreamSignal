@@ -143,6 +143,7 @@ Remediation:
 
 - upgraded `golang.org/x/sys` to `v0.44.0`, the fixed version reported by govulncheck
 - upgraded `golang.org/x/net` to `v0.38.0`, which also upgraded related `golang.org/x/crypto` and `golang.org/x/text` versions
+- updated the pinned Go toolchain to `go1.26.4` after `govulncheck` flagged called standard-library vulnerabilities in `go1.26.3`
 
 Validation on June 2, 2026:
 

@@ -1,5 +1,34 @@
 # StreamSignal Release Notes
 
+## 0.2.1 Workflow Refinements
+
+StreamSignal 0.2.1 is a patch release focused on tightening the Home publishing workflow and removing hidden default behavior.
+
+### Highlights
+
+- Added a Home destination filter for All, Production, and Test workflow scopes.
+- Scoped Preview, Go Live, confirmed Go Live, and End Stream actions to the visible selected destinations in the active Home filter.
+- Preserved Default Hashtags as an initial Home prefill while respecting user-cleared hashtags for preview and publish actions.
+- Clarified documentation that Test and Production are destination workflow labels, not provider sandbox modes.
+
+### Security And Reliability
+
+- Runtime secrets remain stored in the OS credential store rather than directly in SQLite.
+- Updated the pinned Go toolchain to `go1.26.4` after `govulncheck` flagged called standard-library vulnerabilities in `go1.26.3`.
+- `npm audit` and `govulncheck` passed locally during release prep.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.2.1-windows-amd64-installer.exe`
+- `StreamSignal-0.2.1-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.2.1-windows-amd64-installer`
+- `streamsignal-0.2.1-macos-universal-dmg`
+
 ## 0.2.0 UX Refresh
 
 StreamSignal 0.2.0 is a feature release focused on making the app feel like a desktop creator control panel: faster to scan, clearer to operate, and better suited to repeated stream workflows.

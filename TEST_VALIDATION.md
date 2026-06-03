@@ -8,12 +8,12 @@ This document records the Milestone 8 review of StreamSignal's automated tests a
 
 Release-candidate quality gate checked on June 2, 2026:
 
-- `GOCACHE=/tmp/go-build-cache go test ./...`: passed locally
-- `GOCACHE=/tmp/go-build-cache go vet ./...`: passed locally
+- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go test ./...`: passed locally
+- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go vet ./...`: passed locally
 - `npm test --prefix frontend`: passed locally with 3 test files and 53 tests
 - `npm run build --prefix frontend`: passed locally
 - `npm audit --prefix frontend`: passed locally with 0 vulnerabilities
-- `GOCACHE=/tmp/go-build-cache govulncheck ./...`: passed locally with no called vulnerabilities found after upgrading `golang.org/x/net` to `v0.38.0`
+- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache govulncheck ./...`: passed locally with no called vulnerabilities found after upgrading `golang.org/x/net` to `v0.38.0` and the pinned Go toolchain to `go1.26.4`
 - GitHub Actions `Quality Gate` on `main`: passed for run `26801640687`
   - `Backend Tests and Vulnerability Scan`: success
   - `Frontend Tests, Build, and Audit`: success

@@ -13,7 +13,7 @@
   "info": {
     "companyName": "DRDohr",
     "productName": "StreamSignal",
-    "productVersion": "0.2.0",
+    "productVersion": "0.2.1",
     "copyright": "Copyright (c) 2026 DRDohr",
     "comments": "Local-first stream announcement desktop app"
   }
