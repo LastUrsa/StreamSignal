@@ -1,5 +1,7 @@
 # StreamSignal Release Notes
 
+User-facing release notes and planned artifact names. Keep this focused on changes that matter to users, testers, and release packaging.
+
 ## 0.2.1 Workflow Refinements
 
 StreamSignal 0.2.1 is a patch release focused on tightening the Home publishing workflow and removing hidden default behavior.

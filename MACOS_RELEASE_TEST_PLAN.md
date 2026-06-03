@@ -1,6 +1,6 @@
 # macOS Release Test Plan
 
-StreamSignal has macOS Keychain-backed secret storage, but macOS app and DMG packaging must be built and validated on macOS. Wails v2.12.0 reports that cross-compiling macOS builds from Windows is not currently supported.
+This maintainer checklist covers macOS packaging, Keychain behavior, Gatekeeper behavior, and DMG validation. StreamSignal has macOS Keychain-backed secret storage, but macOS app and DMG packaging must be built and validated on macOS. Wails v2.12.0 reports that cross-compiling macOS builds from Windows is not currently supported.
 
 ## Build Inputs
 

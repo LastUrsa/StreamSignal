@@ -2,33 +2,24 @@
 
 StreamSignal is a local-first desktop app for streamers and VTubers that creates one announcement and distributes it to multiple platforms.
 
-Current product status:
+It is intended for creators who want a repeatable Go Live and End Stream workflow without handing their platform credentials to a hosted service. StreamSignal stores app data locally, keeps runtime secrets in the OS credential store, and posts only to the destinations selected for the current session.
 
-- Wails desktop shell, Go backend, and React + TypeScript frontend are all wired together
-- First-run setup and use has been validated end to end with real Discord, Bluesky, and Mastodon destinations
-- Preview, Go Live, End Stream, duplicate confirmation, and explicit production/test destination filtering are implemented and manually exercised
-- Discord, Bluesky, and Mastodon publishers are connected
-- Discord webhook posting has been manually validated, including selected-destination targeting, optional additional image embeds, and destination-level End Stream enablement
-- Bluesky posting has been validated with app-password auth, rich stream links, external cards, configurable `Live Now` duration, an opt-out for Live Status changes, End Stream clearing, and manual recovery if the app closes mid-stream
-- Mastodon posting has been validated with manual access-token auth and optional additional image attachment
-- Preview shows Go Live messages and enabled destination-level End Stream messages in compact expandable rows, with best-effort approximate link previews for Discord and Mastodon
-- link-preview metadata fetches are optional, non-fatal, timeout-limited, size-limited, and guarded against local/private-network targets
-- runtime secrets are stored through the OS credential store rather than directly in SQLite
-- remote image URL fetches for Bluesky and Mastodon are guarded against local/private-network targets
-- automated backend and frontend tests are part of the normal workflow
+## What It Does
 
-The app is past core workflow validation and is now in release-prep polish: documentation, packaging, installer behavior, and final release-candidate checks.
+- publishes Go Live announcements to Discord, Bluesky, and Mastodon
+- generates destination-specific previews before anything is sent
+- supports optional End Stream messages per destination
+- can set and clear Bluesky `Live Now` status, including recovery after an interrupted app session
+- separates Production and Test destinations as local workflow labels
+- supports default stream URLs and hashtags for fresh sessions
 
-## UI Overview
+## App Areas
 
-The current UI is a desktop-first creator control panel:
+- **Home**: session details, destination selection, preview, Go Live, End Stream, and recovery awareness.
+- **Destinations**: Discord, Bluesky, and Mastodon setup and testing.
+- **Settings**: defaults, Bluesky Live Now recovery, and legal notices.
 
-- **Home** is the command center for session setup, destination selection, preview, Go Live, End Stream, and recovery awareness.
-- **Destinations** manages Discord, Bluesky, and Mastodon integrations with quick actions and an in-place editor.
-- **Settings** contains application defaults, Live Now recovery, and platform legal notices.
-- **Logs** are available in debug builds for scan-first workflow diagnostics.
-
-Default Stream URL and Default Hashtags may prefill a fresh Home session. If the user edits or clears either Home field, that session value is respected for preview and publish actions.
+Debug builds also include **Logs** for development and workflow validation. Logs are not shown in production releases.
 
 ## Quickstart
 
@@ -54,6 +45,12 @@ Default Stream URL and Default Hashtags may prefill a fresh Home session. If the
 
 ## Development
 
+Install dependencies before the first run:
+
+```bash
+npm install --prefix frontend
+```
+
 Run the app in development mode:
 
 ```bash
@@ -74,30 +71,29 @@ wails build -platform darwin/universal
 
 Wails v2 does not cross-compile macOS app bundles from Windows. A DMG release artifact should be created on macOS after the `.app` bundle is built, signed, and tested.
 
-Run the automated test suites:
+Run the usual local checks:
 
 ```bash
-cd frontend && npm run build
 npm test --prefix frontend
-GOCACHE=/tmp/go-build-cache go test ./...
-GOCACHE=/tmp/go-build-cache go vet ./...
+npm run build --prefix frontend
+go test ./...
+go vet ./...
 ```
 
 Run dependency and vulnerability checks:
 
 ```bash
 npm audit --prefix frontend
-GOCACHE=/tmp/go-build-cache govulncheck ./...
+govulncheck ./...
 ```
 
 ## Project Docs
 
-- [RELEASE_NOTES.md](./RELEASE_NOTES.md): release notes draft and artifact naming
-- [SECURITY.md](./SECURITY.md): vulnerability reporting policy
-- [SECURITY_AUDIT.md](./SECURITY_AUDIT.md): public-facing security posture summary
-- [BRAND_USAGE.md](./BRAND_USAGE.md): platform name, logo, and legal notice guardrails
-- [INTEGRATION_LIMITATIONS.md](./INTEGRATION_LIMITATIONS.md): current platform integration constraints and boundaries
-- [TEST_VALIDATION.md](./TEST_VALIDATION.md): testing strategy and PR quality-gate guidance
-- [RELEASE_READINESS_CHECKLIST.md](./RELEASE_READINESS_CHECKLIST.md): release and packaging checklist for the next phase
-- [MACOS_RELEASE_TEST_PLAN.md](./MACOS_RELEASE_TEST_PLAN.md): macOS app, DMG, Keychain, and Gatekeeper validation plan
-- [.github/workflows/quality-gate.yml](./.github/workflows/quality-gate.yml): GitHub PR checks
+- [SECURITY.md](./SECURITY.md): vulnerability reporting policy.
+- [INTEGRATION_LIMITATIONS.md](./INTEGRATION_LIMITATIONS.md): practical platform constraints.
+- [RELEASE_NOTES.md](./RELEASE_NOTES.md): user-facing release notes and artifact names.
+- [BRAND_USAGE.md](./BRAND_USAGE.md): platform logo and legal-notice guardrails.
+- [TEST_VALIDATION.md](./TEST_VALIDATION.md): maintainer testing posture and PR quality gate.
+- [RELEASE_READINESS_CHECKLIST.md](./RELEASE_READINESS_CHECKLIST.md): maintainer release checklist.
+- [MACOS_RELEASE_TEST_PLAN.md](./MACOS_RELEASE_TEST_PLAN.md): macOS packaging and validation checklist.
+- [SECURITY_AUDIT.md](./SECURITY_AUDIT.md): maintainer security posture summary.
