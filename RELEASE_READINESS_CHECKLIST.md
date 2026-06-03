@@ -16,11 +16,12 @@ Ship StreamSignal in a way that is:
 - [ ] verify Home, Destinations, Settings, and debug-only Logs follow a clear workflow
 - [ ] verify production builds hide debug-only surfaces
 - [ ] verify Preview shows Go Live messages and enabled End Stream messages before publishing
-- [ ] verify Go Live publishes only to selected destinations
-- [ ] verify End Stream posts only to destinations with End Stream enabled
+- [ ] verify Go Live publishes only to the selected individual destinations or selected Destination Group
+- [ ] verify End Stream posts only to selected destinations with End Stream enabled
+- [ ] verify Destination Groups remain optional and do not block individual Home destination selection
 - [ ] verify Bluesky `Live Now` set, clear, opt-out, duration, and recovery behavior
 - [ ] verify duplicate warning and force-confirm flows
-- [ ] verify Test and Production destination labels are understandable and do not imply provider sandboxing
+- [ ] verify Destination Groups persist across app restarts and never imply provider sandbox modes
 - [ ] verify no stale workflow state survives between real app sessions
 
 ## Platform Integrations
@@ -66,6 +67,7 @@ Wails v2 does not cross-compile macOS app bundles from Windows. Use a Mac runner
 ## CI And Release
 
 - [ ] keep the GitHub quality gate green on the release branch
+- [ ] confirm `Provider Workflow E2E` passes with the configured test-account secrets
 - [ ] validate the release-build workflow before publishing artifacts
 - [ ] confirm branch protection checks match the live job names
 - [ ] confirm release notes describe user-visible changes

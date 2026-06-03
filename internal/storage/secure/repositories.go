@@ -28,7 +28,6 @@ type LiveNowSessionRepository struct {
 }
 
 type discordDestinationConfig struct {
-	Environment          string `json:"environment,omitempty"`
 	ServerName           string `json:"serverName,omitempty"`
 	ChannelName          string `json:"channelName,omitempty"`
 	WebhookKey           string `json:"webhookKey,omitempty"`
@@ -39,7 +38,6 @@ type discordDestinationConfig struct {
 }
 
 type blueskyDestinationConfig struct {
-	Environment            string `json:"environment,omitempty"`
 	AccountIdentifier      string `json:"accountIdentifier,omitempty"`
 	CredentialKey          string `json:"credentialKey,omitempty"`
 	LiveStatusEnabled      *bool  `json:"liveStatusEnabled,omitempty"`
@@ -54,7 +52,6 @@ type blueskyDestinationConfig struct {
 }
 
 type mastodonDestinationConfig struct {
-	Environment            string `json:"environment,omitempty"`
 	AccountIdentifier      string `json:"accountIdentifier,omitempty"`
 	InstanceURL            string `json:"instanceURL,omitempty"`
 	CredentialKey          string `json:"credentialKey,omitempty"`

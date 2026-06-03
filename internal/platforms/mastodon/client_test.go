@@ -26,7 +26,7 @@ func TestPublisherSendsStatusPayload(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"id":"status-1","url":"https://example.social//status-1"}`))
 	}))
 	defer server.Close()
 
@@ -108,7 +108,7 @@ func TestPublisherUploadsAdditionalImageBeforeStatus(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
 				t.Fatalf("decode status payload: %v", err)
 			}
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"id":"status-1","url":"https://example.social//status-1"}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -140,7 +140,7 @@ func TestPublisherVerifiesCredentials(t *testing.T) {
 		}
 		gotMethod = r.Method
 		gotAuth = r.Header.Get("Authorization")
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"id":"status-1","url":"https://example.social//status-1"}`))
 	}))
 	defer server.Close()
 

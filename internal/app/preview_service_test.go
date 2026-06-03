@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +57,76 @@ func (s *previewSessionRepositoryStub) List(context.Context) ([]domain.ActiveLiv
 
 func (s *previewSessionRepositoryStub) Delete(context.Context, string) error {
 	panic("unexpected Delete call")
+}
+
+type destinationGroupRepositoryStub struct {
+	groupsByID          map[string]domain.DestinationGroup
+	groupsByName        map[string]domain.DestinationGroup
+	destinationsByGroup map[string][]domain.Destination
+	groupIDsByDest      map[string][]string
+}
+
+func (s *destinationGroupRepositoryStub) List(context.Context) ([]domain.DestinationGroup, error) {
+	items := make([]domain.DestinationGroup, 0, len(s.groupsByID))
+	for _, item := range s.groupsByID {
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (s *destinationGroupRepositoryStub) Get(_ context.Context, id string) (domain.DestinationGroup, error) {
+	if item, ok := s.groupsByID[id]; ok {
+		return item, nil
+	}
+	return domain.DestinationGroup{}, sql.ErrNoRows
+}
+
+func (s *destinationGroupRepositoryStub) GetByName(_ context.Context, name string) (domain.DestinationGroup, error) {
+	if item, ok := s.groupsByName[strings.ToLower(strings.TrimSpace(name))]; ok {
+		return item, nil
+	}
+	return domain.DestinationGroup{}, sql.ErrNoRows
+}
+
+func (s *destinationGroupRepositoryStub) Save(_ context.Context, group domain.DestinationGroup) error {
+	if s.groupsByID == nil {
+		s.groupsByID = make(map[string]domain.DestinationGroup)
+	}
+	if s.groupsByName == nil {
+		s.groupsByName = make(map[string]domain.DestinationGroup)
+	}
+	s.groupsByID[group.ID] = group
+	s.groupsByName[strings.ToLower(strings.TrimSpace(group.Name))] = group
+	return nil
+}
+
+func (s *destinationGroupRepositoryStub) Delete(_ context.Context, id string) error {
+	delete(s.groupsByID, id)
+	return nil
+}
+
+func (s *destinationGroupRepositoryStub) ListDestinations(_ context.Context, groupID string) ([]domain.Destination, error) {
+	return append([]domain.Destination(nil), s.destinationsByGroup[groupID]...), nil
+}
+
+func (s *destinationGroupRepositoryStub) ListGroupIDsForDestination(_ context.Context, destinationID string) ([]string, error) {
+	return append([]string(nil), s.groupIDsByDest[destinationID]...), nil
+}
+
+func (s *destinationGroupRepositoryStub) SetDestinations(_ context.Context, groupID string, destinationIDs []string) error {
+	return nil
+}
+
+func (s *destinationGroupRepositoryStub) SetGroupsForDestination(_ context.Context, destinationID string, groupIDs []string) error {
+	return nil
+}
+
+func (s *destinationGroupRepositoryStub) AddDestination(context.Context, string, string) error {
+	return nil
+}
+
+func (s *destinationGroupRepositoryStub) RemoveDestination(context.Context, string, string) error {
+	return nil
 }
 
 func newPreviewServiceForTest(destinations *destinationListStub, settings *settingsLoadStub, sessions *previewSessionRepositoryStub) *PreviewService {
@@ -112,6 +184,51 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 	}
 	if item.ValidationState != domain.PreviewValidationValid {
 		t.Fatalf("expected valid preview state, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+}
+
+func TestPreviewServiceGeneratesItemsForSelectedDestinationGroup(t *testing.T) {
+	destinations := &destinationListStub{}
+	settings := &settingsLoadStub{item: domain.DefaultAppSettings()}
+	groups := &destinationGroupRepositoryStub{
+		destinationsByGroup: map[string][]domain.Destination{
+			"main-announcements": {
+				{
+					ID:         "discord-main",
+					Platform:   domain.PlatformDiscord,
+					Name:       "Main Discord",
+					Enabled:    true,
+					Template:   "{{stream_title}}",
+					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+				},
+				{
+					ID:         "discord-disabled",
+					Platform:   domain.PlatformDiscord,
+					Name:       "Disabled Discord",
+					Enabled:    false,
+					Template:   "{{stream_title}}",
+					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/disabled"}`,
+				},
+			},
+		},
+	}
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
+	service.UseDestinationGroups(groups)
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{
+		StreamTitle:        "Going Live",
+		StreamURL:          "https://example.com/live",
+		DestinationGroupID: "main-announcements",
+	})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one enabled group destination, got %+v", items)
+	}
+	if items[0].DestinationID != "discord-main" {
+		t.Fatalf("expected enabled destination preview, got %+v", items[0])
 	}
 }
 

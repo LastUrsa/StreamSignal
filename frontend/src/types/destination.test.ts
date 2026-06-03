@@ -30,7 +30,6 @@ describe('destination mappings', () => {
         expect(form.discordCardThumbnailDataURL).toBe('data:image/png;base64,abc');
         expect(form.endStreamEnabled).toBe(true);
         expect(form.endStreamTemplate).toBe('Bye {{stream_title}}');
-        expect(form.environment).toBe('production');
     });
 
     it('serializes a Discord form state into destination config json', () => {
@@ -49,7 +48,7 @@ describe('destination mappings', () => {
 
         expect(destination.platform).toBe('discord');
         expect(destination.configJSON).toBe(
-            '{"environment":"production","serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"https://example.com/card.png","cardThumbnailDataURL":"data:image/png;base64,abc","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
+            '{"serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"https://example.com/card.png","cardThumbnailDataURL":"data:image/png;base64,abc","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
         );
     });
 
@@ -73,7 +72,7 @@ describe('destination mappings', () => {
 
         expect(destination.platform).toBe('bluesky');
         expect(destination.configJSON).toBe(
-            '{"environment":"production","accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false,"liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":90,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
+            '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false,"liveStatusTemplate":"LIVE {{stream_title}}","liveNowDurationMinutes":90,"cardThumbnailURL":"https://example.com/avatar.png","cardThumbnailDataURL":"data:image/png;base64,abc","additionalImageURL":"https://example.com/additional.png","additionalImageDataURL":"data:image/png;base64,def","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
         );
     });
 
@@ -102,7 +101,6 @@ describe('destination mappings', () => {
         expect(form.blueskyAdditionalImageDataURL).toBe('data:image/png;base64,def');
         expect(form.endStreamEnabled).toBe(true);
         expect(form.endStreamTemplate).toBe('Bye {{stream_title}}');
-        expect(form.environment).toBe('test');
     });
 
     it('defaults Bluesky Live Status to enabled for existing destination configs', () => {
@@ -136,7 +134,7 @@ describe('destination mappings', () => {
 
         expect(destination.platform).toBe('mastodon');
         expect(destination.configJSON).toBe(
-            '{"environment":"production","accountIdentifier":"@streamer@example.social","instanceURL":"https://mastodon.social","credentialKey":"mastodon/main","additionalImageURL":"https://example.com/mastodon.png","additionalImageDataURL":"data:image/png;base64,ghi","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
+            '{"accountIdentifier":"@streamer@example.social","instanceURL":"https://mastodon.social","credentialKey":"mastodon/main","additionalImageURL":"https://example.com/mastodon.png","additionalImageDataURL":"data:image/png;base64,ghi","endStreamEnabled":true,"endStreamTemplate":"Bye {{stream_title}}"}',
         );
     });
 

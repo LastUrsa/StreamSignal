@@ -4,6 +4,7 @@ export interface AnnouncementInput {
     category: string;
     message: string;
     hashtags: string;
+    destinationGroupID?: string;
 }
 
 export interface PreviewItem {

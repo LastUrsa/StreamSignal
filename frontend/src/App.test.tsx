@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import * as api from './lib/api/streamsignal';
+import type { DestinationInput } from './types/destination';
 import type { PreviewItem } from './types/preview';
 import type { AppSettings } from './types/settings';
 
@@ -11,6 +12,8 @@ const STORED_SECRET_TOKEN = '[stored securely]';
 vi.mock('./lib/api/streamsignal', () => ({
     clearPendingLiveNowSession: vi.fn(),
     deleteDestination: vi.fn(),
+    deleteDestinationGroup: vi.fn(),
+    duplicateDestinationGroup: vi.fn(),
     endStream: vi.fn(),
     errorMessage: (err: unknown, fallback: string) => {
         if (err instanceof Error) {
@@ -23,14 +26,20 @@ vi.mock('./lib/api/streamsignal', () => ({
     },
     forceGoLive: vi.fn(),
     getDiagnostics: vi.fn(),
+    getDestinationGroupIDs: vi.fn(),
+    getGroupDestinations: vi.fn(),
     getLogs: vi.fn(),
     getSettings: vi.fn(),
     generatePreview: vi.fn(),
     goLive: vi.fn(),
+    listDestinationGroups: vi.fn(),
     listPendingLiveNowSessions: vi.fn(),
     listDestinations: vi.fn(),
     saveDestination: vi.fn(),
+    saveDestinationGroup: vi.fn(),
     saveSettings: vi.fn(),
+    setDestinationGroups: vi.fn(),
+    setGroupDestinations: vi.fn(),
     testDestinationConnection: vi.fn(),
 }));
 
@@ -39,13 +48,19 @@ const mockedDeleteDestination = vi.mocked(api.deleteDestination);
 const mockedEndStream = vi.mocked(api.endStream);
 const mockedForceGoLive = vi.mocked(api.forceGoLive);
 const mockedGetDiagnostics = vi.mocked(api.getDiagnostics);
+const mockedGetDestinationGroupIDs = vi.mocked(api.getDestinationGroupIDs);
+const mockedGetGroupDestinations = vi.mocked(api.getGroupDestinations);
 const mockedGetLogs = vi.mocked(api.getLogs);
 const mockedGetSettings = vi.mocked(api.getSettings);
 const mockedGeneratePreview = vi.mocked(api.generatePreview);
 const mockedGoLive = vi.mocked(api.goLive);
+const mockedListDestinationGroups = vi.mocked(api.listDestinationGroups);
 const mockedListPendingLiveNowSessions = vi.mocked(api.listPendingLiveNowSessions);
 const mockedListDestinations = vi.mocked(api.listDestinations);
 const mockedSaveDestination = vi.mocked(api.saveDestination);
+const mockedSaveDestinationGroup = vi.mocked(api.saveDestinationGroup);
+const mockedSetDestinationGroups = vi.mocked(api.setDestinationGroups);
+const mockedSetGroupDestinations = vi.mocked(api.setGroupDestinations);
 const mockedSaveSettings = vi.mocked(api.saveSettings);
 const mockedTestDestinationConnection = vi.mocked(api.testDestinationConnection);
 
@@ -77,6 +92,19 @@ function deferred<T>() {
     return { promise, resolve, reject };
 }
 
+function destination(overrides: Partial<DestinationInput> & Pick<DestinationInput, 'id' | 'name'>): DestinationInput {
+    return {
+        id: overrides.id,
+        platform: overrides.platform ?? 'discord',
+        name: overrides.name,
+        enabled: overrides.enabled ?? true,
+        template: overrides.template ?? '{{stream_title}}',
+        configJSON: overrides.configJSON ?? '{"webhookKey":"discord/test"}',
+        createdAt: overrides.createdAt ?? '',
+        updatedAt: overrides.updatedAt ?? '',
+    };
+}
+
 describe('App', () => {
     beforeEach(() => {
         mockedGetSettings.mockResolvedValue({
@@ -84,6 +112,7 @@ describe('App', () => {
             defaultHashtags: '',
             duplicateProtectionEnabled: true,
             duplicateWindowMinutes: 10,
+            selectedDestinationGroupID: 'all-destinations',
         });
         mockedGetLogs.mockResolvedValue([]);
         mockedGetDiagnostics.mockResolvedValue('StreamSignal Diagnostics');
@@ -101,11 +130,22 @@ describe('App', () => {
             content: '',
         });
         mockedListDestinations.mockResolvedValue([]);
+        mockedListDestinationGroups.mockResolvedValue([{ id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' }]);
+        mockedGetGroupDestinations.mockResolvedValue([]);
+        mockedGetDestinationGroupIDs.mockResolvedValue(['all-destinations']);
         mockedSaveDestination.mockImplementation(async (destination) => ({
             ...destination,
             id: destination.id || 'generated-id',
         }));
+        mockedSaveDestinationGroup.mockImplementation(async (group) => ({
+            ...group,
+            id: group.id || 'generated-group-id',
+            createdAt: '',
+            updatedAt: '',
+        }));
         mockedSaveSettings.mockImplementation(async (settings) => settings);
+        mockedSetDestinationGroups.mockResolvedValue();
+        mockedSetGroupDestinations.mockResolvedValue();
         mockedTestDestinationConnection.mockResolvedValue({
             platform: 'discord',
             state: 'SUCCESS',
@@ -153,6 +193,7 @@ describe('App', () => {
                     message: '',
                     hashtags: '',
                 },
+                '',
                 [],
             );
         });
@@ -298,6 +339,7 @@ describe('App', () => {
                 expect.objectContaining({
                     streamURL: '',
                 }),
+                '',
                 [],
             );
         });
@@ -327,6 +369,7 @@ describe('App', () => {
                 expect.objectContaining({
                     hashtags: '',
                 }),
+                '',
                 [],
             );
         });
@@ -374,7 +417,7 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
 
         expect(await screen.findByText('Main Discord')).toBeInTheDocument();
-        expect(screen.getByText('discord · Production')).toBeInTheDocument();
+        expect(screen.getByText('discord')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'New Destination' })).toBeInTheDocument();
         expect(screen.getByText('New destination')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Create Destination' })).toBeInTheDocument();
@@ -391,7 +434,7 @@ describe('App', () => {
         expect(screen.getAllByText('0 configured').length).toBeGreaterThan(0);
     });
 
-    it('uses the Home tab destination selection for preview generation', async () => {
+    it('uses the selected destination group for preview generation', async () => {
         mockedListDestinations.mockResolvedValue([
             {
                 id: 'discord-main',
@@ -414,11 +457,34 @@ describe('App', () => {
                 updatedAt: '',
             },
         ]);
+        mockedListDestinationGroups.mockResolvedValue([
+            { id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' },
+            { id: 'main-announcements', name: 'Main Announcements', description: '', createdAt: '', updatedAt: '' },
+        ]);
+        mockedGetGroupDestinations.mockImplementation(async (groupID) =>
+            groupID === 'main-announcements'
+                ? [
+                      {
+                          id: 'bluesky-main',
+                          platform: 'bluesky',
+                          name: 'Main Bluesky',
+                          enabled: true,
+                          template: '{{stream_title}}',
+                          configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main","liveStatusEnabled":false}',
+                          createdAt: '',
+                          updatedAt: '',
+                      },
+                  ]
+                : [],
+        );
 
         render(<App />);
 
-        expect(await screen.findByText('bluesky · Production · Go Live ON · Live Status OFF · Post End Stream OFF')).toBeInTheDocument();
-        fireEvent.click(await screen.findByLabelText('Main Bluesky'));
+        fireEvent.click(await screen.findByRole('button', { name: 'Group' }));
+        fireEvent.change(await screen.findByLabelText('Destination Group'), {
+            target: { value: 'main-announcements' },
+        });
+        expect(await screen.findByText('Main Announcements · 1 destination')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
 
         await waitFor(() => {
@@ -430,12 +496,13 @@ describe('App', () => {
                     message: '',
                     hashtags: '',
                 },
-                ['discord-main'],
+                'main-announcements',
+                [],
             );
         });
     });
 
-    it('filters Home destination selection by environment for preview generation', async () => {
+    it('shows selected destination group counts before publishing', async () => {
         mockedListDestinations.mockResolvedValue([
             {
                 id: 'discord-main',
@@ -443,7 +510,7 @@ describe('App', () => {
                 name: 'Main Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"environment":"production","webhookKey":"discord/main"}',
+                configJSON: '{"webhookKey":"discord/main"}',
                 createdAt: '',
                 updatedAt: '',
             },
@@ -453,7 +520,29 @@ describe('App', () => {
                 name: 'Test Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"environment":"test","webhookKey":"discord/test"}',
+                configJSON: '{"webhookKey":"discord/test"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+        ]);
+        mockedGetGroupDestinations.mockResolvedValue([
+            {
+                id: 'discord-main',
+                platform: 'discord',
+                name: 'Main Discord',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"webhookKey":"discord/main"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+            {
+                id: 'discord-test',
+                platform: 'discord',
+                name: 'Test Discord',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"webhookKey":"discord/test"}',
                 createdAt: '',
                 updatedAt: '',
             },
@@ -461,18 +550,18 @@ describe('App', () => {
 
         render(<App />);
 
-        expect(await screen.findByText('2 of 2 all selected.')).toBeInTheDocument();
-        const environmentFilter = screen.getByRole('group', { name: 'Destination environment filter' });
-        fireEvent.click(within(environmentFilter).getByRole('button', { name: 'Test' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Group' }));
+        expect(await screen.findByText('All Destinations · 2 destinations')).toBeInTheDocument();
 
-        expect(screen.getByText('1 of 1 test selected.')).toBeInTheDocument();
-        expect(screen.getByText('Test Discord')).toBeInTheDocument();
-        expect(screen.queryByText('Main Discord')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Go Live' }));
 
-        fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+        expect((await screen.findAllByText('Go Live will publish to All Destinations: 2 destinations.')).length).toBeGreaterThan(0);
+        expect(mockedGoLive).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
 
         await waitFor(() => {
-            expect(mockedGeneratePreview).toHaveBeenCalledWith(
+            expect(mockedGoLive).toHaveBeenCalledWith(
                 {
                     streamTitle: '',
                     streamURL: '',
@@ -480,13 +569,97 @@ describe('App', () => {
                     message: '',
                     hashtags: '',
                 },
-                ['discord-test'],
+                'all-destinations',
+                [],
             );
         });
     });
 
-    it('uses the Home tab destination selection for End Stream', async () => {
+    it('publishes only checked individual destinations from Home', async () => {
         mockedListDestinations.mockResolvedValue([
+            destination({ id: 'discord-main', name: 'Main Discord' }),
+            destination({ id: 'discord-test', name: 'Test Discord' }),
+            destination({ id: 'mastodon-disabled', name: 'Disabled Mastodon', platform: 'mastodon', enabled: false }),
+        ]);
+        mockedGoLive.mockResolvedValue({
+            mode: 'go_live',
+            status: 'SUCCESS',
+            testModeActive: false,
+            results: [
+                {
+                    destinationID: 'discord-test',
+                    destinationName: 'Test Discord',
+                    platform: 'discord',
+                    state: 'SUCCESS',
+                    message: 'Published successfully.',
+                    content: 'Going Live',
+                },
+            ],
+            totalCount: 1,
+            successCount: 1,
+            failedCount: 0,
+            skippedCount: 0,
+            validationErrorCount: 0,
+            requiresDuplicateConfirmation: false,
+            duplicateWarningMessage: '',
+        });
+
+        render(<App />);
+
+        expect(await screen.findByText('2 of 2 selected')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Disabled Mastodon')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText('Main Discord'));
+        expect(await screen.findByText('1 of 2 selected')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Go Live' }));
+
+        expect((await screen.findAllByText('Go Live will publish to 1 destination.')).length).toBeGreaterThan(0);
+        expect(mockedGoLive).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
+
+        await waitFor(() => {
+            expect(mockedGoLive).toHaveBeenCalledWith(
+                {
+                    streamTitle: '',
+                    streamURL: '',
+                    category: '',
+                    message: '',
+                    hashtags: '',
+                },
+                '',
+                ['discord-test'],
+            );
+        });
+        expect(await screen.findByText('Go Live completed successfully for 1 destination.')).toBeInTheDocument();
+        expect(mockedForceGoLive).not.toHaveBeenCalled();
+    });
+
+    it('uses the selected destination group for End Stream', async () => {
+        mockedListDestinations.mockResolvedValue([
+            {
+                id: 'discord-main',
+                platform: 'discord',
+                name: 'Main Discord',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"webhookKey":"discord/main","endStreamEnabled":true,"endStreamTemplate":"Thanks for hanging out at {{stream_title}}"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+            {
+                id: 'bluesky-main',
+                platform: 'bluesky',
+                name: 'Main Bluesky',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+        ]);
+        mockedGetGroupDestinations.mockResolvedValue([
             {
                 id: 'discord-main',
                 platform: 'discord',
@@ -511,11 +684,10 @@ describe('App', () => {
 
         render(<App />);
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Group' }));
         fireEvent.change(await screen.findByLabelText('Stream Title'), {
             target: { value: 'Going Live' },
         });
-        expect(await screen.findByText('End Stream will post to 1 destination.')).toBeInTheDocument();
-        fireEvent.click(await screen.findByLabelText('Main Bluesky'));
         expect(await screen.findByText('End Stream will post to 1 destination.')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'End Stream' }));
 
@@ -526,7 +698,7 @@ describe('App', () => {
                 category: '',
                 message: '',
                 hashtags: '',
-            }), ['discord-main']);
+            }), 'all-destinations', []);
         });
     });
 
@@ -586,7 +758,7 @@ describe('App', () => {
                 name: 'Main Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"environment":"production","serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
+                configJSON: '{"serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
                 createdAt: '',
                 updatedAt: '',
             });
@@ -599,6 +771,37 @@ describe('App', () => {
         expect(screen.getByLabelText('Webhook URL')).toHaveValue('');
         expect(screen.getByText('New destination')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Create Destination' })).toBeInTheDocument();
+    });
+
+    it('clears the destination group form after creating a group', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Groups' }));
+
+        fireEvent.change(await screen.findByLabelText('Group Name'), {
+            target: { value: 'Main Announcements' },
+        });
+        fireEvent.change(screen.getByLabelText('Group Description'), {
+            target: { value: 'Primary go-live targets' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Create Group' }));
+
+        await waitFor(() => {
+            expect(mockedSaveDestinationGroup).toHaveBeenCalledWith({
+                id: '',
+                name: 'Main Announcements',
+                description: 'Primary go-live targets',
+            });
+        });
+        expect(mockedSetGroupDestinations).toHaveBeenCalledWith('generated-group-id', []);
+        expect(await screen.findByText('Destination group saved.')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByLabelText('Group Name')).toHaveValue('');
+        });
+        expect(screen.getByLabelText('Group Description')).toHaveValue('');
+        expect(screen.getByRole('button', { name: 'Create Group' })).toBeInTheDocument();
     });
 
     it('tests a discord destination connection before saving', async () => {
@@ -627,7 +830,7 @@ describe('App', () => {
                 name: 'Main Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"environment":"production","serverName":"","channelName":"","webhookKey":"https://discord.com/api/webhooks/test","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
+                configJSON: '{"serverName":"","channelName":"","webhookKey":"https://discord.com/api/webhooks/test","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
                 createdAt: '',
                 updatedAt: '',
             });
@@ -798,7 +1001,7 @@ describe('App', () => {
                 name: 'Main Discord',
                 enabled: true,
                 template: '{{stream_title}}',
-                configJSON: '{"environment":"production","serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
+                configJSON: '{"serverName":"My Server","channelName":"go-live","webhookKey":"discord/main","cardThumbnailURL":"","cardThumbnailDataURL":"","endStreamEnabled":false,"endStreamTemplate":"Thanks for hanging out at {{stream_title}} {{stream_url}}"}',
                 createdAt: '',
                 updatedAt: '',
             });
@@ -1004,6 +1207,8 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
+
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalled();
         });
@@ -1049,6 +1254,8 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
+
         expect(
             (await screen.findAllByText(
                 'Execution finished with issues. Some destinations failed after execution began, and others still need validation before retrying.',
@@ -1086,6 +1293,8 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
+
         expect(
             (await screen.findAllByText('Execution finished with issues. Some destinations failed after execution began.')).length,
         ).toBeGreaterThan(0);
@@ -1118,6 +1327,8 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
 
         expect(
             (await screen.findAllByText('Execution needs attention. Some destinations still have validation issues before they can run.')).length,
@@ -1184,6 +1395,8 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
 
         expect(await screen.findByText('Go Live completed successfully for 1 destination.')).toBeInTheDocument();
         expect(screen.queryByText('Published successfully. Live Now set.')).not.toBeInTheDocument();
@@ -1277,9 +1490,11 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
+
         expect(await screen.findByText(/A similar announcement was recently posted/i)).toBeInTheDocument();
         expect(screen.getByText('Rendered content is empty.')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Anyway' }));
 
         await waitFor(() => {
             expect(mockedForceGoLive).toHaveBeenCalledWith(
@@ -1290,6 +1505,7 @@ describe('App', () => {
                     message: '',
                     hashtags: '',
                 },
+                '',
                 [],
             );
         });

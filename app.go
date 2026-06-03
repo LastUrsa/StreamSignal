@@ -23,6 +23,7 @@ type App struct {
 	db              *sql.DB
 	settingsService *appsvc.SettingsService
 	destinationSvc  *appsvc.DestinationService
+	groupSvc        *appsvc.DestinationGroupService
 	credentialSvc   *appsvc.CredentialSetupService
 	previewService  *appsvc.PreviewService
 	logService      *appsvc.LogService
@@ -53,6 +54,7 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 
 	settingsRepo := secure.NewSettingsRepository(sqlite.NewSettingsRepository(db), secretStore)
 	destinationRepo := secure.NewDestinationRepository(sqlite.NewDestinationRepository(db), secretStore)
+	groupRepo := sqlite.NewDestinationGroupRepository(db)
 	logRepo := sqlite.NewLogRepository(db)
 	historyRepo := sqlite.NewPostHistoryRepository(db)
 	liveNowSessionRepo := secure.NewLiveNowSessionRepository(sqlite.NewLiveNowSessionRepository(db), secretStore)
@@ -64,19 +66,28 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 		db:              db,
 		settingsService: appsvc.NewSettingsService(settingsRepo),
 		destinationSvc:  appsvc.NewDestinationService(destinationRepo),
+		groupSvc:        appsvc.NewDestinationGroupService(groupRepo),
 		credentialSvc:   appsvc.NewCredentialSetupService(discordPublisher, blueskyPublisher, mastodonPublisher),
-		previewService:  appsvc.NewPreviewService(destinationRepo, settingsRepo, liveNowSessionRepo),
-		logService:      appsvc.NewLogService(logRepo),
-		diagnosticsSvc:  appsvc.NewDiagnosticsService(settingsRepo, destinationRepo, logRepo, liveNowSessionRepo),
-		executionSvc: appsvc.NewExecutionService(
-			destinationRepo,
-			settingsRepo,
-			historyRepo,
-			liveNowSessionRepo,
-			discordPublisher,
-			blueskyPublisher,
-			mastodonPublisher,
-		),
+		previewService: func() *appsvc.PreviewService {
+			service := appsvc.NewPreviewService(destinationRepo, settingsRepo, liveNowSessionRepo)
+			service.UseDestinationGroups(groupRepo)
+			return service
+		}(),
+		logService:     appsvc.NewLogService(logRepo),
+		diagnosticsSvc: appsvc.NewDiagnosticsService(settingsRepo, destinationRepo, logRepo, liveNowSessionRepo),
+		executionSvc: func() *appsvc.ExecutionService {
+			service := appsvc.NewExecutionService(
+				destinationRepo,
+				settingsRepo,
+				historyRepo,
+				liveNowSessionRepo,
+				discordPublisher,
+				blueskyPublisher,
+				mastodonPublisher,
+			)
+			service.UseDestinationGroups(groupRepo)
+			return service
+		}(),
 		recoverySvc: appsvc.NewLiveNowRecoveryService(destinationRepo, liveNowSessionRepo, blueskyPublisher),
 	}
 }
@@ -112,6 +123,7 @@ func (a *App) ListDestinations() ([]domain.Destination, error) {
 func (a *App) SaveDestination(destination domain.Destination) (domain.Destination, error) {
 	saved, err := a.destinationSvc.Save(a.ctx, destination)
 	if err == nil {
+		_ = a.groupSvc.AddDestination(a.ctx, domain.DefaultDestinationGroupID, saved.ID)
 		_ = a.logService.Append(a.ctx, saved.Name, "save_destination", "SUCCESS", "Saved destination configuration.")
 	}
 	return saved, err
@@ -123,6 +135,62 @@ func (a *App) DeleteDestination(id string) error {
 		_ = a.logService.Append(a.ctx, id, "delete_destination", "SUCCESS", "Deleted destination configuration.")
 	}
 	return err
+}
+
+func (a *App) ListDestinationGroups() ([]domain.DestinationGroup, error) {
+	return a.groupSvc.List(a.ctx)
+}
+
+func (a *App) GetDestinationGroup(id string) (domain.DestinationGroup, error) {
+	return a.groupSvc.Get(a.ctx, id)
+}
+
+func (a *App) SaveDestinationGroup(group domain.DestinationGroup) (domain.DestinationGroup, error) {
+	saved, err := a.groupSvc.Save(a.ctx, group)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, saved.Name, "save_destination_group", "SUCCESS", "Saved destination group.")
+	}
+	return saved, err
+}
+
+func (a *App) DuplicateDestinationGroup(id string) (domain.DestinationGroup, error) {
+	saved, err := a.groupSvc.Duplicate(a.ctx, id)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, saved.Name, "duplicate_destination_group", "SUCCESS", "Duplicated destination group.")
+	}
+	return saved, err
+}
+
+func (a *App) DeleteDestinationGroup(id string) error {
+	err := a.groupSvc.Delete(a.ctx, id)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, id, "delete_destination_group", "SUCCESS", "Deleted destination group.")
+	}
+	return err
+}
+
+func (a *App) GetGroupDestinations(groupID string) ([]domain.Destination, error) {
+	return a.groupSvc.GetDestinations(a.ctx, groupID)
+}
+
+func (a *App) SetGroupDestinations(groupID string, destinationIDs []string) error {
+	return a.groupSvc.SetDestinations(a.ctx, groupID, destinationIDs)
+}
+
+func (a *App) GetDestinationGroupIDs(destinationID string) ([]string, error) {
+	return a.groupSvc.GetGroupIDsForDestination(a.ctx, destinationID)
+}
+
+func (a *App) SetDestinationGroups(destinationID string, groupIDs []string) error {
+	return a.groupSvc.SetGroupsForDestination(a.ctx, destinationID, groupIDs)
+}
+
+func (a *App) AddDestinationToGroup(groupID string, destinationID string) error {
+	return a.groupSvc.AddDestination(a.ctx, groupID, destinationID)
+}
+
+func (a *App) RemoveDestinationFromGroup(groupID string, destinationID string) error {
+	return a.groupSvc.RemoveDestination(a.ctx, groupID, destinationID)
 }
 
 func (a *App) TestDestinationConnection(destination domain.Destination) domain.CredentialCheckResult {

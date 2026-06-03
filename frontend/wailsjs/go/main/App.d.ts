@@ -6,13 +6,23 @@ export function ClearPendingLiveNowSession(arg1:string):Promise<domain.Execution
 
 export function DeleteDestination(arg1:string):Promise<void>;
 
+export function DeleteDestinationGroup(arg1:string):Promise<void>;
+
+export function DuplicateDestinationGroup(arg1:string):Promise<domain.DestinationGroup>;
+
 export function EndStream(arg1:domain.Announcement):Promise<domain.ExecutionSummary>;
 
 export function ForceGoLive(arg1:domain.Announcement):Promise<domain.ExecutionSummary>;
 
 export function GeneratePreview(arg1:domain.Announcement):Promise<Array<domain.PreviewItem>>;
 
+export function GetDestinationGroup(arg1:string):Promise<domain.DestinationGroup>;
+
+export function GetDestinationGroupIDs(arg1:string):Promise<Array<string>>;
+
 export function GetDiagnostics():Promise<string>;
+
+export function GetGroupDestinations(arg1:string):Promise<Array<domain.Destination>>;
 
 export function GetLogs():Promise<Array<domain.LogEntry>>;
 
@@ -20,12 +30,20 @@ export function GetSettings():Promise<domain.AppSettings>;
 
 export function GoLive(arg1:domain.Announcement):Promise<domain.ExecutionSummary>;
 
+export function ListDestinationGroups():Promise<Array<domain.DestinationGroup>>;
+
 export function ListDestinations():Promise<Array<domain.Destination>>;
 
 export function ListPendingLiveNowSessions():Promise<Array<domain.ActiveLiveNowSession>>;
 
 export function SaveDestination(arg1:domain.Destination):Promise<domain.Destination>;
 
+export function SaveDestinationGroup(arg1:domain.DestinationGroup):Promise<domain.DestinationGroup>;
+
 export function SaveSettings(arg1:domain.AppSettings):Promise<domain.AppSettings>;
+
+export function SetDestinationGroups(arg1:string,arg2:Array<string>):Promise<void>;
+
+export function SetGroupDestinations(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function TestDestinationConnection(arg1:domain.Destination):Promise<domain.CredentialCheckResult>;

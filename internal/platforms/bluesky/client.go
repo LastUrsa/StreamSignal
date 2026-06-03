@@ -60,6 +60,11 @@ type createRecordRequest struct {
 	Record     postRecordBody `json:"record"`
 }
 
+type createRecordResponse struct {
+	URI string `json:"uri"`
+	CID string `json:"cid"`
+}
+
 type putRecordRequest struct {
 	Collection string              `json:"collection"`
 	Repo       string              `json:"repo"`
@@ -142,9 +147,14 @@ func NewPublisher(baseURL string, client *http.Client) *Publisher {
 }
 
 func (p *Publisher) PublishPost(ctx context.Context, accountIdentifier string, credentialKey string, content string, metadata domain.BlueskyPostMetadata) error {
+	_, err := p.PublishPostWithReceipt(ctx, accountIdentifier, credentialKey, content, metadata)
+	return err
+}
+
+func (p *Publisher) PublishPostWithReceipt(ctx context.Context, accountIdentifier string, credentialKey string, content string, metadata domain.BlueskyPostMetadata) (domain.PublishReceipt, error) {
 	session, err := p.createSession(ctx, accountIdentifier, credentialKey)
 	if err != nil {
-		return err
+		return domain.PublishReceipt{}, err
 	}
 
 	postRecord := postRecordBody{
@@ -153,12 +163,12 @@ func (p *Publisher) PublishPost(ctx context.Context, accountIdentifier string, c
 		CreatedAt: p.now().UTC().Format(time.RFC3339),
 	}
 	if err := p.applyPostLinkMetadata(ctx, session.AccessJWT, &postRecord, metadata); err != nil {
-		return err
+		return domain.PublishReceipt{}, err
 	}
 	applyPostHashtagFacets(&postRecord)
 	if postRecord.Embed == nil {
 		if err := p.applyPostImageMetadata(ctx, session.AccessJWT, &postRecord, metadata); err != nil {
-			return err
+			return domain.PublishReceipt{}, err
 		}
 	}
 
@@ -170,27 +180,51 @@ func (p *Publisher) PublishPost(ctx context.Context, accountIdentifier string, c
 
 	body, err := json.Marshal(record)
 	if err != nil {
-		return fmt.Errorf("encode Bluesky post payload: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("encode Bluesky post payload: %w", err)
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/xrpc/com.atproto.repo.createRecord", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("build Bluesky createRecord request: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("build Bluesky createRecord request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+session.AccessJWT)
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := p.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send Bluesky createRecord request: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("send Bluesky createRecord request: %w", err)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("Bluesky createRecord request failed: %s%s", response.Status, readResponseSuffix(response.Body))
+		return domain.PublishReceipt{}, fmt.Errorf("Bluesky createRecord request failed: %s%s", response.Status, readResponseSuffix(response.Body))
 	}
 
-	return nil
+	var result createRecordResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return domain.PublishReceipt{}, fmt.Errorf("decode Bluesky createRecord response: %w", err)
+	}
+	if strings.TrimSpace(result.URI) == "" {
+		return domain.PublishReceipt{}, fmt.Errorf("Bluesky createRecord response was missing URI")
+	}
+	return domain.PublishReceipt{
+		Provider: string(domain.PlatformBluesky),
+		ID:       recordKeyFromATURI(result.URI),
+		URI:      result.URI,
+		CID:      result.CID,
+	}, nil
+}
+
+func (p *Publisher) DeletePost(ctx context.Context, accountIdentifier string, credentialKey string, postURI string) error {
+	session, err := p.createSession(ctx, accountIdentifier, credentialKey)
+	if err != nil {
+		return err
+	}
+	rkey := recordKeyFromATURI(postURI)
+	if rkey == "" {
+		return fmt.Errorf("Bluesky post URI was missing a record key")
+	}
+	return p.deleteRecord(ctx, session.AccessJWT, session.DID, "app.bsky.feed.post", rkey, "Bluesky post")
 }
 
 func (p *Publisher) VerifyCredentials(ctx context.Context, accountIdentifier string, credentialKey string) error {
@@ -259,35 +293,47 @@ func (p *Publisher) ClearLiveNow(ctx context.Context, accountIdentifier string, 
 		return err
 	}
 
+	return p.deleteRecord(ctx, session.AccessJWT, session.DID, "app.bsky.actor.status", "self", "Bluesky Live Now")
+}
+
+func (p *Publisher) deleteRecord(ctx context.Context, accessJWT string, repo string, collection string, rkey string, label string) error {
 	payload := deleteRecordRequest{
-		Collection: "app.bsky.actor.status",
-		Repo:       session.DID,
-		RKey:       "self",
+		Collection: collection,
+		Repo:       repo,
+		RKey:       rkey,
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("encode Bluesky Live Now delete payload: %w", err)
+		return fmt.Errorf("encode %s delete payload: %w", label, err)
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/xrpc/com.atproto.repo.deleteRecord", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("build Bluesky deleteRecord request: %w", err)
+		return fmt.Errorf("build %s deleteRecord request: %w", label, err)
 	}
-	request.Header.Set("Authorization", "Bearer "+session.AccessJWT)
+	request.Header.Set("Authorization", "Bearer "+accessJWT)
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := p.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send Bluesky deleteRecord request: %w", err)
+		return fmt.Errorf("send %s deleteRecord request: %w", label, err)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("Bluesky deleteRecord request failed: %s%s", response.Status, readResponseSuffix(response.Body))
+		return fmt.Errorf("%s deleteRecord request failed: %s%s", label, response.Status, readResponseSuffix(response.Body))
 	}
 
 	return nil
+}
+
+func recordKeyFromATURI(uri string) string {
+	parts := strings.Split(strings.TrimSpace(uri), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(parts[len(parts)-1])
 }
 
 func (p *Publisher) createSession(ctx context.Context, accountIdentifier string, credentialKey string) (createSessionResponse, error) {

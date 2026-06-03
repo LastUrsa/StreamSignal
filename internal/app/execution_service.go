@@ -58,6 +58,7 @@ type destinationEndStreamConfig struct {
 
 type ExecutionService struct {
 	destinations ports.DestinationRepository
+	groups       ports.DestinationGroupRepository
 	settings     ports.SettingsRepository
 	history      ports.PostHistoryRepository
 	sessions     ports.LiveNowSessionRepository
@@ -93,6 +94,10 @@ func NewExecutionService(
 	}
 }
 
+func (s *ExecutionService) UseDestinationGroups(groups ports.DestinationGroupRepository) {
+	s.groups = groups
+}
+
 func (s *ExecutionService) GoLive(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error) {
 	results, settings, warning, err := s.execute(ctx, domain.ExecutionModeGoLive, announcement, false)
 	if err != nil {
@@ -115,11 +120,13 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 		return domain.ExecutionSummary{}, err
 	}
 
-	destinations, err := s.destinations.List(ctx)
+	destinations, err := resolveAnnouncementDestinations(ctx, s.destinations, s.groups, announcement)
 	if err != nil {
 		return domain.ExecutionSummary{}, err
 	}
-	destinations = destinationsForSelection(destinations, announcement.DestinationIDs)
+	if announcement.DestinationGroupID != "" && len(destinations) == 0 {
+		return domain.ExecutionSummary{}, fmt.Errorf("No enabled destinations in this group.")
+	}
 
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
@@ -239,7 +246,8 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 			continue
 		}
 
-		if err := s.publish(ctx, destination, content, announcementForDestination); err != nil {
+		receipt, err := s.publish(ctx, destination, content, announcementForDestination)
+		if err != nil {
 			state := domain.ExecutionStateFailed
 			if domain.IsIntegrationUnavailable(err) {
 				state = domain.ExecutionStateSkipped
@@ -262,6 +270,7 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 			State:           domain.ExecutionStateSuccess,
 			Message:         "End stream post published successfully.",
 			Content:         content,
+			Receipt:         receipt,
 		})
 	}
 
@@ -274,11 +283,13 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 		return nil, domain.AppSettings{}, nil, err
 	}
 
-	destinations, err := s.destinations.List(ctx)
+	destinations, err := resolveAnnouncementDestinations(ctx, s.destinations, s.groups, announcement)
 	if err != nil {
 		return nil, domain.AppSettings{}, nil, err
 	}
-	destinations = destinationsForSelection(destinations, announcement.DestinationIDs)
+	if announcement.DestinationGroupID != "" && len(destinations) == 0 {
+		return nil, domain.AppSettings{}, nil, fmt.Errorf("No enabled destinations in this group.")
+	}
 
 	normalized := domain.NormalizeAnnouncement(announcement, settings)
 	now := s.clock.Now()
@@ -339,7 +350,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 			continue
 		}
 
-		err = s.publish(ctx, destination, content, normalized)
+		receipt, err := s.publish(ctx, destination, content, normalized)
 		if err != nil {
 			state := domain.ExecutionStateFailed
 			if domain.IsIntegrationUnavailable(err) {
@@ -372,6 +383,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 					State:           domain.ExecutionStateFailed,
 					Message:         fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", err.Error()),
 					Content:         content,
+					Receipt:         receipt,
 				})
 				continue
 			}
@@ -389,6 +401,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 						State:           domain.ExecutionStateFailed,
 						Message:         fmt.Sprintf("Published successfully, but Live Now update failed: %s", err.Error()),
 						Content:         content,
+						Receipt:         receipt,
 					})
 					continue
 				}
@@ -403,6 +416,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 						State:           domain.ExecutionStateFailed,
 						Message:         fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", err.Error()),
 						Content:         content,
+						Receipt:         receipt,
 					})
 					continue
 				}
@@ -421,6 +435,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 			State:           state,
 			Message:         message,
 			Content:         content,
+			Receipt:         receipt,
 		})
 	}
 
@@ -445,6 +460,37 @@ func destinationsForSelection(destinations []domain.Destination, selectedIDs []s
 	}
 
 	return filtered
+}
+
+func resolveAnnouncementDestinations(
+	ctx context.Context,
+	destinations ports.DestinationRepository,
+	groups ports.DestinationGroupRepository,
+	announcement domain.Announcement,
+) ([]domain.Destination, error) {
+	if groups != nil && strings.TrimSpace(announcement.DestinationGroupID) != "" {
+		groupDestinations, err := groups.ListDestinations(ctx, strings.TrimSpace(announcement.DestinationGroupID))
+		if err != nil {
+			return nil, err
+		}
+		return enabledDestinations(groupDestinations), nil
+	}
+
+	allDestinations, err := destinations.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return destinationsForSelection(allDestinations, announcement.DestinationIDs), nil
+}
+
+func enabledDestinations(destinations []domain.Destination) []domain.Destination {
+	enabled := make([]domain.Destination, 0, len(destinations))
+	for _, destination := range destinations {
+		if destination.Enabled {
+			enabled = append(enabled, destination)
+		}
+	}
+	return enabled
 }
 
 func (s *ExecutionService) applyBlueskyLiveNow(ctx context.Context, destination domain.Destination, announcement domain.Announcement) error {
@@ -500,29 +546,29 @@ func (s *ExecutionService) trackBlueskyLiveNowSession(ctx context.Context, desti
 	})
 }
 
-func (s *ExecutionService) publish(ctx context.Context, destination domain.Destination, content string, announcement domain.Announcement) error {
+func (s *ExecutionService) publish(ctx context.Context, destination domain.Destination, content string, announcement domain.Announcement) (*domain.PublishReceipt, error) {
 	switch destination.Platform {
 	case domain.PlatformDiscord:
 		var config discordDestinationConfig
 		if err := json.Unmarshal([]byte(destination.ConfigJSON), &config); err != nil {
-			return fmt.Errorf("invalid Discord config")
+			return nil, fmt.Errorf("invalid Discord config")
 		}
 		if config.WebhookKey == "" {
-			return fmt.Errorf("missing Discord webhook key")
+			return nil, fmt.Errorf("missing Discord webhook key")
 		}
-		return s.discord.Publish(ctx, config.WebhookKey, content, domain.DiscordPostMetadata{
+		return nil, s.discord.Publish(ctx, config.WebhookKey, content, domain.DiscordPostMetadata{
 			ThumbnailURL:     config.CardThumbnailURL,
 			ThumbnailDataURL: config.CardThumbnailDataURL,
 		})
 	case domain.PlatformBluesky:
 		var config blueskyDestinationConfig
 		if err := json.Unmarshal([]byte(destination.ConfigJSON), &config); err != nil {
-			return fmt.Errorf("invalid Bluesky config")
+			return nil, fmt.Errorf("invalid Bluesky config")
 		}
 		if config.AccountIdentifier == "" || config.CredentialKey == "" {
-			return fmt.Errorf("missing Bluesky connection details")
+			return nil, fmt.Errorf("missing Bluesky connection details")
 		}
-		return s.bluesky.PublishPost(ctx, config.AccountIdentifier, config.CredentialKey, content, domain.BlueskyPostMetadata{
+		metadata := domain.BlueskyPostMetadata{
 			StreamURL:              announcement.StreamURL,
 			StreamTitle:            announcement.StreamTitle,
 			Description:            announcement.Message,
@@ -530,21 +576,37 @@ func (s *ExecutionService) publish(ctx context.Context, destination domain.Desti
 			ThumbnailDataURL:       config.CardThumbnailDataURL,
 			AdditionalImageURL:     config.AdditionalImageURL,
 			AdditionalImageDataURL: config.AdditionalImageDataURL,
-		})
+		}
+		if publisher, ok := s.bluesky.(ports.BlueskyReceiptPublisher); ok {
+			receipt, err := publisher.PublishPostWithReceipt(ctx, config.AccountIdentifier, config.CredentialKey, content, metadata)
+			if err != nil {
+				return nil, err
+			}
+			return &receipt, nil
+		}
+		return nil, s.bluesky.PublishPost(ctx, config.AccountIdentifier, config.CredentialKey, content, metadata)
 	case domain.PlatformMastodon:
 		var config mastodonDestinationConfig
 		if err := json.Unmarshal([]byte(destination.ConfigJSON), &config); err != nil {
-			return fmt.Errorf("invalid Mastodon config")
+			return nil, fmt.Errorf("invalid Mastodon config")
 		}
 		if config.CredentialKey == "" || config.InstanceURL == "" {
-			return fmt.Errorf("missing Mastodon connection details")
+			return nil, fmt.Errorf("missing Mastodon connection details")
 		}
-		return s.mastodon.PublishPost(ctx, config.CredentialKey, config.InstanceURL, content, domain.MastodonPostMetadata{
+		metadata := domain.MastodonPostMetadata{
 			AdditionalImageURL:     config.AdditionalImageURL,
 			AdditionalImageDataURL: config.AdditionalImageDataURL,
-		})
+		}
+		if publisher, ok := s.mastodon.(ports.MastodonReceiptPublisher); ok {
+			receipt, err := publisher.PublishPostWithReceipt(ctx, config.CredentialKey, config.InstanceURL, content, metadata)
+			if err != nil {
+				return nil, err
+			}
+			return &receipt, nil
+		}
+		return nil, s.mastodon.PublishPost(ctx, config.CredentialKey, config.InstanceURL, content, metadata)
 	default:
-		return fmt.Errorf("unsupported destination platform")
+		return nil, fmt.Errorf("unsupported destination platform")
 	}
 }
 

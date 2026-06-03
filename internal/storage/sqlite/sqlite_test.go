@@ -66,6 +66,7 @@ func TestSettingsRepositoryPersistsRoundTrip(t *testing.T) {
 		DefaultHashtags:            "#vtuber #music",
 		DuplicateProtectionEnabled: true,
 		DuplicateWindowMinutes:     15,
+		SelectedDestinationGroupID: "main-announcements",
 	}
 
 	if err := repository.Save(context.Background(), expected); err != nil {
@@ -79,6 +80,98 @@ func TestSettingsRepositoryPersistsRoundTrip(t *testing.T) {
 
 	if actual != expected {
 		t.Fatalf("expected settings %+v, got %+v", expected, actual)
+	}
+}
+
+func TestDestinationGroupMigrationCreatesDefaultGroup(t *testing.T) {
+	db := openTestDB(t)
+	repository := NewDestinationGroupRepository(db)
+
+	groups, err := repository.List(context.Background())
+	if err != nil {
+		t.Fatalf("list destination groups: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("expected default destination group, got %+v", groups)
+	}
+	if groups[0].ID != domain.DefaultDestinationGroupID || groups[0].Name != domain.DefaultDestinationGroupName {
+		t.Fatalf("unexpected default group: %+v", groups[0])
+	}
+}
+
+func TestDestinationGroupRepositoryMembershipRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+	destinationRepository := NewDestinationRepository(db)
+	groupRepository := NewDestinationGroupRepository(db)
+	now := time.Now().UTC().Round(time.Microsecond)
+
+	first := domain.Destination{
+		ID:         "discord-main",
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/main"}`,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	second := domain.Destination{
+		ID:         "bluesky-main",
+		Platform:   domain.PlatformBluesky,
+		Name:       "Main Bluesky",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}`,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	if err := destinationRepository.Save(context.Background(), first); err != nil {
+		t.Fatalf("save first destination: %v", err)
+	}
+	if err := destinationRepository.Save(context.Background(), second); err != nil {
+		t.Fatalf("save second destination: %v", err)
+	}
+
+	group := domain.DestinationGroup{
+		ID:          "main-announcements",
+		Name:        "Main Announcements",
+		Description: "Primary live announcement targets",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := groupRepository.Save(context.Background(), group); err != nil {
+		t.Fatalf("save group: %v", err)
+	}
+	if err := groupRepository.SetDestinations(context.Background(), group.ID, []string{first.ID, second.ID, first.ID}); err != nil {
+		t.Fatalf("set group destinations: %v", err)
+	}
+
+	destinations, err := groupRepository.ListDestinations(context.Background(), group.ID)
+	if err != nil {
+		t.Fatalf("list group destinations: %v", err)
+	}
+	if len(destinations) != 2 {
+		t.Fatalf("expected two group destinations, got %+v", destinations)
+	}
+
+	groupIDs, err := groupRepository.ListGroupIDsForDestination(context.Background(), first.ID)
+	if err != nil {
+		t.Fatalf("list groups for destination: %v", err)
+	}
+	if len(groupIDs) != 1 || groupIDs[0] != group.ID {
+		t.Fatalf("expected destination in group %q, got %+v", group.ID, groupIDs)
+	}
+
+	if err := groupRepository.SetGroupsForDestination(context.Background(), first.ID, []string{domain.DefaultDestinationGroupID}); err != nil {
+		t.Fatalf("set groups for destination: %v", err)
+	}
+	groupIDs, err = groupRepository.ListGroupIDsForDestination(context.Background(), first.ID)
+	if err != nil {
+		t.Fatalf("list groups after destination update: %v", err)
+	}
+	if len(groupIDs) != 1 || groupIDs[0] != domain.DefaultDestinationGroupID {
+		t.Fatalf("expected destination in default group, got %+v", groupIDs)
 	}
 }
 

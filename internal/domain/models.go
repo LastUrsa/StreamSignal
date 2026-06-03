@@ -3,13 +3,14 @@ package domain
 import "time"
 
 type Announcement struct {
-	StreamTitle    string    `json:"streamTitle"`
-	StreamURL      string    `json:"streamURL"`
-	Category       string    `json:"category"`
-	Message        string    `json:"message"`
-	Hashtags       string    `json:"hashtags"`
-	DestinationIDs []string  `json:"destinationIDs"`
-	CreatedAt      time.Time `json:"createdAt"`
+	StreamTitle        string    `json:"streamTitle"`
+	StreamURL          string    `json:"streamURL"`
+	Category           string    `json:"category"`
+	Message            string    `json:"message"`
+	Hashtags           string    `json:"hashtags"`
+	DestinationGroupID string    `json:"destinationGroupID"`
+	DestinationIDs     []string  `json:"destinationIDs"`
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 type DestinationPlatform string
@@ -31,11 +32,30 @@ type Destination struct {
 	UpdatedAt  time.Time           `json:"updatedAt"`
 }
 
+const (
+	DefaultDestinationGroupID   = "all-destinations"
+	DefaultDestinationGroupName = "All Destinations"
+)
+
+type DestinationGroup struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type DestinationGroupMembership struct {
+	GroupID       string `json:"groupID"`
+	DestinationID string `json:"destinationID"`
+}
+
 type AppSettings struct {
 	DefaultStreamURL           string `json:"defaultStreamURL"`
 	DefaultHashtags            string `json:"defaultHashtags"`
 	DuplicateProtectionEnabled bool   `json:"duplicateProtectionEnabled"`
 	DuplicateWindowMinutes     int    `json:"duplicateWindowMinutes"`
+	SelectedDestinationGroupID string `json:"selectedDestinationGroupID"`
 }
 
 func DefaultAppSettings() AppSettings {
@@ -44,6 +64,7 @@ func DefaultAppSettings() AppSettings {
 		DefaultHashtags:            "",
 		DuplicateProtectionEnabled: true,
 		DuplicateWindowMinutes:     10,
+		SelectedDestinationGroupID: DefaultDestinationGroupID,
 	}
 }
 

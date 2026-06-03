@@ -10,6 +10,14 @@ export function DeleteDestination(arg1) {
   return window['go']['main']['App']['DeleteDestination'](arg1);
 }
 
+export function DeleteDestinationGroup(arg1) {
+  return window['go']['main']['App']['DeleteDestinationGroup'](arg1);
+}
+
+export function DuplicateDestinationGroup(arg1) {
+  return window['go']['main']['App']['DuplicateDestinationGroup'](arg1);
+}
+
 export function EndStream(arg1) {
   return window['go']['main']['App']['EndStream'](arg1);
 }
@@ -22,8 +30,20 @@ export function GeneratePreview(arg1) {
   return window['go']['main']['App']['GeneratePreview'](arg1);
 }
 
+export function GetDestinationGroup(arg1) {
+  return window['go']['main']['App']['GetDestinationGroup'](arg1);
+}
+
+export function GetDestinationGroupIDs(arg1) {
+  return window['go']['main']['App']['GetDestinationGroupIDs'](arg1);
+}
+
 export function GetDiagnostics() {
   return window['go']['main']['App']['GetDiagnostics']();
+}
+
+export function GetGroupDestinations(arg1) {
+  return window['go']['main']['App']['GetGroupDestinations'](arg1);
 }
 
 export function GetLogs() {
@@ -38,6 +58,10 @@ export function GoLive(arg1) {
   return window['go']['main']['App']['GoLive'](arg1);
 }
 
+export function ListDestinationGroups() {
+  return window['go']['main']['App']['ListDestinationGroups']();
+}
+
 export function ListDestinations() {
   return window['go']['main']['App']['ListDestinations']();
 }
@@ -50,8 +74,20 @@ export function SaveDestination(arg1) {
   return window['go']['main']['App']['SaveDestination'](arg1);
 }
 
+export function SaveDestinationGroup(arg1) {
+  return window['go']['main']['App']['SaveDestinationGroup'](arg1);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SetDestinationGroups(arg1, arg2) {
+  return window['go']['main']['App']['SetDestinationGroups'](arg1, arg2);
+}
+
+export function SetGroupDestinations(arg1, arg2) {
+  return window['go']['main']['App']['SetGroupDestinations'](arg1, arg2);
 }
 
 export function TestDestinationConnection(arg1) {

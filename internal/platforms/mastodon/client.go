@@ -32,6 +32,12 @@ type mediaUploadResponse struct {
 	ID string `json:"id"`
 }
 
+type statusResponse struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
+	URI string `json:"uri"`
+}
+
 func NewPublisher(client *http.Client) *Publisher {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -40,17 +46,22 @@ func NewPublisher(client *http.Client) *Publisher {
 }
 
 func (p *Publisher) PublishPost(ctx context.Context, credentialKey string, instanceURL string, content string, metadata domain.MastodonPostMetadata) error {
+	_, err := p.PublishPostWithReceipt(ctx, credentialKey, instanceURL, content, metadata)
+	return err
+}
+
+func (p *Publisher) PublishPostWithReceipt(ctx context.Context, credentialKey string, instanceURL string, content string, metadata domain.MastodonPostMetadata) (domain.PublishReceipt, error) {
 	normalizedInstanceURL := strings.TrimRight(strings.TrimSpace(instanceURL), "/")
 	trimmedCredentialKey := strings.TrimSpace(credentialKey)
 	mediaIDs, err := p.uploadAdditionalImage(ctx, trimmedCredentialKey, normalizedInstanceURL, metadata)
 	if err != nil {
-		return err
+		return domain.PublishReceipt{}, err
 	}
 
 	payload := statusPayload{Status: content, MediaIDs: mediaIDs}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("encode Mastodon payload: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("encode Mastodon payload: %w", err)
 	}
 
 	request, err := http.NewRequestWithContext(
@@ -60,14 +71,14 @@ func (p *Publisher) PublishPost(ctx context.Context, credentialKey string, insta
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return fmt.Errorf("build Mastodon status request: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("build Mastodon status request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+trimmedCredentialKey)
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := p.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send Mastodon status request: %w", err)
+		return domain.PublishReceipt{}, fmt.Errorf("send Mastodon status request: %w", err)
 	}
 	defer response.Body.Close()
 
@@ -75,11 +86,56 @@ func (p *Publisher) PublishPost(ctx context.Context, credentialKey string, insta
 		responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		message := strings.TrimSpace(string(responseBody))
 		if message != "" {
-			return fmt.Errorf("Mastodon status request failed: %s: %s", response.Status, message)
+			return domain.PublishReceipt{}, fmt.Errorf("Mastodon status request failed: %s: %s", response.Status, message)
 		}
-		return fmt.Errorf("Mastodon status request failed: %s", response.Status)
+		return domain.PublishReceipt{}, fmt.Errorf("Mastodon status request failed: %s", response.Status)
 	}
 
+	var result statusResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return domain.PublishReceipt{}, fmt.Errorf("decode Mastodon status response: %w", err)
+	}
+	if strings.TrimSpace(result.ID) == "" {
+		return domain.PublishReceipt{}, fmt.Errorf("Mastodon status response was missing ID")
+	}
+	uri := strings.TrimSpace(result.URL)
+	if uri == "" {
+		uri = strings.TrimSpace(result.URI)
+	}
+	return domain.PublishReceipt{
+		Provider: string(domain.PlatformMastodon),
+		ID:       result.ID,
+		URI:      uri,
+	}, nil
+}
+
+func (p *Publisher) DeleteStatus(ctx context.Context, credentialKey string, instanceURL string, statusID string) error {
+	normalizedInstanceURL := strings.TrimRight(strings.TrimSpace(instanceURL), "/")
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodDelete,
+		normalizedInstanceURL+"/api/v1/statuses/"+strings.TrimSpace(statusID)+"?delete_media=true",
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("build Mastodon delete status request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(credentialKey))
+
+	response, err := p.client.Do(request)
+	if err != nil {
+		return fmt.Errorf("send Mastodon delete status request: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+		message := strings.TrimSpace(string(responseBody))
+		if message != "" {
+			return fmt.Errorf("Mastodon delete status request failed: %s: %s", response.Status, message)
+		}
+		return fmt.Errorf("Mastodon delete status request failed: %s", response.Status)
+	}
 	return nil
 }
 

@@ -19,6 +19,7 @@ func NewSettingsRepository(db *sql.DB) *SettingsRepository {
 func (r *SettingsRepository) Load(ctx context.Context) (domain.AppSettings, error) {
 	row := r.db.QueryRowContext(ctx, `
 select default_stream_url, default_hashtags, duplicate_protection_enabled, duplicate_window_minutes
+     , selected_destination_group_id
 from settings
 where id = 1`)
 
@@ -38,18 +39,21 @@ func (r *SettingsRepository) Save(ctx context.Context, settings domain.AppSettin
 insert into settings(
   id, test_mode_enabled, default_stream_url, default_hashtags,
   duplicate_protection_enabled, duplicate_window_minutes, end_stream_post_enabled, end_stream_template,
-  test_discord_webhook_key, test_bluesky_account_identifier, test_bluesky_credential_key, test_mastodon_credential_key, test_mastodon_instance_url
+  test_discord_webhook_key, test_bluesky_account_identifier, test_bluesky_credential_key, test_mastodon_credential_key, test_mastodon_instance_url,
+  selected_destination_group_id
 )
-values(1, 0, ?, ?, ?, ?, 0, '', '', '', '', '', '')
+values(1, 0, ?, ?, ?, ?, 0, '', '', '', '', '', '', ?)
 on conflict(id) do update set
   default_stream_url = excluded.default_stream_url,
   default_hashtags = excluded.default_hashtags,
   duplicate_protection_enabled = excluded.duplicate_protection_enabled,
-  duplicate_window_minutes = excluded.duplicate_window_minutes`,
+  duplicate_window_minutes = excluded.duplicate_window_minutes,
+  selected_destination_group_id = excluded.selected_destination_group_id`,
 		settings.DefaultStreamURL,
 		settings.DefaultHashtags,
 		boolToInt(settings.DuplicateProtectionEnabled),
 		settings.DuplicateWindowMinutes,
+		selectedDestinationGroupID(settings.SelectedDestinationGroupID),
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)
@@ -67,12 +71,21 @@ func scanSettings(scanner rowScanner) (domain.AppSettings, error) {
 		&settings.DefaultHashtags,
 		&duplicateProtectionEnabled,
 		&settings.DuplicateWindowMinutes,
+		&settings.SelectedDestinationGroupID,
 	)
 	if err != nil {
 		return domain.AppSettings{}, err
 	}
 
 	settings.DuplicateProtectionEnabled = intToBool(duplicateProtectionEnabled)
+	settings.SelectedDestinationGroupID = selectedDestinationGroupID(settings.SelectedDestinationGroupID)
 
 	return settings, nil
+}
+
+func selectedDestinationGroupID(value string) string {
+	if value == "" {
+		return domain.DefaultDestinationGroupID
+	}
+	return value
 }

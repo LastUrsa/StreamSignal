@@ -217,6 +217,89 @@ func TestExecutionServiceGoLiveIsolatesDestinationFailures(t *testing.T) {
 	}
 }
 
+func TestExecutionServiceGoLiveUsesSelectedDestinationGroup(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	history := &postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}}
+	sessions := &liveNowSessionRepositoryExecutionStub{}
+	discord := &discordPublisherStub{}
+	bluesky := &blueskyPublisherStub{}
+	service := NewExecutionService(destRepo, settingsRepo, history, sessions, discord, bluesky, &mastodonPublisherStub{})
+	service.UseDestinationGroups(&destinationGroupRepositoryStub{
+		destinationsByGroup: map[string][]domain.Destination{
+			"main-announcements": {
+				{
+					ID:         "discord-main",
+					Platform:   domain.PlatformDiscord,
+					Name:       "Main Discord",
+					Enabled:    true,
+					Template:   "{{stream_title}}",
+					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+				},
+				{
+					ID:         "discord-disabled",
+					Platform:   domain.PlatformDiscord,
+					Name:       "Disabled Discord",
+					Enabled:    false,
+					Template:   "{{stream_title}}",
+					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/disabled"}`,
+				},
+			},
+		},
+	})
+
+	summary, err := service.GoLive(context.Background(), domain.Announcement{
+		StreamTitle:        "Going Live",
+		StreamURL:          "https://example.com/live",
+		DestinationGroupID: "main-announcements",
+	})
+	if err != nil {
+		t.Fatalf("go live: %v", err)
+	}
+	if summary.TotalCount != 1 || len(discord.calls) != 1 {
+		t.Fatalf("expected one enabled destination publish, summary=%+v calls=%+v", summary, discord.calls)
+	}
+	if discord.calls[0].key != "https://discord.com/api/webhooks/123/main" {
+		t.Fatalf("expected enabled destination webhook, got %+v", discord.calls[0])
+	}
+}
+
+func TestExecutionServiceGoLiveBlocksEmptyEnabledGroup(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	service := NewExecutionService(
+		destRepo,
+		&settingsRepositoryStub{item: domain.DefaultAppSettings()},
+		&postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}},
+		&liveNowSessionRepositoryExecutionStub{},
+		&discordPublisherStub{},
+		&blueskyPublisherStub{},
+		&mastodonPublisherStub{},
+	)
+	service.UseDestinationGroups(&destinationGroupRepositoryStub{
+		destinationsByGroup: map[string][]domain.Destination{
+			"empty": {
+				{
+					ID:         "discord-disabled",
+					Platform:   domain.PlatformDiscord,
+					Name:       "Disabled Discord",
+					Enabled:    false,
+					Template:   "{{stream_title}}",
+					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/disabled"}`,
+				},
+			},
+		},
+	})
+
+	_, err := service.GoLive(context.Background(), domain.Announcement{
+		StreamTitle:        "Going Live",
+		StreamURL:          "https://example.com/live",
+		DestinationGroupID: "empty",
+	})
+	if err == nil || err.Error() != "No enabled destinations in this group." {
+		t.Fatalf("expected empty group error, got %v", err)
+	}
+}
+
 func TestExecutionServiceReturnsValidationErrorsPerDestination(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
 	destRepo.items["discord-main"] = domain.Destination{

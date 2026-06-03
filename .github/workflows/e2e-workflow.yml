@@ -1,0 +1,96 @@
+name: Provider Workflow E2E
+
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+    inputs:
+      run_bluesky:
+        description: Run the Bluesky workflow E2E scenario
+        type: boolean
+        required: true
+        default: true
+      run_mastodon:
+        description: Run the Mastodon workflow E2E scenario
+        type: boolean
+        required: true
+        default: true
+  workflow_call:
+    inputs:
+      enabled:
+        description: Run the provider-backed workflow E2E scenario
+        type: boolean
+        required: false
+        default: true
+      run_bluesky:
+        description: Run the Bluesky workflow E2E scenario
+        type: boolean
+        required: false
+        default: true
+      run_mastodon:
+        description: Run the Mastodon workflow E2E scenario
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      E2E_BLUESKY_IDENTIFIER:
+        required: false
+      E2E_BLUESKY_APP_PASSWORD:
+        required: false
+      E2E_MASTODON_INSTANCE_URL:
+        required: false
+      E2E_MASTODON_ACCESS_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  STREAMSIGNAL_E2E: "1"
+
+jobs:
+  workflow-e2e:
+    name: Workflow E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run provider-backed workflow E2E
+        env:
+          E2E_BLUESKY_IDENTIFIER: ${{ secrets.E2E_BLUESKY_IDENTIFIER }}
+          E2E_BLUESKY_APP_PASSWORD: ${{ secrets.E2E_BLUESKY_APP_PASSWORD }}
+          E2E_MASTODON_INSTANCE_URL: ${{ secrets.E2E_MASTODON_INSTANCE_URL }}
+          E2E_MASTODON_ACCESS_TOKEN: ${{ secrets.E2E_MASTODON_ACCESS_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_call" ] && [ "${{ inputs.enabled }}" != "true" ]; then
+            echo "Provider-backed workflow E2E disabled for this release run."
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
+            if [ "${{ inputs.run_bluesky }}" = "true" ]; then
+              export E2E_EXPECT_BLUESKY=1
+            else
+              export E2E_EXPECT_BLUESKY=0
+              unset E2E_BLUESKY_IDENTIFIER E2E_BLUESKY_APP_PASSWORD
+            fi
+
+            if [ "${{ inputs.run_mastodon }}" = "true" ]; then
+              export E2E_EXPECT_MASTODON=1
+            else
+              export E2E_EXPECT_MASTODON=0
+              unset E2E_MASTODON_INSTANCE_URL E2E_MASTODON_ACCESS_TOKEN
+            fi
+          else
+            export E2E_EXPECT_BLUESKY=1
+            export E2E_EXPECT_MASTODON=1
+          fi
+
+          go test -tags=e2e ./internal/e2e -v -count=1
