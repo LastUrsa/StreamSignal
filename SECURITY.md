@@ -1,14 +1,16 @@
 # Security Policy
 
+This file is the public vulnerability reporting policy for StreamSignal. It is standard practice for public repos, especially for software that stores credentials or posts to external services.
+
 ## Reporting a Vulnerability
 
 If you believe you have found a security issue in StreamSignal, please do not open a public GitHub issue with exploit details.
 
 Instead:
 
-1. contact the maintainer privately through the repository contact method or profile contact information
-2. include a clear description of the issue, affected area, impact, and reproduction steps
-3. include your environment details if they matter to the report
+1. Contact the maintainer privately through the repository contact method or profile contact information.
+2. Include the affected area, impact, reproduction steps, and environment details if they matter.
+3. Do not include secrets, credentials, personal data, or public exploit details.
 
 If private contact details are not yet available on the repository profile, open a minimal public issue asking for a secure reporting channel without including sensitive details.
 
@@ -23,12 +25,6 @@ Helpful reports usually include:
 - reproduction steps
 - screenshots or logs, if safe to share
 
-Please do not include:
-
-- secrets or credentials
-- personal data
-- exploit code that would put users at immediate risk in a public thread
-
 ## Disclosure Approach
 
 The goal is responsible disclosure:
@@ -40,4 +36,4 @@ The goal is responsible disclosure:
 
 ## Current Security Notes
 
-For a public-facing summary of the current security posture and completed audit work, see [SECURITY_AUDIT.md](./SECURITY_AUDIT.md).
+For the maintainer-facing security posture summary, see [SECURITY_AUDIT.md](./SECURITY_AUDIT.md).

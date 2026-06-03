@@ -1,240 +1,81 @@
-# Test Validation Review
+# Test Validation
 
-## Purpose
+This maintainer-facing document explains how StreamSignal treats automated tests and release validation. It is not an end-user guide.
 
-This document records the Milestone 8 review of StreamSignal's automated tests against practical best practice, not just raw coverage totals.
+## Baseline Checks
 
-## Current Snapshot
+Every pull request and release candidate should pass:
 
-Release-candidate quality gate checked on June 2, 2026:
+```bash
+go test ./...
+go vet ./...
+npm test --prefix frontend
+npm run build --prefix frontend
+npm audit --prefix frontend
+govulncheck ./...
+```
 
-- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go test ./...`: passed locally
-- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go vet ./...`: passed locally
-- `npm test --prefix frontend`: passed locally with 3 test files and 53 tests
-- `npm run build --prefix frontend`: passed locally
-- `npm audit --prefix frontend`: passed locally with 0 vulnerabilities
-- `GOTELEMETRY=off GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache govulncheck ./...`: passed locally with no called vulnerabilities found after upgrading `golang.org/x/net` to `v0.38.0` and the pinned Go toolchain to `go1.26.4`
-- GitHub Actions `Quality Gate` on `main`: passed for run `26801640687`
-  - `Backend Tests and Vulnerability Scan`: success
-  - `Frontend Tests, Build, and Audit`: success
+If dependency manifests change, also confirm:
 
-Note: the local frontend build/test initially failed because the installed `frontend/node_modules` tree was missing Rolldown's optional native Linux binding. Running `npm install --prefix frontend` repaired the local install state without changing tracked files, and the quality gate passed after that refresh.
+```bash
+go mod tidy
+npm install --prefix frontend
+```
 
-Backend coverage from `go test ./... -coverprofile=coverage.out`:
+The tracked lockfiles should only change when the dependency update is intentional.
 
-- root app package: `40.3%`
-- `internal/app`: `71.2%`
-- `internal/domain`: `72.7%`
-- `internal/duplicate`: `90.0%`
-- `internal/platforms/bluesky`: `76.9%`
-- `internal/platforms/discord`: `86.4%`
-- `internal/platforms/mastodon`: `87.0%`
-- `internal/platforms/unavailable`: previously `0.0%`, now covered
-- `internal/storage/sqlite`: `71.8%`
-- `internal/templates`: `100.0%`
+## Testing Philosophy
 
-Frontend coverage from `npm run test:coverage`:
+StreamSignal handles credentials and outbound posting, so tests should protect workflow behavior rather than chase a single repo-wide coverage number.
 
-- statements: `92.33%`
-- branches: `83.10%`
-- functions: `71.27%`
-- `src/App.tsx`: `86.32%` statements, `80%` branches
-- API wrapper layer: `100%`
+Good coverage for this project means:
 
-## Best-Practice Assessment
+- validation and normalization paths are covered
+- publishing orchestration is covered for success, warning, skipped, and failure cases
+- destination targeting is covered so posts go only where the user selected
+- persistence behavior is covered when workflow state changes
+- outbound adapters have request, response, and error-path tests
+- frontend tests cover user-visible decisions and safety messaging
 
-### What is strong
+## Strongly Protected Areas
 
-- risky workflow logic is tested at the service layer, where most product behavior actually lives
-- adapters for real outbound integrations have dedicated tests instead of being covered only indirectly
-- repository coverage is meaningful rather than token-level
-- frontend tests are behavior-oriented and exercise real user flows instead of snapshots
-- coverage is highest in the most failure-prone backend areas: templates, duplicate protection, execution orchestration, and publishers
-- app-shell tests now use isolated temp databases, which reduces test pollution and flakiness
+Keep targeted coverage around:
 
-### What we are doing right
+- Preview remaining network-safe except for explicit link-preview metadata paths
+- Go Live and End Stream destination selection
+- duplicate-publish warning and confirmation behavior
+- Bluesky `Live Now` set, clear, duration, opt-out, and recovery behavior
+- credential persistence through secret references rather than raw values
+- Discord, Bluesky, and Mastodon publisher payloads
+- remote image and preview URL validation
+- settings defaults that prefill fresh Home sessions without overriding user edits
 
-- testing by seam, not by file count
-- validating safety rules like Preview staying network-free
-- protecting destination selection and publishing targets with direct assertions
-- covering partial-failure behavior instead of only happy paths
-- validating recovery and diagnostics flows, not just posting flows
+## PR Review Guidance
 
-## Remaining Gaps
+When reviewing behavior changes, ask:
 
-### Lower-risk gaps
-
-- several frontend `types/*.ts` files remain uncovered because they only declare interfaces
-- some root app bindings are still lightly tested relative to the service layer
-
-### Moderate gaps
-
-- frontend function coverage is good, but not as strong as statement coverage
-- `src/App.tsx` still has some unhit conditional branches in less central UI paths
-- root package coverage is still lower than the core backend packages because the shell is intentionally thin
-
-### Not currently concerning
-
-- low or zero coverage on pure type-definition files
-- lower root-package coverage when the real behavior is already covered more directly in `internal/app`
-
-## Milestone 8 Changes Added In This Pass
-
-- added app-shell tests for:
-  - settings persistence and logging
-  - preview plus diagnostics binding behavior
-  - Go Live binding and summary logging
-- added tests for the unavailable publisher adapters so safe fallback semantics are explicit
-
-## UI Refresh Test Updates
-
-The `ui-update` pass added or updated coverage for:
-
-- sidebar navigation and production/debug tab visibility
-- Settings recovery badge and Home recovery status
-- destination quick actions, guided setup, advanced-section defaults, and token insertion
-- collapsible generated previews
-- default Stream URL prefill behavior that respects a user-cleared Home field
-- default Hashtags prefill behavior that respects a user-cleared Home field
-- Home destination environment filtering for All, Production, and Test workflow scopes
-- Discord/Mastodon link-preview metadata attachment in backend preview generation
-- platform logo/fallback rendering and platform legal notice visibility
-- newest-first log ordering and scan-friendly log cards
-
-## Current Bluesky Coverage
-
-Recent workflow work added or updated tests for:
-
-- Preview validation replacing the removed Dry Run path
-- explicit production/test destination targeting
-- Bluesky rich text link facets and external stream cards
-- Bluesky card thumbnail upload from both URL and local-image data URL
-- Bluesky additional image upload when no stream preview card is posted
-- Bluesky `Live Now` duration configuration, set, clear, and recovery behavior
-- defensive image validation for non-image, oversized, non-HTTP, and local/private-network URL inputs
-
-## Current Mastodon Coverage
-
-Recent workflow work added or updated tests for:
-
-- Mastodon status publishing
-- Mastodon additional image upload through media API before status publishing
-- Mastodon request failure handling
-- defensive image validation for oversized, non-image, non-HTTP, and local/private-network URL inputs
-
-## Current Discord And End Stream Coverage
-
-Recent workflow work added or updated tests for:
-
-- selected-destination targeting for Go Live and End Stream
-- Discord webhook publishing with optional image URL and uploaded image embeds
-- Discord image validation for non-HTTP image URLs and oversized uploaded images
-- destination-level End Stream enablement and template rendering
-- disabled End Stream destinations producing skipped execution results instead of posts
-- combined Preview output that includes Go Live messages plus enabled End Stream messages in one preview pass
-- approximate Discord link-preview metadata in generated preview items
-
-## Current Preview Link Metadata Coverage
-
-Recent workflow work added or updated tests for:
-
-- per-generation caching of fetched link metadata
-- attaching link-preview metadata only for Discord and Mastodon unfurl-style previews
-- preserving Bluesky's configured card/image preview path
-- respecting a user-cleared Home Stream URL instead of reapplying the Settings default
-
-## Standard For Future Work
-
-Use this rule of thumb before calling a feature "well tested":
-
-1. domain validation and normalization paths are covered
-2. orchestration rules are covered with success, warning, and failure behavior
-3. repository behavior is covered for persistence that changes workflow state
-4. real outbound adapters have request/response or error-path tests
-5. frontend tests cover the user-visible decision points and safety messaging
-
-## Recommended PR Quality Gate
-
-For GitHub PR checks, use a quality gate that is strict enough to protect the important paths without blocking contributors on low-value coverage churn.
-
-### Required checks
-
-Every pull request should pass:
-
-- `go test ./...`
-- `govulncheck ./...`
-- `npm test --prefix frontend`
-- `npm run build --prefix frontend`
-- `npm audit --prefix frontend`
-
-If a PR changes dependency manifests, add:
-
-- `go mod tidy` with no diff
-- frontend install lockfile validation as part of normal CI
-
-Current GitHub Actions implementation:
-
-- [quality-gate.yml](./.github/workflows/quality-gate.yml)
-
-### Coverage posture
-
-Do not gate on a single repo-wide number alone. Prefer a mixed policy:
-
-1. hard pass/fail on the test commands above
-2. coverage reporting visible on every PR
-3. reviewer attention on changed-file coverage and risky workflow coverage
-
-Recommended baseline thresholds for automated warning, not immediate failure:
-
-- backend overall coverage should not regress materially from the current baseline
-- frontend statement coverage should stay above `90%`
-- frontend branch coverage should stay above `80%`
-
-Recommended failure conditions:
-
-- a PR lowers coverage in `internal/app`, `internal/duplicate`, `internal/platforms/*`, or `frontend/src/App.tsx` without adding equivalent protection elsewhere
-- a PR changes execution, destination targeting, duplicate protection, Live Now, recovery, or diagnostics behavior without adding or updating tests
-- a PR introduces snapshot-style UI tests instead of behavior-focused assertions for workflow changes
-
-### Risk-based required tests
+- What user-visible or workflow-risk behavior changed?
+- Where is that behavior tested now?
+- Does the test exercise the public behavior instead of an implementation detail?
+- If coverage moved down, was equivalent protection added at a better layer?
 
 Require targeted tests when a PR touches:
 
-- execution orchestration
-  - must update service tests in `internal/app`
-- publisher adapters
-  - must update adapter tests for success and failure paths
-- SQLite repositories
-  - must add or update round-trip persistence tests
-- app-shell bindings
-  - should add or update `app_test.go` coverage when behavior changes
-- `frontend/src/App.tsx`
-  - should add or update interaction tests for the changed user path
+- `internal/app`: service and orchestration tests
+- `internal/platforms/*`: adapter success and failure tests
+- `internal/storage/*`: persistence round-trip tests
+- `app.go` or Wails bindings: app-shell tests when behavior changes
+- `frontend/src/App.tsx`: interaction tests for changed user paths
 
-### What the gate should avoid
+## Coverage Posture
 
-Avoid these anti-patterns:
+Use coverage as a signal, not the only gate.
 
-- blocking PRs only because type-definition files are uncovered
-- forcing contributors to raise total coverage when the PR only refactors internals without changing risk
-- rewarding superficial tests that only assert implementation details or static rendering
+Recommended expectations:
 
-### Suggested review language
+- backend coverage should not regress materially in high-risk packages
+- frontend statement coverage should stay high enough to exercise core workflows
+- branch coverage matters most where UI decisions affect publishing or safety
+- pure type-definition files do not need artificial tests
 
-When a PR changes behavior, reviewers should ask:
-
-- what user-visible or workflow-risk behavior changed?
-- where is that behavior tested now?
-- if coverage moved down, was protection added in a better seam?
-
-## Practical Conclusion
-
-StreamSignal is aligned with good testing practice for its current maturity.
-
-That does not mean the product itself is fully validated from a user-workflow perspective yet. The automated test posture is strong, but we are still using release-readiness and hands-on usability review to confirm that implemented behavior is understandable and trustworthy for real users.
-
-The main strength is that the suite protects the highest-risk behavior first. The biggest remaining opportunities are refinement, not rescue:
-
-- keep lifting root app-shell confidence when new bindings are added
-- keep adding branch-focused frontend tests when new UI decisions appear
-- continue reviewing test quality by risk area instead of chasing a single coverage number
+Avoid rewarding superficial tests that only assert static rendering or internal implementation details.

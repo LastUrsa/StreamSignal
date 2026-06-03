@@ -1,6 +1,6 @@
 # Integration Limitations
 
-This document records practical limits and constraints in StreamSignal's current platform integrations. It is meant to be a product and implementation reference, not an end-user troubleshooting guide.
+This maintainer-facing reference records practical platform constraints that shape StreamSignal's product behavior. It is not a user troubleshooting guide.
 
 ## Discord
 
@@ -49,4 +49,4 @@ This document records practical limits and constraints in StreamSignal's current
 
 ## Why This Exists
 
-These constraints are normal for third-party platform integrations, especially where platform safety, permissions, and anti-abuse rules are involved. This document exists so future UX, roadmap, and support decisions have a clear reference point.
+Third-party posting integrations are shaped by platform permissions, safety rules, and anti-abuse boundaries. Keep this document current when integration behavior changes so future UX, roadmap, and support decisions have a clear reference point.

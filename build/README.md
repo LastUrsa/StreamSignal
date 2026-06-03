@@ -1,35 +1,34 @@
-# Build Directory
+# Build Assets
 
-The build directory is used to house all the build files and assets for your application. 
+This directory contains Wails build assets and platform packaging metadata for StreamSignal.
 
-The structure is:
+## Structure
 
-* bin - Output directory
-* darwin - macOS specific files
-* windows - Windows specific files
+- `appicon.png`: source app icon used by Wails.
+- `bin/`: local build output.
+- `darwin/`: macOS bundle metadata.
+- `windows/`: Windows icon, manifest, version metadata, and NSIS installer files.
 
-## Mac
+## macOS
 
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
+- `darwin/Info.plist`: production app bundle metadata.
+- `darwin/Info.dev.plist`: development app bundle metadata.
 
-The directory contains the following files:
+Build macOS artifacts on macOS:
 
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
+```bash
+wails build -platform darwin/universal
+```
 
 ## Windows
 
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
+- `windows/icon.ico`: Windows app icon.
+- `windows/info.json`: app and installer version metadata.
+- `windows/wails.exe.manifest`: Windows app manifest.
+- `windows/installer/`: NSIS installer files.
 
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+Build a Windows installer:
+
+```bash
+wails build -platform windows/amd64 -nsis
+```

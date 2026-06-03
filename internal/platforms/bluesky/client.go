@@ -8,8 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"StreamSignal/internal/domain"
 	"StreamSignal/internal/platforms/netguard"
@@ -89,7 +93,8 @@ type byteSliceIndex struct {
 
 type richTextFeature struct {
 	Type string `json:"$type"`
-	URI  string `json:"uri"`
+	URI  string `json:"uri,omitempty"`
+	Tag  string `json:"tag,omitempty"`
 }
 
 type liveNowStatusRecord struct {
@@ -150,6 +155,7 @@ func (p *Publisher) PublishPost(ctx context.Context, accountIdentifier string, c
 	if err := p.applyPostLinkMetadata(ctx, session.AccessJWT, &postRecord, metadata); err != nil {
 		return err
 	}
+	applyPostHashtagFacets(&postRecord)
 	if postRecord.Embed == nil {
 		if err := p.applyPostImageMetadata(ctx, session.AccessJWT, &postRecord, metadata); err != nil {
 			return err
@@ -402,6 +408,60 @@ func (p *Publisher) applyPostLinkMetadata(ctx context.Context, accessJWT string,
 		External: card,
 	}
 	return nil
+}
+
+var hashtagRegex = regexp.MustCompile(`(^|\s)(#[^\d\s]\S*)`)
+
+func applyPostHashtagFacets(record *postRecordBody) {
+	matches := hashtagRegex.FindAllStringSubmatchIndex(record.Text, -1)
+	for _, match := range matches {
+		if len(match) < 6 {
+			continue
+		}
+		byteStart := match[4]
+		byteEnd := trimTrailingPunctuationEnd(record.Text, byteStart, match[5])
+		if byteEnd <= byteStart+1 || byteEnd-byteStart > 66 {
+			continue
+		}
+		if overlapsFacet(record.Facets, byteStart, byteEnd) {
+			continue
+		}
+
+		record.Facets = append(record.Facets, richTextFacet{
+			Index: byteSliceIndex{
+				ByteStart: byteStart,
+				ByteEnd:   byteEnd,
+			},
+			Features: []richTextFeature{{
+				Type: "app.bsky.richtext.facet#tag",
+				Tag:  record.Text[byteStart+1 : byteEnd],
+			}},
+		})
+	}
+
+	sort.Slice(record.Facets, func(left int, right int) bool {
+		return record.Facets[left].Index.ByteStart < record.Facets[right].Index.ByteStart
+	})
+}
+
+func trimTrailingPunctuationEnd(text string, byteStart int, byteEnd int) int {
+	for byteEnd > byteStart {
+		r, size := utf8.DecodeLastRuneInString(text[:byteEnd])
+		if !unicode.IsPunct(r) {
+			break
+		}
+		byteEnd -= size
+	}
+	return byteEnd
+}
+
+func overlapsFacet(facets []richTextFacet, byteStart int, byteEnd int) bool {
+	for _, facet := range facets {
+		if byteStart < facet.Index.ByteEnd && byteEnd > facet.Index.ByteStart {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Publisher) applyPostImageMetadata(ctx context.Context, accessJWT string, record *postRecordBody, metadata domain.BlueskyPostMetadata) error {

@@ -117,6 +117,67 @@ func TestPublisherCreatesSessionThenPublishesPost(t *testing.T) {
 	}
 }
 
+func TestPublisherAddsHashtagFacets(t *testing.T) {
+	var createRecordPayload map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/xrpc/com.atproto.server.createSession":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"accessJwt":"jwt-token","did":"did:plc:test"}`))
+		case "/xrpc/com.atproto.repo.createRecord":
+			if err := json.NewDecoder(r.Body).Decode(&createRecordPayload); err != nil {
+				t.Fatalf("decode createRecord payload: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	publisher := NewPublisher(server.URL, server.Client())
+	content := "🚀 #vtuber #music!\nhttps://example.com/live#schedule"
+	if err := publisher.PublishPost(context.Background(), "streamer.test", "app-password", content, domain.BlueskyPostMetadata{
+		StreamURL:   "https://example.com/live#schedule",
+		StreamTitle: "Going Live",
+	}); err != nil {
+		t.Fatalf("publish post: %v", err)
+	}
+
+	record := createRecordPayload["record"].(map[string]any)
+	facets, ok := record["facets"].([]any)
+	if !ok || len(facets) != 3 {
+		t.Fatalf("expected two tag facets and one link facet, got %+v", record["facets"])
+	}
+
+	assertFacet := func(index int, expectedText string, expectedType string, expectedValue string) {
+		t.Helper()
+		facet := facets[index].(map[string]any)
+		byteIndex := facet["index"].(map[string]any)
+		byteStart := int(byteIndex["byteStart"].(float64))
+		byteEnd := int(byteIndex["byteEnd"].(float64))
+		if content[byteStart:byteEnd] != expectedText {
+			t.Fatalf("expected facet %d to cover %q, got %q", index, expectedText, content[byteStart:byteEnd])
+		}
+		features := facet["features"].([]any)
+		feature := features[0].(map[string]any)
+		if feature["$type"] != expectedType {
+			t.Fatalf("unexpected facet %d type: %+v", index, feature)
+		}
+		if expectedType == "app.bsky.richtext.facet#tag" && feature["tag"] != expectedValue {
+			t.Fatalf("unexpected tag facet %d: %+v", index, feature)
+		}
+		if expectedType == "app.bsky.richtext.facet#link" && feature["uri"] != expectedValue {
+			t.Fatalf("unexpected link facet %d: %+v", index, feature)
+		}
+	}
+
+	assertFacet(0, "#vtuber", "app.bsky.richtext.facet#tag", "vtuber")
+	assertFacet(1, "#music", "app.bsky.richtext.facet#tag", "music")
+	assertFacet(2, "https://example.com/live#schedule", "app.bsky.richtext.facet#link", "https://example.com/live#schedule")
+}
+
 func rewriteHostTransport(t *testing.T, base http.RoundTripper, targetBaseURL string, host string) http.RoundTripper {
 	t.Helper()
 	target, err := url.Parse(targetBaseURL)
