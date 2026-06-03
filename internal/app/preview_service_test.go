@@ -95,6 +95,7 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 	items, err := service.Generate(context.Background(), domain.Announcement{
 		StreamTitle:    "Going Live",
 		StreamURL:      "https://example.com/live",
+		Hashtags:       "#explicit",
 		DestinationIDs: []string{"discord-main"},
 	})
 	if err != nil {
@@ -106,7 +107,7 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 	}
 
 	item := items[0]
-	if item.Content != "Going Live https://example.com/live #default" {
+	if item.Content != "Going Live https://example.com/live #explicit" {
 		t.Fatalf("unexpected preview content %q", item.Content)
 	}
 	if item.ValidationState != domain.PreviewValidationValid {

@@ -590,6 +590,27 @@ button:focus-visible {
     gap: 9px;
 }
 
+.destination-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 10px;
+    color: var(--metadata);
+    font-size: 0.78rem;
+}
+
+.compact-segmented-control {
+    flex: 1;
+    min-width: 0;
+}
+
+.compact-segmented-control button {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 8px;
+}
+
 .destination-picker-card {
     display: grid;
     grid-template-columns: auto 28px 1fr;

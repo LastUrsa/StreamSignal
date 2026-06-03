@@ -49,6 +49,7 @@ import {
     toDestinationFormState,
     toDestinationInput,
     usedTemplateVariables,
+    type DestinationEnvironment,
     type DestinationFormState,
     type DestinationInput,
 } from './types/destination';
@@ -97,6 +98,7 @@ type WorkflowToast = {
 
 type LogCategoryFilter = 'all' | 'execution' | 'destinations' | 'settings' | 'preview';
 type LogStatusFilter = 'all' | 'failed' | 'validation' | 'warning' | 'success';
+type HomeDestinationFilter = 'all' | DestinationEnvironment;
 
 type SidebarItem = {
     key: TabKey;
@@ -113,6 +115,12 @@ const LOG_CATEGORY_FILTERS: Array<{ value: LogCategoryFilter; label: string }> =
     { value: 'destinations', label: 'Destinations' },
     { value: 'settings', label: 'Settings' },
     { value: 'preview', label: 'Preview' },
+];
+
+const HOME_DESTINATION_FILTERS: Array<{ value: HomeDestinationFilter; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'production', label: 'Production' },
+    { value: 'test', label: 'Test' },
 ];
 
 const LOG_STATUS_FILTERS: Array<{ value: LogStatusFilter; label: string }> = [
@@ -361,11 +369,11 @@ function toMaskedDestinationForm(form: DestinationFormState): DestinationFormSta
     };
 }
 
-function applyAnnouncementDefaults(announcement: AnnouncementInput, settings: AppSettings, prefillStreamURL = false): AnnouncementInput {
+function applyAnnouncementDefaults(announcement: AnnouncementInput, settings: AppSettings, prefillStreamURL = false, prefillHashtags = false): AnnouncementInput {
     return {
         ...announcement,
         streamURL: prefillStreamURL && announcement.streamURL.trim() === '' ? settings.defaultStreamURL : announcement.streamURL,
-        hashtags: announcement.hashtags.trim() === '' ? settings.defaultHashtags : announcement.hashtags,
+        hashtags: prefillHashtags && announcement.hashtags.trim() === '' ? settings.defaultHashtags : announcement.hashtags,
     };
 }
 
@@ -567,6 +575,7 @@ function App() {
 
     const [announcement, setAnnouncement] = useState<AnnouncementInput>(initialAnnouncement);
     const [selectedDestinationIDs, setSelectedDestinationIDs] = useState<string[]>([]);
+    const [homeDestinationFilter, setHomeDestinationFilter] = useState<HomeDestinationFilter>('all');
     const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -603,6 +612,7 @@ function App() {
     const [workflowToast, setWorkflowToast] = useState<WorkflowToast | null>(null);
     const initializedSelection = useRef(false);
     const streamURLTouched = useRef(false);
+    const hashtagsTouched = useRef(false);
     const workflowToastTimeout = useRef<number | null>(null);
     const discordThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
@@ -654,7 +664,7 @@ function App() {
         try {
             const current = await getSettings();
             setSettings(current);
-            setAnnouncement((existing) => applyAnnouncementDefaults(existing, current, !streamURLTouched.current));
+            setAnnouncement((existing) => applyAnnouncementDefaults(existing, current, !streamURLTouched.current, !hashtagsTouched.current));
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to load settings.');
             setSettingsError(message);
@@ -703,13 +713,19 @@ function App() {
         setPreviewError(null);
 
         try {
-            if (destinations.length > 0 && selectedDestinationIDs.length === 0) {
+            if (configuredDestinationCount > 0 && visibleDestinationCount === 0) {
+                setPreviewError(`No ${destinationFilterLabel.toLowerCase()} destinations are available for this session.`);
+                setPreviewItems([]);
+                return;
+            }
+
+            if (configuredDestinationCount > 0 && activeSelectedDestinationIDs.length === 0) {
                 setPreviewError('Select at least one destination for this session before generating previews.');
                 setPreviewItems([]);
                 return;
             }
 
-            const preview = await generatePreview(announcement, selectedDestinationIDs);
+            const preview = await generatePreview(announcement, activeSelectedDestinationIDs);
             setPreviewItems(asArray(preview));
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to generate previews.');
@@ -725,14 +741,21 @@ function App() {
         setExecutionError(null);
 
         try {
-            if (destinations.length > 0 && selectedDestinationIDs.length === 0) {
+            if (configuredDestinationCount > 0 && visibleDestinationCount === 0) {
+                setExecutionError(`No ${destinationFilterLabel.toLowerCase()} destinations are available for this session.`);
+                setExecutionSummary(null);
+                setPendingGoLiveConfirmation(false);
+                return;
+            }
+
+            if (configuredDestinationCount > 0 && activeSelectedDestinationIDs.length === 0) {
                 setExecutionError('Select at least one destination for this session before running this action.');
                 setExecutionSummary(null);
                 setPendingGoLiveConfirmation(false);
                 return;
             }
 
-            const summary = await goLive(announcement, selectedDestinationIDs);
+            const summary = await goLive(announcement, activeSelectedDestinationIDs);
             if (summary.requiresDuplicateConfirmation) {
                 setPendingGoLiveConfirmation(true);
                 setExecutionSummary(summary);
@@ -755,7 +778,7 @@ function App() {
         setExecutionLoading('go_live');
         setExecutionError(null);
         try {
-            const summary = await forceGoLive(announcement, selectedDestinationIDs);
+            const summary = await forceGoLive(announcement, activeSelectedDestinationIDs);
             setPendingGoLiveConfirmation(false);
             setExecutionSummary(summary);
             showToast(publishStatusMessage(summary), summary.status === 'SUCCESS' ? 'success' : 'warning');
@@ -773,13 +796,19 @@ function App() {
         setPendingGoLiveConfirmation(false);
 
         try {
-            if (destinations.length > 0 && selectedDestinationIDs.length === 0) {
+            if (configuredDestinationCount > 0 && visibleDestinationCount === 0) {
+                setExecutionError(`No ${destinationFilterLabel.toLowerCase()} destinations are available for this session.`);
+                setExecutionSummary(null);
+                return;
+            }
+
+            if (configuredDestinationCount > 0 && activeSelectedDestinationIDs.length === 0) {
                 setExecutionError('Select at least one destination for this session before running this action.');
                 setExecutionSummary(null);
                 return;
             }
 
-            const summary = await endStream(announcement, selectedDestinationIDs);
+            const summary = await endStream(announcement, activeSelectedDestinationIDs);
             setExecutionSummary(summary);
             showToast(publishStatusMessage(summary), summary.status === 'SUCCESS' ? 'success' : 'warning');
             await refreshPendingLiveNowSessions();
@@ -996,7 +1025,7 @@ function App() {
         try {
             const saved = await saveSettings(settings);
             setSettings(saved);
-            setAnnouncement((existing) => applyAnnouncementDefaults(existing, saved, !streamURLTouched.current));
+            setAnnouncement((existing) => applyAnnouncementDefaults(existing, saved, !streamURLTouched.current, !hashtagsTouched.current));
             setSettingsStatus(null);
             showToast('Settings saved.');
         } catch (err: unknown) {
@@ -1027,6 +1056,9 @@ function App() {
     function updateAnnouncement<K extends keyof AnnouncementInput>(field: K, value: AnnouncementInput[K]) {
         if (field === 'streamURL') {
             streamURLTouched.current = true;
+        }
+        if (field === 'hashtags') {
+            hashtagsTouched.current = true;
         }
         setAnnouncement((current) => ({
             ...current,
@@ -1237,12 +1269,26 @@ function App() {
         );
     }
 
+    function selectVisibleDestinations() {
+        const visibleIDs = visibleDestinations.map((destination) => destination.id);
+        setSelectedDestinationIDs((current) => Array.from(new Set([...current, ...visibleIDs])));
+    }
+
+    function clearVisibleDestinations() {
+        const visibleIDs = new Set(visibleDestinations.map((destination) => destination.id));
+        setSelectedDestinationIDs((current) => current.filter((id) => !visibleIDs.has(id)));
+    }
+
     const configuredDestinationCount = destinations.length;
-    const selectedDestinationCount = selectedDestinationIDs.length;
-    const selectedDestinationIDSet = new Set(selectedDestinationIDs);
-    const selectedDestinations = destinations.filter((destination) => selectedDestinationIDSet.has(destination.id));
+    const visibleDestinations = destinations.filter((destination) => homeDestinationFilter === 'all' || destinationEnvironmentFrom(destination) === homeDestinationFilter);
+    const visibleDestinationCount = visibleDestinations.length;
+    const activeSelectedDestinationIDs = selectedDestinationIDs.filter((id) => visibleDestinations.some((destination) => destination.id === id));
+    const selectedDestinationCount = activeSelectedDestinationIDs.length;
+    const selectedDestinationIDSet = new Set(activeSelectedDestinationIDs);
+    const selectedDestinations = visibleDestinations.filter((destination) => selectedDestinationIDSet.has(destination.id));
     const selectedEndStreamPostCount = selectedDestinations.filter((destination) => toDestinationFormState(destination).endStreamEnabled).length;
     const selectedLiveNowClearCount = pendingLiveNowSessions.filter((session) => selectedDestinationIDSet.has(session.destinationID)).length;
+    const destinationFilterLabel = HOME_DESTINATION_FILTERS.find((filter) => filter.value === homeDestinationFilter)?.label ?? 'All';
     const sortedLogs = newestFirstLogs(logs);
     const filteredLogs = sortedLogs.filter((entry) => {
         const matchesCategory = logCategoryFilter === 'all' || logCategoryForAction(entry.action) === logCategoryFilter;
@@ -1555,7 +1601,7 @@ function App() {
         <main className="app-shell">
             <aside className="app-sidebar" aria-label="Primary navigation"><div className="sidebar-brand-stack"><div className="sidebar-brand"><img src={streamSignalIcon} alt="" className="app-logo" aria-hidden="true" /><div><h1>StreamSignal</h1></div></div>{SHOW_DEBUG_WORKFLOW_UI ? <span className="debug-build-badge">Debug Build</span> : null}</div><nav className="sidebar-nav">{sidebarItems.map((item) => { const Icon = item.icon; return <button key={item.key} type="button" className={selectedTab === item.key ? 'sidebar-nav-item active' : 'sidebar-nav-item'} onClick={() => setSelectedTab(item.key)} aria-current={selectedTab === item.key ? 'page' : undefined}><Icon aria-hidden="true" /><span>{item.label}</span>{item.badge ? <strong className="nav-badge">{item.badge}</strong> : null}</button>; })}</nav></aside>
             <div className="app-frame">
-                {selectedTab === 'home' ? <section className="content-stack home-dashboard"><div className="dashboard-top-grid"><article className="panel dashboard-panel session-editor"><div className="panel-header compact-header"><div><h2>Live Session</h2><p>Configure the announcement once, then preview and publish from the same workspace.</p></div><button type="button" className="ghost-button icon-button" aria-label="Reset" onClick={() => { streamURLTouched.current = false; setAnnouncement(applyAnnouncementDefaults(initialAnnouncement, settings, true)); setPreviewError(null); setPreviewItems([]); }}><RotateCcw aria-hidden="true" /></button></div><form className="announcement-form compact-form" onSubmit={onPreviewSubmit}><div className="form-grid"><div className="field"><div className="field-label-row"><label htmlFor="stream-title">Stream Title</label><button type="button" className="info-tooltip" aria-label="Stream Title information">i<span role="tooltip">Required for Bluesky Live Now Use</span></button></div><input id="stream-title" aria-label="Stream Title" value={announcement.streamTitle} onChange={(event) => updateAnnouncement('streamTitle', event.target.value)} placeholder="Late Night Variety" /></div><label className="field"><span>Stream URL</span><input aria-label="Stream URL" value={announcement.streamURL} onChange={(event) => updateAnnouncement('streamURL', event.target.value)} placeholder="https://example.com/live" /></label><label className="field"><span>Category / Game</span><input aria-label="Category / Game" value={announcement.category} onChange={(event) => updateAnnouncement('category', event.target.value)} placeholder="Music, FFXIV, Variety..." /></label><label className="field"><span>Hashtags</span><input aria-label="Hashtags" value={announcement.hashtags} onChange={(event) => updateAnnouncement('hashtags', event.target.value)} placeholder="#vtuber #music" /></label></div><label className="field"><span>Optional Message</span><textarea aria-label="Optional Message" value={announcement.message} onChange={(event) => updateAnnouncement('message', event.target.value)} placeholder="What are we getting into tonight?" rows={3} /></label><div className="workflow-actions command-actions"><button type="submit" className="ghost-button" disabled={previewLoading}><ClipboardList aria-hidden="true" />{previewLoading ? 'Generating...' : 'Generate Preview'}</button><button type="button" className="primary-button gold-button" onClick={() => void runGoLive()} disabled={executionLoading !== null}><Zap aria-hidden="true" />{executionLoading === 'go_live' ? 'Running Go Live...' : 'Go Live'}</button><span className="button-tooltip-wrap"><button type="button" className="ghost-button" onClick={() => void onEndStream()} disabled={executionLoading !== null} aria-describedby="end-stream-action-hint"><Square aria-hidden="true" />{executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}</button><span id="end-stream-action-hint" className="button-tooltip" role="tooltip">{selectedDestinationCount > 0 ? endStreamActionHint(selectedEndStreamPostCount, selectedLiveNowClearCount) : 'Select destinations to enable End Stream actions.'}</span></span></div></form></article><article className="panel dashboard-panel preview-panel"><div className="panel-header compact-header"><div><h2>Preview Content</h2><p>Validate destination-specific messages before publishing.</p></div><span>{previewItems.length} messages</span></div>{previewError ? <p className="error-banner">{previewError}</p> : null}{previewItems.length === 0 ? <div className="empty-state compact-empty-state"><h3>No previews yet</h3><p>{destinations.length === 0 ? 'Add at least one destination first, then generate a preview to see per-destination content.' : selectedDestinationIDs.length === 0 ? 'Select at least one destination for this session, then generate a preview to see per-destination content.' : 'Generate a preview to validate messages before publishing.'}</p></div> : <div className="preview-list dense-preview-list">{previewItems.map(renderPreviewItem)}</div>}</article><aside className="dashboard-side-stack"><section className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Destinations</h2><p>{configuredDestinationCount === 0 ? 'Add destinations first.' : `${selectedDestinationCount} of ${configuredDestinationCount} selected.`}</p></div>{configuredDestinationCount > 0 ? <div className="session-destination-actions"><button type="button" className="ghost-button small-button" onClick={() => setSelectedDestinationIDs(destinations.map((destination) => destination.id))}>Select All</button><button type="button" className="ghost-button small-button" onClick={() => setSelectedDestinationIDs([])}>Clear All</button></div> : null}</div><div className="destination-picker-list">{destinations.length === 0 ? <div className="empty-state compact-empty-state"><h3>No destinations yet</h3><p>Create one in Destinations to enable previews and publishing.</p></div> : destinations.map((destination) => <label key={destination.id} className={selectedDestinationIDs.includes(destination.id) ? 'destination-picker-card selected' : 'destination-picker-card'}><input type="checkbox" aria-label={destination.name} checked={selectedDestinationIDs.includes(destination.id)} onChange={() => toggleSessionDestination(destination.id)} /><PlatformIcon platform={destination.platform} /><span><strong>{destination.name}</strong><small>{destinationSendToMetadata(destination)}</small></span></label>)}</div></section><section className={pendingLiveNowSessions.length > 0 ? 'panel recovery-card recovery-pending' : 'panel recovery-card'}><ShieldAlert aria-hidden="true" /><div><strong>Recovery Status</strong><p>{pendingLiveNowSessions.length > 0 ? `${pendingLiveNowSessions.length} pending Live Now recovery item${pendingLiveNowSessions.length === 1 ? '' : 's'}.` : 'No pending Live Now recovery.'}</p></div><button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('settings')}>Open Settings</button></section></aside></div>{renderExecutionPanel()}{SHOW_DEBUG_WORKFLOW_UI ? <article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Recent Activity</h2></div>{SHOW_DEBUG_WORKFLOW_UI ? <button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('logs')}>View Logs</button> : null}</div>{recentActivity.length === 0 ? <div className="empty-state compact-empty-state"><h3>No recent activity</h3><p>Preview, publish, recovery, and settings events will appear here.</p></div> : <div className="compact-list">{recentActivity.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="activity-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination} · {entry.message}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><StatusBadge status={entry.status} /></section>; })}</div>}</article> : null}</section> : null}
+                {selectedTab === 'home' ? <section className="content-stack home-dashboard"><div className="dashboard-top-grid"><article className="panel dashboard-panel session-editor"><div className="panel-header compact-header"><div><h2>Live Session</h2><p>Configure the announcement once, then preview and publish from the same workspace.</p></div><button type="button" className="ghost-button icon-button" aria-label="Reset" onClick={() => { streamURLTouched.current = false; hashtagsTouched.current = false; setAnnouncement(applyAnnouncementDefaults(initialAnnouncement, settings, true, true)); setPreviewError(null); setPreviewItems([]); }}><RotateCcw aria-hidden="true" /></button></div><form className="announcement-form compact-form" onSubmit={onPreviewSubmit}><div className="form-grid"><div className="field"><div className="field-label-row"><label htmlFor="stream-title">Stream Title</label><button type="button" className="info-tooltip" aria-label="Stream Title information">i<span role="tooltip">Required for Bluesky Live Now Use</span></button></div><input id="stream-title" aria-label="Stream Title" value={announcement.streamTitle} onChange={(event) => updateAnnouncement('streamTitle', event.target.value)} placeholder="Late Night Variety" /></div><label className="field"><span>Stream URL</span><input aria-label="Stream URL" value={announcement.streamURL} onChange={(event) => updateAnnouncement('streamURL', event.target.value)} placeholder="https://example.com/live" /></label><label className="field"><span>Category / Game</span><input aria-label="Category / Game" value={announcement.category} onChange={(event) => updateAnnouncement('category', event.target.value)} placeholder="Music, FFXIV, Variety..." /></label><label className="field"><span>Hashtags</span><input aria-label="Hashtags" value={announcement.hashtags} onChange={(event) => updateAnnouncement('hashtags', event.target.value)} placeholder="#vtuber #music" /></label></div><label className="field"><span>Optional Message</span><textarea aria-label="Optional Message" value={announcement.message} onChange={(event) => updateAnnouncement('message', event.target.value)} placeholder="What are we getting into tonight?" rows={3} /></label><div className="workflow-actions command-actions"><button type="submit" className="ghost-button" disabled={previewLoading}><ClipboardList aria-hidden="true" />{previewLoading ? 'Generating...' : 'Generate Preview'}</button><button type="button" className="primary-button gold-button" onClick={() => void runGoLive()} disabled={executionLoading !== null}><Zap aria-hidden="true" />{executionLoading === 'go_live' ? 'Running Go Live...' : 'Go Live'}</button><span className="button-tooltip-wrap"><button type="button" className="ghost-button" onClick={() => void onEndStream()} disabled={executionLoading !== null} aria-describedby="end-stream-action-hint"><Square aria-hidden="true" />{executionLoading === 'end_stream' ? 'Ending Stream...' : 'End Stream'}</button><span id="end-stream-action-hint" className="button-tooltip" role="tooltip">{selectedDestinationCount > 0 ? endStreamActionHint(selectedEndStreamPostCount, selectedLiveNowClearCount) : 'Select destinations to enable End Stream actions.'}</span></span></div></form></article><article className="panel dashboard-panel preview-panel"><div className="panel-header compact-header"><div><h2>Preview Content</h2><p>Validate destination-specific messages before publishing.</p></div><span>{previewItems.length} messages</span></div>{previewError ? <p className="error-banner">{previewError}</p> : null}{previewItems.length === 0 ? <div className="empty-state compact-empty-state"><h3>No previews yet</h3><p>{destinations.length === 0 ? 'Add at least one destination first, then generate a preview to see per-destination content.' : activeSelectedDestinationIDs.length === 0 ? 'Select at least one destination for this session, then generate a preview to see per-destination content.' : 'Generate a preview to validate messages before publishing.'}</p></div> : <div className="preview-list dense-preview-list">{previewItems.map(renderPreviewItem)}</div>}</article><aside className="dashboard-side-stack"><section className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Destinations</h2><p>{configuredDestinationCount === 0 ? 'Add destinations first.' : `${selectedDestinationCount} of ${visibleDestinationCount} ${destinationFilterLabel.toLowerCase()} selected.`}</p></div>{configuredDestinationCount > 0 ? <div className="session-destination-actions"><button type="button" className="ghost-button small-button" onClick={selectVisibleDestinations}>Select All</button><button type="button" className="ghost-button small-button" onClick={clearVisibleDestinations}>Clear All</button></div> : null}</div><div className="destination-filter-bar"><span>Show</span><div className="segmented-control compact-segmented-control" role="group" aria-label="Destination environment filter">{HOME_DESTINATION_FILTERS.map((filter) => <button key={filter.value} type="button" className={homeDestinationFilter === filter.value ? 'active' : ''} onClick={() => setHomeDestinationFilter(filter.value)}>{filter.label}</button>)}</div></div><div className="destination-picker-list">{destinations.length === 0 ? <div className="empty-state compact-empty-state"><h3>No destinations yet</h3><p>Create one in Destinations to enable previews and publishing.</p></div> : visibleDestinations.length === 0 ? <div className="empty-state compact-empty-state"><h3>No {destinationFilterLabel} destinations</h3><p>Switch the filter or create a {destinationFilterLabel.toLowerCase()} destination in Destinations.</p></div> : visibleDestinations.map((destination) => <label key={destination.id} className={selectedDestinationIDs.includes(destination.id) ? 'destination-picker-card selected' : 'destination-picker-card'}><input type="checkbox" aria-label={destination.name} checked={selectedDestinationIDs.includes(destination.id)} onChange={() => toggleSessionDestination(destination.id)} /><PlatformIcon platform={destination.platform} /><span><strong>{destination.name}</strong><small>{destinationSendToMetadata(destination)}</small></span></label>)}</div></section><section className={pendingLiveNowSessions.length > 0 ? 'panel recovery-card recovery-pending' : 'panel recovery-card'}><ShieldAlert aria-hidden="true" /><div><strong>Recovery Status</strong><p>{pendingLiveNowSessions.length > 0 ? `${pendingLiveNowSessions.length} pending Live Now recovery item${pendingLiveNowSessions.length === 1 ? '' : 's'}.` : 'No pending Live Now recovery.'}</p></div><button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('settings')}>Open Settings</button></section></aside></div>{renderExecutionPanel()}{SHOW_DEBUG_WORKFLOW_UI ? <article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Recent Activity</h2></div>{SHOW_DEBUG_WORKFLOW_UI ? <button type="button" className="ghost-button small-button" onClick={() => setSelectedTab('logs')}>View Logs</button> : null}</div>{recentActivity.length === 0 ? <div className="empty-state compact-empty-state"><h3>No recent activity</h3><p>Preview, publish, recovery, and settings events will appear here.</p></div> : <div className="compact-list">{recentActivity.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="activity-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination} · {entry.message}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><StatusBadge status={entry.status} /></section>; })}</div>}</article> : null}</section> : null}
                 {selectedTab === 'destinations' ? <section className="content-stack destinations-workspace"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Saved Destinations</h2><p>Manage integrations quickly, or load one into the editor.</p></div><div className="form-actions"><span>{configuredDestinationCount} configured</span><button type="button" className="ghost-button" onClick={() => resetDestinationForm()}><Send aria-hidden="true" />New Destination</button></div></div>{destinationError ? <p className="error-banner">{destinationError}</p> : null}<div className="destination-card-grid">{destinations.length === 0 ? <div className="empty-state"><h3>No destinations yet</h3><p>Create a destination to start building platform-specific previews and go-live targets.</p></div> : destinations.map((item) => <section key={item.id} className={destinationForm.id === item.id ? 'destination-manage-card active' : 'destination-manage-card'}><div className="entity-row"><PlatformIcon platform={item.platform} /><div><strong>{item.name}</strong><span>{item.platform} · {destinationEnvironmentLabel(destinationEnvironmentFrom(item))}</span></div></div><div className="quick-action-row"><button type="button" className="ghost-button small-button" onClick={() => editDestination(item)}>Edit</button><button type="button" className="ghost-button icon-button" aria-label="Duplicate" onClick={() => duplicateDestination(item)}><Copy aria-hidden="true" /></button><button type="button" className="ghost-button icon-button" aria-label="Test" onClick={() => void onTestSavedDestination(item)} disabled={destinationConnectionLoading}><Play aria-hidden="true" /></button><button type="button" className="danger-button icon-button" aria-label="Delete" onClick={() => void onDeleteSavedDestination(item)}><Trash2 aria-hidden="true" /></button></div></section>)}</div></article><div className="destination-editor-grid"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>{destinationForm.id ? 'Edit Destination' : 'New Destination'}</h2><p>{destinationForm.id ? 'Save changes to the selected integration.' : 'Create a new publishing integration.'}</p><div className="destination-mode-indicator">{destinationForm.id ? `Editing: ${destinationForm.name || 'Selected destination'}` : 'New destination'}</div></div><StatusBadge status={destinationConnectionResult?.state ?? 'pending'} label={destinationConnectionResult ? destinationConnectionResult.state : 'Not tested'} /></div><form className="announcement-form" onSubmit={onDestinationSubmit}><section className="config-section open-section"><div className="config-section-title"><span><ExternalLink aria-hidden="true" /> Connection</span><small>Platform and credential details</small></div><div className="config-section-body"><div className="form-grid"><label className="field"><span>Platform</span><select aria-label="Platform" value={destinationForm.platform} onChange={(event) => { setDestinationSecrets({ discordWebhookKey: '', blueskyCredentialKey: '', mastodonCredentialKey: '' }); setDestinationConnectionResult(null); setDestinationForm((current) => ({ ...createEmptyDestinationForm(event.target.value as DestinationInput['platform']), id: current.id, name: current.name, environment: current.environment, createdAt: current.createdAt, updatedAt: current.updatedAt })); }}><option value="discord">Discord</option><option value="bluesky">Bluesky</option><option value="mastodon">Mastodon</option></select></label><label className="field"><span>Friendly Name</span><input aria-label="Friendly Name" value={destinationForm.name} onChange={(event) => updateDestination('name', event.target.value)} placeholder="Main Discord" /></label><label className="field"><span>Destination Type</span><select aria-label="Destination Type" value={destinationForm.environment} onChange={(event) => updateDestination('environment', event.target.value as DestinationFormState['environment'])}><option value="production">Production</option><option value="test">Test</option></select></label></div>{renderPlatformConnectionFields()}</div></section><section className="config-section open-section"><div className="config-section-title"><span><FileText aria-hidden="true" /> Template</span><small>Message composition and token insertion</small></div><div className="config-section-body"><label className="field"><span>{destinationTemplateLabel(destinationForm.platform)}</span><textarea ref={templateInputRef} aria-label={destinationTemplateLabel(destinationForm.platform)} value={destinationForm.template} onFocus={() => { activeTemplateInputRef.current = templateInputRef.current; }} onChange={(event) => updateDestination('template', event.target.value)} placeholder="{{stream_title}}" rows={5} /></label><section className="mini-panel template-helper-panel"><div className="template-helper-header"><h3>How This Template Works</h3><button type="button" className="ghost-button" onClick={() => updateDestination('template', defaultTemplateForPlatform(destinationForm.platform))}>Reset to Starter Template</button></div><p>Only fields referenced in this template will appear in the published post.</p><p>Uses: {usedTemplateVariables(destinationForm.template).length > 0 ? usedTemplateVariables(destinationForm.template).join(', ') : 'no announcement fields yet'}</p>{destinationHelperStatus ? <p className="success-copy">{destinationHelperStatus}</p> : null}<div className="template-token-list" role="list" aria-label="Available template variables">{TEMPLATE_VARIABLES.map((variable) => <button key={variable} type="button" className="template-token" onClick={() => insertTemplateVariable(variable)}>{variable}</button>)}</div></section></div></section>{renderAdvancedFields()}<div className="action-cluster-main sticky-editor-actions"><button type="submit" className="primary-button gold-button">{destinationForm.id ? 'Save Changes' : 'Create Destination'}</button><button type="button" className="ghost-button" onClick={() => void onTestDestinationConnection()} disabled={destinationConnectionLoading}>{destinationConnectionLoading ? 'Testing Connection...' : `Test ${credentialSetupLabel(destinationForm.platform)}`}</button><button type="button" className="danger-button" onClick={() => void onDeleteDestination()} disabled={!destinationForm.id}>Delete</button></div>{destinationConnectionResult ? <p className={destinationConnectionResult.state === 'SUCCESS' ? 'success-banner' : 'error-banner'}>{destinationConnectionResult.message}</p> : null}</form></article><aside className="panel dashboard-panel setup-helper-panel" aria-label="Guided Credential Setup"><div className="panel-header compact-header"><div><h2>{platformLabel(destinationForm.platform)} Setup</h2><p>Use these steps, then test before saving.</p></div></div><div className="guided-setup-list">{guidedSetupSteps(destinationForm.platform).map((step) => <section className="guided-setup-step" key={step.title}><strong>{step.title}</strong><p>{step.detail}</p></section>)}</div></aside></div></section> : null}
                 {selectedTab === 'settings' ? <section className="content-stack"><article className="panel dashboard-panel settings-page-panel"><div className="panel-header compact-header"><div><h2>Settings</h2><p>Configure defaults and recovery behavior.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label={`${pendingLiveNowSessions.length} Pending Recovery`} /> : null}</div>{settingsError ? <p className="error-banner">{settingsError}</p> : null}<section className="two-column-layout"><article className="panel settings-panel"><div className="panel-header compact-header"><div><h2>Application Defaults</h2><p>Defaults prefill new sessions and protect against accidental duplicate publishes.</p></div></div><form className="announcement-form settings-grid" onSubmit={onSettingsSubmit}><label className="field checkbox-field"><input aria-label="Duplicate Protection Enabled" type="checkbox" checked={settings.duplicateProtectionEnabled} onChange={(event) => updateSettings('duplicateProtectionEnabled', event.target.checked)} /><span>Duplicate Protection Enabled<small>Warns when a similar Go Live action happens inside the duplicate window.</small></span></label><label className="field"><span>Default Stream URL</span><input aria-label="Default Stream URL" value={settings.defaultStreamURL} onChange={(event) => updateSettings('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /><small>Prefills new Home sessions until edited.</small></label><label className="field"><span>Default Hashtags</span><input aria-label="Default Hashtags" value={settings.defaultHashtags} onChange={(event) => updateSettings('defaultHashtags', event.target.value)} placeholder="#vtuber #music" /><small>Applied to new announcements until changed.</small></label><label className="field"><span>Duplicate Window (Minutes)</span><input aria-label="Duplicate Window (Minutes)" type="number" min={1} value={settings.duplicateWindowMinutes} onChange={(event) => updateSettings('duplicateWindowMinutes', Number(event.target.value))} /><small>How long StreamSignal watches for repeated publish attempts.</small></label><button type="submit" className="primary-button gold-button">Save Settings</button></form></article><article className={pendingLiveNowSessions.length > 0 ? 'panel recovery-center recovery-pending' : 'panel recovery-center'}><div className="panel-header compact-header"><div><h2>Recovery Center</h2><h3>Live Now Recovery</h3><p>Clear Bluesky Live Now states left active after interruptions.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label="Pending Recovery" /> : null}</div>{recoveryError ? <p className="error-banner">{recoveryError}</p> : null}{recoveryStatus ? <p className="success-banner">{recoveryStatus}</p> : null}{pendingLiveNowSessions.length === 0 ? <div className="empty-state compact-empty-state"><h3>No pending Live Now sessions.</h3><p>When recovery is needed, each session will appear here with a one-click clear action.</p></div> : <div className="compact-list">{pendingLiveNowSessions.map((session) => <section className="activity-card" key={session.destinationID}><PlatformIcon platform={session.platform} /><div><strong>{session.destinationName}</strong><p>{session.streamTitle || 'Untitled stream'} · {session.streamURL}</p><time dateTime={session.startedAt}>{session.startedAt}</time></div><button type="button" className="primary-button gold-button" onClick={() => void onClearPendingLiveNow(session.destinationID)} disabled={recoveryLoadingId !== null}>{recoveryLoadingId === session.destinationID ? 'Recovering Live Now...' : 'Recover and Clear Live Now'}</button></section>)}</div>}</article><article className="panel legal-notice-card"><div className="panel-header compact-header"><div><h2>Legal Notices</h2><p>{LEGAL_NOTICE}</p></div></div></article></section></article></section> : null}
                 {SHOW_DEBUG_WORKFLOW_UI && selectedTab === 'logs' ? <section className="content-stack"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Logs</h2><p>Newest activity first, optimized for quick scanning.</p></div><span>{filteredLogs.length} of {logs.length} recent entries</span></div>{logsError ? <p className="error-banner">{logsError}</p> : null}<div className="log-toolbar"><button type="button" className="ghost-button" onClick={() => void refreshLogs()}><RefreshCw aria-hidden="true" />Refresh Logs</button><button type="button" className="primary-button gold-button" onClick={() => void onCopyDiagnostics()}><ListChecks aria-hidden="true" />Copy Diagnostics</button></div><div className="log-filter-panel" aria-label="Log filters"><div className="log-filter-group"><span>Category</span><div className="segmented-control" role="group" aria-label="Log category filter">{LOG_CATEGORY_FILTERS.map((filter) => <button key={filter.value} type="button" className={logCategoryFilter === filter.value ? 'active' : ''} onClick={() => setLogCategoryFilter(filter.value)}>{filter.label}</button>)}</div></div><div className="log-filter-group"><span>Status</span><div className="segmented-control" role="group" aria-label="Log status filter">{LOG_STATUS_FILTERS.map((filter) => <button key={filter.value} type="button" className={logStatusFilter === filter.value ? 'active' : ''} onClick={() => setLogStatusFilter(filter.value)}>{filter.label}</button>)}</div></div></div>{logs.length === 0 ? <div className="empty-state"><h3>No logs yet</h3><p>Workflow activity and validation outcomes will appear here as you use the app.</p></div> : filteredLogs.length === 0 ? <div className="empty-state"><h3>No matching logs</h3><p>Adjust the filters to see more recent activity.</p></div> : <div className="log-card-list">{filteredLogs.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="log-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><p>{entry.message}</p><StatusBadge status={entry.status} /></section>; })}</div>}</article></section> : null}

@@ -303,6 +303,35 @@ describe('App', () => {
         });
     });
 
+    it('respects user-cleared default hashtags when generating previews', async () => {
+        mockedGetSettings.mockResolvedValue({
+            defaultStreamURL: 'https://example.com/live',
+            defaultHashtags: '#vtuber',
+            duplicateProtectionEnabled: true,
+            duplicateWindowMinutes: 10,
+        });
+        mockedGeneratePreview.mockResolvedValue([]);
+
+        render(<App />);
+
+        const hashtags = await screen.findByLabelText('Hashtags');
+        expect(hashtags).toHaveValue('#vtuber');
+
+        fireEvent.change(hashtags, {
+            target: { value: '' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+        await waitFor(() => {
+            expect(mockedGeneratePreview).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    hashtags: '',
+                }),
+                [],
+            );
+        });
+    });
+
     it('does not overwrite Home fields typed before settings finish loading', async () => {
         const pendingSettings = deferred<AppSettings>();
         mockedGetSettings.mockReturnValue(pendingSettings.promise);
@@ -402,6 +431,56 @@ describe('App', () => {
                     hashtags: '',
                 },
                 ['discord-main'],
+            );
+        });
+    });
+
+    it('filters Home destination selection by environment for preview generation', async () => {
+        mockedListDestinations.mockResolvedValue([
+            {
+                id: 'discord-main',
+                platform: 'discord',
+                name: 'Main Discord',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"environment":"production","webhookKey":"discord/main"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+            {
+                id: 'discord-test',
+                platform: 'discord',
+                name: 'Test Discord',
+                enabled: true,
+                template: '{{stream_title}}',
+                configJSON: '{"environment":"test","webhookKey":"discord/test"}',
+                createdAt: '',
+                updatedAt: '',
+            },
+        ]);
+
+        render(<App />);
+
+        expect(await screen.findByText('2 of 2 all selected.')).toBeInTheDocument();
+        const environmentFilter = screen.getByRole('group', { name: 'Destination environment filter' });
+        fireEvent.click(within(environmentFilter).getByRole('button', { name: 'Test' }));
+
+        expect(screen.getByText('1 of 1 test selected.')).toBeInTheDocument();
+        expect(screen.getByText('Test Discord')).toBeInTheDocument();
+        expect(screen.queryByText('Main Discord')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+        await waitFor(() => {
+            expect(mockedGeneratePreview).toHaveBeenCalledWith(
+                {
+                    streamTitle: '',
+                    streamURL: '',
+                    category: '',
+                    message: '',
+                    hashtags: '',
+                },
+                ['discord-test'],
             );
         });
     });
