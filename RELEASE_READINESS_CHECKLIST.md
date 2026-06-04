@@ -4,6 +4,8 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
+Current release target: `0.3.1`.
+
 Ship StreamSignal in a way that is:
 
 - safe for real user credentials

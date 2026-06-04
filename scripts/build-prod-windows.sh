@@ -3,10 +3,15 @@ set -euo pipefail
 
 launch=false
 launch_env=""
+nsis=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --launch)
             launch=true
+            shift
+            ;;
+        --nsis)
+            nsis=true
             shift
             ;;
         --env)
@@ -47,6 +52,9 @@ if [[ "$launch" == true ]]; then
 fi
 if [[ -n "$launch_env" ]]; then
     args+=(-LaunchEnvironment "$launch_env")
+fi
+if [[ "$nsis" == true ]]; then
+    args+=(-Nsis)
 fi
 
 powershell.exe "${args[@]}"

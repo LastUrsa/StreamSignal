@@ -74,6 +74,12 @@ Build the Windows desktop app from WSL:
 ./scripts/build-prod-windows.sh
 ```
 
+Build the Windows NSIS installer from WSL:
+
+```bash
+./scripts/build-prod-windows.sh --nsis
+```
+
 Build and launch it for local review:
 
 ```bash
