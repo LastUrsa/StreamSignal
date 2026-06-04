@@ -104,6 +104,7 @@ type postHistoryRepositoryStub struct {
 		hash          string
 		postedAt      time.Time
 	}
+	recordErr error
 }
 
 func (s *postHistoryRepositoryStub) Record(_ context.Context, destinationID string, renderedContent string, hash string, postedAt time.Time) error {
@@ -113,6 +114,9 @@ func (s *postHistoryRepositoryStub) Record(_ context.Context, destinationID stri
 		hash          string
 		postedAt      time.Time
 	}{destinationID, renderedContent, hash, postedAt})
+	if s.recordErr != nil {
+		return s.recordErr
+	}
 	return nil
 }
 
@@ -219,6 +223,14 @@ func TestExecutionServiceGoLiveIsolatesDestinationFailures(t *testing.T) {
 
 func TestExecutionServiceGoLiveUsesSelectedDestinationGroup(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
+	destRepo.items["discord-main"] = domain.Destination{
+		ID:         "discord-main",
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+	}
 	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
 	history := &postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}}
 	sessions := &liveNowSessionRepositoryExecutionStub{}
@@ -234,7 +246,7 @@ func TestExecutionServiceGoLiveUsesSelectedDestinationGroup(t *testing.T) {
 					Name:       "Main Discord",
 					Enabled:    true,
 					Template:   "{{stream_title}}",
-					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+					ConfigJSON: `{"webhookKey":"secret://streamsignal/destinations/discord-main/discord-webhook"}`,
 				},
 				{
 					ID:         "discord-disabled",
@@ -707,6 +719,46 @@ func TestExecutionServiceGoLiveSkipsBlueskyLiveNowWhenDisabled(t *testing.T) {
 	}
 	if len(sessions.upserts) != 0 {
 		t.Fatalf("expected no live now tracking, got %+v", sessions.upserts)
+	}
+}
+
+func TestExecutionServiceGoLiveReturnsResultWhenPostHistoryRecordFailsAfterPublish(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	destRepo.items["discord-main"] = domain.Destination{
+		ID:         "discord-main",
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+	}
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	history := &postHistoryRepositoryStub{
+		recordsByDestination: map[string][]ports.PostHistoryRecord{},
+		recordErr:            errors.New("database is locked"),
+	}
+	discord := &discordPublisherStub{}
+	service := NewExecutionService(destRepo, settingsRepo, history, &liveNowSessionRepositoryExecutionStub{}, discord, &blueskyPublisherStub{}, &mastodonPublisherStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	summary, err := service.GoLive(context.Background(), domain.Announcement{
+		StreamTitle: "Going Live",
+		StreamURL:   "https://example.com/live",
+	})
+	if err != nil {
+		t.Fatalf("go live: %v", err)
+	}
+	if len(discord.calls) != 1 {
+		t.Fatalf("expected publish call, got %d", len(discord.calls))
+	}
+	if len(summary.Results) != 1 || summary.Results[0].State != domain.ExecutionStateFailed {
+		t.Fatalf("expected failed tracking result, got %+v", summary.Results)
+	}
+	if summary.Results[0].Message != "Published successfully, but duplicate tracking failed: database is locked" {
+		t.Fatalf("unexpected result message: %+v", summary.Results[0])
+	}
+	if summary.TotalCount != 1 || summary.FailedCount != 1 || summary.SuccessCount != 0 {
+		t.Fatalf("unexpected summary counts: %+v", summary)
 	}
 }
 

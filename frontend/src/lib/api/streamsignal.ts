@@ -9,6 +9,7 @@ import {
     ForceGoLive,
     GeneratePreview,
     GetAnnouncementProfile,
+    GetDestination,
     GetDestinationGroup,
     GetDestinationGroupIDs,
     GetDiagnostics,
@@ -20,6 +21,7 @@ import {
     GetSettings,
     ListPendingLiveNowSessions,
     ListDestinations,
+    MarkAnnouncementProfileUsed,
     SaveDestination,
     SaveDestinationGroup,
     SaveAnnouncementProfile,
@@ -138,10 +140,11 @@ function toDestinationGroupInput(group: domain.DestinationGroup): DestinationGro
 }
 
 function toAnnouncementProfileModel(profile: AnnouncementProfileInput): domain.AnnouncementProfile {
-    const { createdAt, updatedAt, ...rest } = profile;
+    const { createdAt, lastUsedAt, updatedAt, ...rest } = profile;
     return domain.AnnouncementProfile.createFrom({
         ...rest,
         ...(createdAt ? { createdAt } : {}),
+        ...(lastUsedAt ? { lastUsedAt } : {}),
         ...(updatedAt ? { updatedAt } : {}),
     });
 }
@@ -151,6 +154,7 @@ function toAnnouncementProfileInput(profile: domain.AnnouncementProfile): Announ
         id: profile.id,
         name: profile.name,
         description: profile.description,
+        defaultStreamTitle: profile.defaultStreamTitle ?? '',
         defaultStreamURL: profile.defaultStreamURL,
         defaultCategory: profile.defaultCategory,
         defaultMessage: profile.defaultMessage,
@@ -160,6 +164,8 @@ function toAnnouncementProfileInput(profile: domain.AnnouncementProfile): Announ
         defaultBlueskyCardThumbnailURL: profile.defaultBlueskyCardThumbnailURL,
         defaultBlueskyCardThumbnailDataURL: profile.defaultBlueskyCardThumbnailDataURL,
         defaultGroupID: profile.defaultGroupID,
+        lastUsedAt: profile.lastUsedAt ? String(profile.lastUsedAt) : '',
+        useCount: profile.useCount ?? 0,
         createdAt: profile.createdAt ? String(profile.createdAt) : '',
         updatedAt: profile.updatedAt ? String(profile.updatedAt) : '',
     };
@@ -258,6 +264,10 @@ export function listDestinations(): Promise<DestinationInput[]> {
     return ListDestinations().then((destinations: domain.Destination[] | null) => asArray(destinations).map(toDestinationInput));
 }
 
+export function getDestination(id: string): Promise<DestinationInput> {
+    return GetDestination(id).then(toDestinationInput);
+}
+
 export function saveDestination(destination: DestinationInput): Promise<DestinationInput> {
     return SaveDestination(toDestinationModel(destination)).then(toDestinationInput);
 }
@@ -304,6 +314,10 @@ export function saveAnnouncementProfile(profile: AnnouncementProfileInput): Prom
 
 export function duplicateAnnouncementProfile(id: string): Promise<AnnouncementProfileInput> {
     return DuplicateAnnouncementProfile(id).then(toAnnouncementProfileInput);
+}
+
+export function markAnnouncementProfileUsed(id: string): Promise<void> {
+    return MarkAnnouncementProfileUsed(id);
 }
 
 export function deleteAnnouncementProfile(id: string): Promise<void> {

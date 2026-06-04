@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"StreamSignal/internal/domain"
+	"StreamSignal/internal/runtimeenv"
 	"StreamSignal/internal/secrets/memory"
 	sqlitestore "StreamSignal/internal/storage/sqlite"
 )
@@ -62,6 +63,40 @@ func TestSecureDestinationRepositoryStoresOnlySecretReferencesInSQLite(t *testin
 	}
 	if !strings.Contains(actual.ConfigJSON, "webhook-secret") {
 		t.Fatalf("expected hydrated secret in loaded destination, got %s", actual.ConfigJSON)
+	}
+}
+
+func TestSecureDestinationRepositoryNamespacesSecretsByRuntimeEnvironment(t *testing.T) {
+	t.Setenv(runtimeenv.EnvironmentVariable, "test")
+
+	db := openTestDB(t)
+	repository := NewDestinationRepository(sqlitestore.NewDestinationRepository(db), memory.NewStore())
+	now := time.Now().UTC().Round(time.Microsecond)
+
+	expected := domain.Destination{
+		ID:         "discord-main",
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"webhookKey":"https://discord.example/webhook-secret"}`,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	if err := repository.Save(context.Background(), expected); err != nil {
+		t.Fatalf("save destination: %v", err)
+	}
+
+	var rawConfig string
+	if err := db.QueryRow(`select config_json from destinations where id = ?`, expected.ID).Scan(&rawConfig); err != nil {
+		t.Fatalf("query raw destination config: %v", err)
+	}
+	if !strings.Contains(rawConfig, "secret://streamsignal-test/destinations/discord-main/discord-webhook") {
+		t.Fatalf("expected test environment secret reference, got %s", rawConfig)
+	}
+	if strings.Contains(rawConfig, "secret://streamsignal/destinations/discord-main/discord-webhook") {
+		t.Fatalf("expected secret reference to avoid production namespace, got %s", rawConfig)
 	}
 }
 

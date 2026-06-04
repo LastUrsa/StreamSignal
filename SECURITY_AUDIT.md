@@ -17,6 +17,7 @@ The current review focus is:
 - Runtime secrets are stored through the OS credential store: Windows Credential Manager on Windows and macOS Keychain on macOS.
 - SQLite stores secret references, destination settings, local app data, and optional local image data; it should not store raw webhook URLs, access tokens, or app passwords.
 - Legacy SQLite rows that contain raw secrets are migrated away from raw-secret storage when read through the app.
+- Non-production runtime environments can use isolated app data folders and credential namespaces through `STREAMSIGNAL_ENV`, keeping local test/dev stores separate from production streaming data.
 - Diagnostics and logs are designed to avoid raw credential output.
 - Outbound image and preview fetches use public HTTP(S) URL validation, request timeouts, redirect/body limits where relevant, and bounded error-body reads.
 - Link-preview fetching is best-effort and non-fatal; preview generation continues when metadata fetches fail.
@@ -27,6 +28,7 @@ The current review focus is:
 - Discord webhook URLs, Bluesky app passwords, and Mastodon access tokens are treated as secrets.
 - Bluesky `Live Now` session tracking stores the credential reference needed for recovery, not the raw credential.
 - Masked edit fields prevent stored secrets from being hydrated back into visible destination forms.
+- Runtime environment namespacing keeps non-production secret references out of the production `streamsignal` credential namespace.
 - Remote image URLs for Bluesky and Mastodon are rejected if they resolve to localhost, private-network, link-local, unspecified, or multicast addresses.
 - Uploaded image data is size-limited before decode and again after decode.
 - Preview metadata image URLs are validated before being sent to the frontend.

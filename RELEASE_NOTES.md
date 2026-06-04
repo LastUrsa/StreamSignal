@@ -9,7 +9,9 @@ StreamSignal 0.3.0 is a feature release focused on reusable announcement presets
 ### Highlights
 
 - Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
+- Added profile usage tracking, update/save-as-new actions, and stream-title persistence for Announcement Profiles.
 - Added Destination Groups as optional saved destination sets while preserving individual destination selection for one-off posting.
+- Refined the Destinations workspace with cleaner group membership UI, a compact template token helper, and platform setup guidance moved into a contextual modal.
 - Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
 - Kept destination-level media as a fallback for existing saved destination configuration.
 - Added a dedicated Profiles workspace and Home **Announcement Preset** selector so profiles read as prefill presets, not a separate posting mode.
@@ -25,6 +27,8 @@ Destination Groups let users save reusable sets of destinations for common posti
 ### Security And Reliability
 
 - Runtime secrets remain stored in the OS credential store rather than directly in SQLite.
+- Added runtime environment namespacing so non-production review builds can use separate app data and credential stores from a streamer's personal production setup.
+- Hardened grouped-destination publishing so secure credentials are hydrated before publish attempts and unrelated destinations are not falsely marked failed when one destination has a credential problem.
 - Announcement Profile Wails bindings now have app-level coverage for save, duplicate, and delete behavior.
 - Provider-backed workflow E2E still runs separately because it creates real test-account posts and deletes them afterward.
 - `npm audit` and `govulncheck` passed locally during release prep.

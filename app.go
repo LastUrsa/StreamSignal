@@ -123,6 +123,10 @@ func (a *App) ListDestinations() ([]domain.Destination, error) {
 	return a.destinationSvc.List(a.ctx)
 }
 
+func (a *App) GetDestination(id string) (domain.Destination, error) {
+	return a.destinationSvc.Get(a.ctx, id)
+}
+
 func (a *App) SaveDestination(destination domain.Destination) (domain.Destination, error) {
 	saved, err := a.destinationSvc.Save(a.ctx, destination)
 	if err == nil {
@@ -225,6 +229,14 @@ func (a *App) DuplicateAnnouncementProfile(id string) (domain.AnnouncementProfil
 		_ = a.logService.Append(a.ctx, saved.Name, "duplicate_announcement_profile", "SUCCESS", fmt.Sprintf("Announcement profile duplicated: %s", saved.Name))
 	}
 	return saved, err
+}
+
+func (a *App) MarkAnnouncementProfileUsed(id string) error {
+	err := a.profileSvc.MarkUsed(a.ctx, id)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, id, "use_announcement_profile", "SUCCESS", "Announcement profile used.")
+	}
+	return err
 }
 
 func (a *App) DeleteAnnouncementProfile(id string) error {

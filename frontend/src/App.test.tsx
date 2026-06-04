@@ -28,6 +28,7 @@ vi.mock('./lib/api/streamsignal', () => ({
         return fallback;
     },
     forceGoLive: vi.fn(),
+    getDestination: vi.fn(),
     getDiagnostics: vi.fn(),
     getDestinationGroupIDs: vi.fn(),
     getGroupDestinations: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('./lib/api/streamsignal', () => ({
     listDestinationGroups: vi.fn(),
     listPendingLiveNowSessions: vi.fn(),
     listDestinations: vi.fn(),
+    markAnnouncementProfileUsed: vi.fn(),
     saveDestination: vi.fn(),
     saveAnnouncementProfile: vi.fn(),
     saveDestinationGroup: vi.fn(),
@@ -54,6 +56,7 @@ const mockedDeleteDestination = vi.mocked(api.deleteDestination);
 const mockedDuplicateAnnouncementProfile = vi.mocked(api.duplicateAnnouncementProfile);
 const mockedEndStream = vi.mocked(api.endStream);
 const mockedForceGoLive = vi.mocked(api.forceGoLive);
+const mockedGetDestination = vi.mocked(api.getDestination);
 const mockedGetDiagnostics = vi.mocked(api.getDiagnostics);
 const mockedGetDestinationGroupIDs = vi.mocked(api.getDestinationGroupIDs);
 const mockedGetGroupDestinations = vi.mocked(api.getGroupDestinations);
@@ -65,6 +68,7 @@ const mockedListAnnouncementProfiles = vi.mocked(api.listAnnouncementProfiles);
 const mockedListDestinationGroups = vi.mocked(api.listDestinationGroups);
 const mockedListPendingLiveNowSessions = vi.mocked(api.listPendingLiveNowSessions);
 const mockedListDestinations = vi.mocked(api.listDestinations);
+const mockedMarkAnnouncementProfileUsed = vi.mocked(api.markAnnouncementProfileUsed);
 const mockedSaveDestination = vi.mocked(api.saveDestination);
 const mockedSaveAnnouncementProfile = vi.mocked(api.saveAnnouncementProfile);
 const mockedSaveDestinationGroup = vi.mocked(api.saveDestinationGroup);
@@ -134,6 +138,7 @@ function profile(overrides: Partial<AnnouncementProfileInput> & Pick<Announcemen
         id: overrides.id,
         name: overrides.name,
         description: overrides.description ?? '',
+        defaultStreamTitle: overrides.defaultStreamTitle ?? '',
         defaultStreamURL: overrides.defaultStreamURL ?? '',
         defaultCategory: overrides.defaultCategory ?? '',
         defaultMessage: overrides.defaultMessage ?? '',
@@ -143,6 +148,8 @@ function profile(overrides: Partial<AnnouncementProfileInput> & Pick<Announcemen
         defaultBlueskyCardThumbnailURL: overrides.defaultBlueskyCardThumbnailURL ?? '',
         defaultBlueskyCardThumbnailDataURL: overrides.defaultBlueskyCardThumbnailDataURL ?? '',
         defaultGroupID: overrides.defaultGroupID ?? '',
+        lastUsedAt: overrides.lastUsedAt ?? '',
+        useCount: overrides.useCount ?? 0,
         createdAt: overrides.createdAt ?? '',
         updatedAt: overrides.updatedAt ?? '',
     };
@@ -173,6 +180,7 @@ describe('App', () => {
             content: '',
         });
         mockedListDestinations.mockResolvedValue([]);
+        mockedGetDestination.mockImplementation(async (id) => destination({ id, name: 'Loaded Destination' }));
         mockedListAnnouncementProfiles.mockResolvedValue([]);
         mockedListDestinationGroups.mockResolvedValue([{ id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' }]);
         mockedGetGroupDestinations.mockResolvedValue([]);
@@ -184,13 +192,16 @@ describe('App', () => {
         mockedSaveAnnouncementProfile.mockImplementation(async (profile) => ({
             ...profile,
             id: profile.id || 'generated-profile-id',
+            useCount: profile.useCount ?? 0,
             createdAt: '',
             updatedAt: '',
         }));
+        mockedMarkAnnouncementProfileUsed.mockResolvedValue();
         mockedDuplicateAnnouncementProfile.mockImplementation(async (id) => ({
             id: `${id}-copy`,
             name: 'Copied Profile',
             description: '',
+            defaultStreamTitle: '',
             defaultStreamURL: '',
             defaultCategory: '',
             defaultMessage: '',
@@ -613,11 +624,6 @@ describe('App', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Go Live' }));
 
-        expect((await screen.findAllByText('Go Live will publish to All Destinations: 2 destinations.')).length).toBeGreaterThan(0);
-        expect(mockedGoLive).not.toHaveBeenCalled();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
-
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalledWith(
                 announcement(),
@@ -645,6 +651,7 @@ describe('App', () => {
                 id: 'music-profile',
                 name: 'Music Stream',
                 description: 'Music announcements',
+                defaultStreamTitle: 'Late Night Music',
                 defaultStreamURL: 'https://example.com/music',
                 defaultCategory: 'Music',
                 defaultMessage: 'Going live with music.',
@@ -662,6 +669,7 @@ describe('App', () => {
             target: { value: 'music-profile' },
         });
 
+        expect(await screen.findByDisplayValue('Late Night Music')).toBeInTheDocument();
         expect(await screen.findByDisplayValue('https://example.com/music')).toBeInTheDocument();
         expect(screen.getByLabelText('Category / Game')).toHaveValue('Music');
         expect(screen.getByLabelText('Optional Message')).toHaveValue('Going live with music.');
@@ -669,6 +677,153 @@ describe('App', () => {
         expect(await screen.findByText('Music Announcements · 1 destination')).toBeInTheDocument();
         expect(screen.getByLabelText('Announcement Image URL')).toHaveValue('https://example.com/promo.png');
         expect(screen.getByLabelText('Bluesky Link Card Thumbnail URL')).toHaveValue('https://example.com/card.png');
+        await waitFor(() => expect(mockedMarkAnnouncementProfileUsed).toHaveBeenCalledWith('music-profile'));
+    });
+
+    it('saves the current Home announcement as a profile', async () => {
+        mockedListDestinationGroups.mockResolvedValue([
+            { id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' },
+            { id: 'music-announcements', name: 'Music Announcements', description: '', createdAt: '', updatedAt: '' },
+        ]);
+        mockedGetGroupDestinations.mockResolvedValue([
+            destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' }),
+        ]);
+        mockedListDestinations.mockResolvedValue([
+            destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' }),
+        ]);
+
+        render(<App />);
+
+        expect(await screen.findByRole('button', { name: 'Save as New Profile' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Update Selected Profile' })).not.toBeInTheDocument();
+        expect(screen.getByText('Save current announcement as a new profile')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Stream Title'), {
+            target: { value: 'Late Night Music' },
+        });
+        fireEvent.change(await screen.findByLabelText('Stream URL'), {
+            target: { value: 'https://example.com/music' },
+        });
+        fireEvent.change(screen.getByLabelText('Category / Game'), {
+            target: { value: 'Music' },
+        });
+        fireEvent.change(screen.getByLabelText('Optional Message'), {
+            target: { value: 'Going live with music.' },
+        });
+        fireEvent.change(screen.getByLabelText('Hashtags'), {
+            target: { value: '#VTuber #Music' },
+        });
+        fireEvent.click(await screen.findByText('Media'));
+        fireEvent.change(screen.getByLabelText('Announcement Image URL'), {
+            target: { value: 'https://example.com/promo.png' },
+        });
+        fireEvent.change(screen.getByLabelText('Bluesky Link Card Thumbnail URL'), {
+            target: { value: 'https://example.com/card.png' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Group' }));
+        fireEvent.change(await screen.findByLabelText('Destination Group'), {
+            target: { value: 'music-announcements' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save as New Profile' }));
+        fireEvent.change(await screen.findByLabelText('Profile Name'), {
+            target: { value: 'Music Stream' },
+        });
+        fireEvent.change(screen.getByLabelText('Profile Description'), {
+            target: { value: 'Music announcements' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+        await waitFor(() => {
+            expect(mockedSaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
+                id: '',
+                name: 'Music Stream',
+                description: 'Music announcements',
+                defaultStreamTitle: 'Late Night Music',
+                defaultStreamURL: 'https://example.com/music',
+                defaultCategory: 'Music',
+                defaultMessage: 'Going live with music.',
+                defaultHashtags: '#VTuber #Music',
+                defaultAnnouncementImageURL: 'https://example.com/promo.png',
+                defaultBlueskyCardThumbnailURL: 'https://example.com/card.png',
+                defaultGroupID: 'music-announcements',
+            }));
+        });
+        expect(await screen.findByText('Profile saved: Music Stream')).toBeInTheDocument();
+    });
+
+    it('updates the selected Home profile with current announcement values', async () => {
+        mockedListAnnouncementProfiles.mockResolvedValue([
+            profile({
+                id: 'music-profile',
+                name: 'Music Stream',
+                description: 'Keep the name',
+                defaultStreamTitle: 'Old Title',
+                defaultStreamURL: 'https://example.com/old',
+                defaultCategory: 'Old Category',
+                defaultMessage: 'Old message',
+                defaultHashtags: '#old',
+            }),
+        ]);
+
+        render(<App />);
+
+        fireEvent.change(await screen.findByLabelText('Announcement Preset'), {
+            target: { value: 'music-profile' },
+        });
+        await waitFor(() => expect(mockedMarkAnnouncementProfileUsed).toHaveBeenCalledWith('music-profile'));
+        expect(screen.getByRole('button', { name: 'Save as New Profile' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Update Selected Profile' })).toBeInTheDocument();
+        expect(screen.getByText('Update selected profile with current announcement')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Stream Title'), {
+            target: { value: 'New Title' },
+        });
+        fireEvent.change(screen.getByLabelText('Stream URL'), {
+            target: { value: 'https://example.com/new' },
+        });
+        fireEvent.change(screen.getByLabelText('Category / Game'), {
+            target: { value: 'New Category' },
+        });
+        fireEvent.change(screen.getByLabelText('Optional Message'), {
+            target: { value: 'New message' },
+        });
+        fireEvent.change(screen.getByLabelText('Hashtags'), {
+            target: { value: '#new' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Update Selected Profile' }));
+
+        await waitFor(() => {
+            expect(mockedSaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
+                id: 'music-profile',
+                name: 'Music Stream',
+                description: 'Keep the name',
+                defaultStreamTitle: 'New Title',
+                defaultStreamURL: 'https://example.com/new',
+                defaultCategory: 'New Category',
+                defaultMessage: 'New message',
+                defaultHashtags: '#new',
+            }));
+        });
+        expect(await screen.findByText('Profile updated: Music Stream')).toBeInTheDocument();
+    });
+
+    it('shows the duplicate profile message when saving Home as an existing profile name', async () => {
+        mockedListAnnouncementProfiles.mockResolvedValue([
+            profile({ id: 'music-profile', name: 'Music Stream' }),
+        ]);
+
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Save as New Profile' }));
+        fireEvent.change(await screen.findByLabelText('Profile Name'), {
+            target: { value: 'music stream' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+        expect(await screen.findByText('A profile with this name already exists.')).toBeInTheDocument();
+        expect(mockedSaveAnnouncementProfile).not.toHaveBeenCalled();
     });
 
     it('shows selected upload indicators for Home announcement media', async () => {
@@ -700,6 +855,9 @@ describe('App', () => {
         fireEvent.change(await screen.findByLabelText('Preset Name'), {
             target: { value: 'Music Stream' },
         });
+        fireEvent.change(screen.getByLabelText('Profile Stream Title'), {
+            target: { value: 'Late Night Music' },
+        });
         fireEvent.change(screen.getByLabelText('Profile Stream URL'), {
             target: { value: 'https://example.com/music' },
         });
@@ -716,6 +874,7 @@ describe('App', () => {
             expect(mockedSaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
                 id: '',
                 name: 'Music Stream',
+                defaultStreamTitle: 'Late Night Music',
                 defaultStreamURL: 'https://example.com/music',
                 defaultHashtags: '#VTuber #Music',
                 defaultAnnouncementImageURL: 'https://example.com/promo.png',
@@ -762,11 +921,6 @@ describe('App', () => {
         expect(await screen.findByText('1 of 2 selected')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Go Live' }));
-
-        expect((await screen.findAllByText('Go Live will publish to 1 destination.')).length).toBeGreaterThan(0);
-        expect(mockedGoLive).not.toHaveBeenCalled();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
 
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalledWith(
@@ -952,7 +1106,7 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
 
-        expect(screen.getByText(/Only fields referenced in this template will appear/i)).toBeInTheDocument();
+        expect(screen.getByText('Template Tokens')).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Friendly Name'), {
             target: { value: 'Main Discord' },
@@ -982,33 +1136,88 @@ describe('App', () => {
         expect(await screen.findAllByText('Discord webhook verified successfully.')).toHaveLength(2);
     });
 
-    it('shows which announcement fields a destination template uses and can reset to the starter template', async () => {
+    it('tests a saved destination using a fresh backend load', async () => {
+        const listed = destination({
+            id: 'discord-main',
+            name: 'Main Discord',
+            configJSON: '{"webhookKey":"cached-secret"}',
+        });
+        const loaded = destination({
+            id: 'discord-main',
+            name: 'Main Discord',
+            configJSON: '{"webhookKey":"fresh-secret"}',
+        });
+        mockedListDestinations.mockResolvedValue([listed]);
+        mockedGetDestination.mockResolvedValue(loaded);
+
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+        const card = screen.getByText('Main Discord').closest('section');
+        expect(card).not.toBeNull();
+        fireEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Test' }));
+
+        await waitFor(() => {
+            expect(mockedGetDestination).toHaveBeenCalledWith('discord-main');
+            expect(mockedTestDestinationConnection).toHaveBeenCalledWith(loaded);
+        });
+    });
+
+    it('shows destination groups as quiet metadata on saved destination cards', async () => {
+        mockedListDestinationGroups.mockResolvedValue([
+            { id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' },
+            { id: 'music-announcements', name: 'Music Announcements', description: '', createdAt: '', updatedAt: '' },
+            { id: 'test-posts', name: 'Test Posts', description: '', createdAt: '', updatedAt: '' },
+        ]);
+        mockedListDestinations.mockResolvedValue([
+            destination({ id: 'discord-main', name: 'Main Discord' }),
+        ]);
+        mockedGetDestinationGroupIDs.mockResolvedValue(['all-destinations', 'music-announcements', 'test-posts']);
+
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
 
-        expect(await screen.findByText('Uses: title, stream URL, message, hashtags')).toBeInTheDocument();
+        const card = await screen.findByText('Main Discord');
+        expect(card.closest('section')).toHaveTextContent('All Destinations +2');
+    });
+
+    it('shows destination template tokens and can reset to the starter template', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+
+        expect(await screen.findByText('Template Tokens')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '{{stream_title}}' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '{{stream_url}}' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '{{message}}' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '{{hashtags}}' })).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Template'), {
             target: { value: '{{stream_title}}' },
         });
 
-        expect(await screen.findByText('Uses: title')).toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Reset to Starter Template' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Reset Template' }));
 
         expect(screen.getByLabelText('Template')).toHaveValue('{{stream_title}}\n{{stream_url}}\n{{message}}\n{{hashtags}}');
-        expect(screen.getByText('Uses: title, stream URL, message, hashtags')).toBeInTheDocument();
     });
 
-    it('shows guided setup persistently on the destinations page', async () => {
+    it('opens guided setup from the platform help button', async () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
 
-        expect(await screen.findByLabelText('Guided Credential Setup')).toBeInTheDocument();
+        expect(screen.queryByText('Create and name a channel webhook')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open Discord Setup' }));
+
+        expect(await screen.findByRole('dialog', { name: 'Discord Setup' })).toBeInTheDocument();
         expect(screen.getByText('Create and name a channel webhook')).toBeInTheDocument();
         expect(screen.getByText(/name it StreamSignal or the messenger name/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Close Setup' }));
+
+        expect(screen.queryByRole('dialog', { name: 'Discord Setup' })).not.toBeInTheDocument();
     });
 
     it('shows Mastodon app setup details in guided setup', async () => {
@@ -1018,6 +1227,7 @@ describe('App', () => {
         fireEvent.change(await screen.findByLabelText('Platform'), {
             target: { value: 'mastodon' },
         });
+        fireEvent.click(screen.getByRole('button', { name: 'Open Mastodon Setup' }));
 
         expect(await screen.findByText('Set the redirect URI')).toBeInTheDocument();
         expect(screen.getByText(/urn:ietf:wg:oauth:2.0:oob/)).toBeInTheDocument();
@@ -1076,8 +1286,6 @@ describe('App', () => {
         fireEvent.change(await screen.findByLabelText('Platform'), {
             target: { value: 'bluesky' },
         });
-
-        expect(await screen.findByText('Create an app password')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Test Bluesky app password' }));
 
@@ -1350,8 +1558,6 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
-
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalled();
         });
@@ -1397,8 +1603,6 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
-
         expect(
             (await screen.findAllByText(
                 'Execution finished with issues. Some destinations failed after execution began, and others still need validation before retrying.',
@@ -1436,8 +1640,6 @@ describe('App', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
-
         expect(
             (await screen.findAllByText('Execution finished with issues. Some destinations failed after execution began.')).length,
         ).toBeGreaterThan(0);
@@ -1470,8 +1672,6 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
-
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
 
         expect(
             (await screen.findAllByText('Execution needs attention. Some destinations still have validation issues before they can run.')).length,
@@ -1538,8 +1738,6 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
-
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
 
         expect(await screen.findByText('Go Live completed successfully for 1 destination.')).toBeInTheDocument();
         expect(screen.queryByText('Published successfully. Live Now set.')).not.toBeInTheDocument();
@@ -1632,8 +1830,6 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Go Live' }));
-
-        fireEvent.click(await screen.findByRole('button', { name: 'Confirm Go Live' }));
 
         expect(await screen.findByText(/A similar announcement was recently posted/i)).toBeInTheDocument();
         expect(screen.getByText('Rendered content is empty.')).toBeInTheDocument();

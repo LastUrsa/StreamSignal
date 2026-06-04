@@ -175,6 +175,49 @@ func TestDestinationGroupRepositoryMembershipRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAnnouncementProfileRepositoryListsRecentlyUsedProfilesFirst(t *testing.T) {
+	db := openTestDB(t)
+	repository := NewAnnouncementProfileRepository(db)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 4, 14, 0, 0, 0, time.UTC)
+
+	for _, profile := range []domain.AnnouncementProfile{
+		{ID: "alpha", Name: "Alpha", DefaultStreamTitle: "Alpha Title", CreatedAt: now, UpdatedAt: now},
+		{ID: "beta", Name: "Beta", DefaultStreamTitle: "Beta Title", CreatedAt: now, UpdatedAt: now},
+		{ID: "gamma", Name: "Gamma", DefaultStreamTitle: "Gamma Title", CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := repository.Save(ctx, profile); err != nil {
+			t.Fatalf("save profile %q: %v", profile.ID, err)
+		}
+	}
+
+	if err := repository.MarkUsed(ctx, "beta", now.Add(time.Hour)); err != nil {
+		t.Fatalf("mark beta used: %v", err)
+	}
+	if err := repository.MarkUsed(ctx, "gamma", now.Add(2*time.Hour)); err != nil {
+		t.Fatalf("mark gamma used: %v", err)
+	}
+
+	profiles, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list profiles: %v", err)
+	}
+
+	got := []string{profiles[0].ID, profiles[1].ID, profiles[2].ID}
+	expected := []string{"gamma", "beta", "alpha"}
+	for index := range expected {
+		if got[index] != expected[index] {
+			t.Fatalf("expected order %+v, got %+v", expected, got)
+		}
+	}
+	if profiles[0].LastUsedAt == nil || profiles[0].UseCount != 1 {
+		t.Fatalf("expected usage fields on first profile, got %+v", profiles[0])
+	}
+	if profiles[0].DefaultStreamTitle != "Gamma Title" {
+		t.Fatalf("expected stream title to round trip, got %+v", profiles[0])
+	}
+}
+
 func TestDestinationRepositoryCRUD(t *testing.T) {
 	db := openTestDB(t)
 	repository := NewDestinationRepository(db)

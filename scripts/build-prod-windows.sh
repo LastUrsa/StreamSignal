@@ -2,9 +2,27 @@
 set -euo pipefail
 
 launch=false
-if [[ "${1:-}" == "--launch" ]]; then
-    launch=true
-fi
+launch_env=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --launch)
+            launch=true
+            shift
+            ;;
+        --env)
+            if [[ -z "${2:-}" ]]; then
+                echo "--env requires a value" >&2
+                exit 2
+            fi
+            launch_env="$2"
+            shift 2
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            exit 2
+            ;;
+    esac
+done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 archive="/tmp/streamsignal-prod-build.tar"
@@ -26,6 +44,9 @@ script_windows="$(wslpath -w "$repo_root/scripts/build-prod-windows.ps1")"
 args=(-NoProfile -ExecutionPolicy Bypass -File "$script_windows" -SourceArchive "$archive_windows")
 if [[ "$launch" == true ]]; then
     args+=(-Launch)
+fi
+if [[ -n "$launch_env" ]]; then
+    args+=(-LaunchEnvironment "$launch_env")
 fi
 
 powershell.exe "${args[@]}"

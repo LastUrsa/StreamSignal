@@ -27,6 +27,13 @@ func (s *DestinationService) List(ctx context.Context) ([]domain.Destination, er
 	return s.repository.List(ctx)
 }
 
+func (s *DestinationService) Get(ctx context.Context, id string) (domain.Destination, error) {
+	if strings.TrimSpace(id) == "" {
+		return domain.Destination{}, fmt.Errorf("destination id is required")
+	}
+	return s.repository.Get(ctx, id)
+}
+
 func (s *DestinationService) Save(ctx context.Context, destination domain.Destination) (domain.Destination, error) {
 	if err := validateDestination(destination); err != nil {
 		return domain.Destination{}, err

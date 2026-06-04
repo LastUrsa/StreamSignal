@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,6 +158,17 @@ func TestDestinationServiceSaveValidatesDiscordWebhookURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
+
+	_, err = service.Save(context.Background(), domain.Destination{
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"webhookKey":"secret://streamsignal/destinations/main/discord-webhook"}`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "stored webhook could not be loaded") {
+		t.Fatalf("expected stored webhook validation error, got %v", err)
+	}
 }
 
 func TestDestinationServiceSaveValidatesBlueskyConfig(t *testing.T) {
@@ -173,6 +185,17 @@ func TestDestinationServiceSaveValidatesBlueskyConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
+
+	_, err = service.Save(context.Background(), domain.Destination{
+		Platform:   domain.PlatformBluesky,
+		Name:       "Main Bluesky",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"accountIdentifier":"streamer.test","credentialKey":"secret://streamsignal/destinations/main/bluesky-credential"}`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "stored credential could not be loaded") {
+		t.Fatalf("expected stored credential validation error, got %v", err)
+	}
 }
 
 func TestDestinationServiceSaveValidatesMastodonInstanceURL(t *testing.T) {
@@ -188,6 +211,17 @@ func TestDestinationServiceSaveValidatesMastodonInstanceURL(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected validation error")
+	}
+
+	_, err = service.Save(context.Background(), domain.Destination{
+		Platform:   domain.PlatformMastodon,
+		Name:       "Main Mastodon",
+		Enabled:    true,
+		Template:   "{{stream_title}}",
+		ConfigJSON: `{"credentialKey":"secret://streamsignal/destinations/main/mastodon-credential","instanceURL":"https://mastodon.social"}`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "stored credential could not be loaded") {
+		t.Fatalf("expected stored credential validation error, got %v", err)
 	}
 }
 

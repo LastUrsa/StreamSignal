@@ -9,6 +9,8 @@ import (
 	"StreamSignal/internal/domain"
 )
 
+const storedSecretRefPrefix = "secret://"
+
 func validateDestinationConfig(destination domain.Destination) error {
 	switch destination.Platform {
 	case domain.PlatformDiscord:
@@ -19,8 +21,15 @@ func validateDestinationConfig(destination domain.Destination) error {
 		if strings.TrimSpace(config.WebhookKey) == "" {
 			return fmt.Errorf("Discord webhook key is required")
 		}
-		if _, err := url.ParseRequestURI(strings.TrimSpace(config.WebhookKey)); err != nil {
+		if isStoredSecretRef(config.WebhookKey) {
+			return fmt.Errorf("Discord stored webhook could not be loaded; re-enter and save the webhook")
+		}
+		parsedWebhook, err := url.ParseRequestURI(strings.TrimSpace(config.WebhookKey))
+		if err != nil {
 			return fmt.Errorf("Discord webhook key must be a valid absolute URL")
+		}
+		if parsedWebhook.Scheme != "http" && parsedWebhook.Scheme != "https" {
+			return fmt.Errorf("Discord webhook key must use http or https")
 		}
 		return nil
 	case domain.PlatformBluesky:
@@ -34,6 +43,9 @@ func validateDestinationConfig(destination domain.Destination) error {
 		if strings.TrimSpace(config.CredentialKey) == "" {
 			return fmt.Errorf("Bluesky credential key is required")
 		}
+		if isStoredSecretRef(config.CredentialKey) {
+			return fmt.Errorf("Bluesky stored credential could not be loaded; re-enter and save the app password")
+		}
 		return nil
 	case domain.PlatformMastodon:
 		config, err := parseMastodonDestinationConfig(destination.ConfigJSON)
@@ -42,6 +54,9 @@ func validateDestinationConfig(destination domain.Destination) error {
 		}
 		if strings.TrimSpace(config.CredentialKey) == "" {
 			return fmt.Errorf("Mastodon credential key is required")
+		}
+		if isStoredSecretRef(config.CredentialKey) {
+			return fmt.Errorf("Mastodon stored credential could not be loaded; re-enter and save the access token")
 		}
 		if strings.TrimSpace(config.InstanceURL) == "" {
 			return fmt.Errorf("Mastodon instance URL is required")
@@ -53,6 +68,10 @@ func validateDestinationConfig(destination domain.Destination) error {
 	default:
 		return fmt.Errorf("unsupported destination platform")
 	}
+}
+
+func isStoredSecretRef(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), storedSecretRefPrefix)
 }
 
 func validateDestinationCredentialConfig(destination domain.Destination) error {
