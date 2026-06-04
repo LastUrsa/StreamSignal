@@ -4,35 +4,25 @@ User-facing release notes and planned artifact names. Keep this focused on chang
 
 ## 0.3.1 Profile And Destination Workflow Polish
 
-StreamSignal 0.3.1 is a release focused on reusable announcement presets, optional Destination Groups, safer local review workflows, and cleaner destination management.
+StreamSignal 0.3.1 is a patch release focused on profile editing polish, destination workflow cleanup, safer credential handling, and release-prep validation.
 
 ### Highlights
 
-- Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
-- Added profile usage tracking, update/save-as-new actions, and stream-title persistence for Announcement Profiles.
-- Added Destination Groups as optional saved destination sets while preserving individual destination selection for one-off posting.
-- Refined the Destinations workspace with cleaner group membership UI, a compact template token helper, and platform setup guidance moved into a contextual modal.
-- Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
-- Kept destination-level media as a fallback for existing saved destination configuration.
-- Added a dedicated Profiles workspace and Home **Announcement Preset** selector so profiles read as prefill presets, not a separate posting mode.
-
-### Announcement Profiles
-
-Announcement Profiles are prefill presets for repeated stream types. Selecting one on Home fills the announcement fields and optional media defaults; if the preset has a Destination Group, Home switches to that group for review before publishing.
-
-### Destination Groups
-
-Destination Groups let users save reusable sets of destinations for common posting workflows. Home still supports selecting individual destinations directly, and a selected profile can preselect its associated group for review before publishing.
+- Added profile usage tracking so recently used profiles sort more helpfully.
+- Added separate Home actions to save the current announcement as a new profile or update the selected profile.
+- Added Stream Title to announcement profiles so a profile can prefill the full Home announcement context.
+- Refined Destinations with quieter group membership display, destination-only and group-only sub-tabs, compact template token controls, and contextual platform setup modals.
+- Removed the extra Go Live confirmation step; duplicate-protection confirmation remains when needed.
 
 ### Security And Reliability
 
-- Runtime secrets remain stored in the OS credential store rather than directly in SQLite.
 - Added runtime environment namespacing so non-production review builds can use separate app data and credential stores from a streamer's personal production setup.
-- Hardened grouped-destination publishing so secure credentials are hydrated before publish attempts and unrelated destinations are not falsely marked failed when one destination has a credential problem.
-- Announcement Profile Wails bindings now have app-level coverage for save, duplicate, and delete behavior.
-- Provider-backed workflow E2E still runs separately because it creates real test-account posts and deletes them afterward.
+- Hardened grouped-destination publishing so secure credentials are hydrated before publish attempts.
+- Added validation for unresolved stored credential references so missing OS credential or webhook entries ask the user to re-enter and save credentials.
+- Improved publish-result handling so a successful provider post is not hidden by later duplicate-tracking or Live Now recovery bookkeeping failures.
+- Added local release-build support for environment-specific review launches and NSIS installer validation.
 - `npm audit` and `govulncheck` passed locally during release prep.
-- The release-build workflow passed for provider-backed E2E, Windows installer, and macOS DMG artifacts.
+- Provider-backed E2E, Windows installer, and macOS DMG release-build jobs passed.
 
 ### Release Artifacts
 
@@ -47,6 +37,40 @@ The GitHub release build workflow uploads matching build artifacts and attaches 
 - `streamsignal-0.3.1-macos-universal-dmg`
 
 Release prep validation uploaded both artifacts successfully from the `release-prep-v0.3.1` branch.
+
+## 0.3.0 Announcement Profiles
+
+StreamSignal 0.3.0 is a feature release focused on reusable announcement presets and cleaner media handling on Home.
+
+### Highlights
+
+- Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
+- Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
+- Kept destination-level media as a fallback for existing saved destination configuration.
+- Added a dedicated Profiles workspace and Home **Announcement Preset** selector so profiles read as prefill presets, not a separate posting mode.
+
+### Announcement Profiles
+
+Announcement Profiles are prefill presets for repeated stream types. Selecting one on Home fills the announcement fields and optional media defaults; if the preset has a Destination Group, Home switches to that group for review before publishing.
+
+### Security And Reliability
+
+- Runtime secrets remain stored in the OS credential store rather than directly in SQLite.
+- Announcement Profile Wails bindings now have app-level coverage for save, duplicate, and delete behavior.
+- Provider-backed workflow E2E still runs separately because it creates real test-account posts and deletes them afterward.
+- `npm audit` and `govulncheck` passed locally during release prep.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.3.0-windows-amd64-installer.exe`
+- `StreamSignal-0.3.0-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.3.0-windows-amd64-installer`
+- `streamsignal-0.3.0-macos-universal-dmg`
 
 ## 0.2.1 Workflow Refinements
 
