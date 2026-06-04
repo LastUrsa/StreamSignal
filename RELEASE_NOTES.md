@@ -32,6 +32,7 @@ Destination Groups let users save reusable sets of destinations for common posti
 - Announcement Profile Wails bindings now have app-level coverage for save, duplicate, and delete behavior.
 - Provider-backed workflow E2E still runs separately because it creates real test-account posts and deletes them afterward.
 - `npm audit` and `govulncheck` passed locally during release prep.
+- The release-build workflow passed for provider-backed E2E, Windows installer, and macOS DMG artifacts.
 
 ### Release Artifacts
 
@@ -44,6 +45,8 @@ The GitHub release build workflow uploads matching build artifacts and attaches 
 
 - `streamsignal-0.3.1-windows-amd64-installer`
 - `streamsignal-0.3.1-macos-universal-dmg`
+
+Release prep validation uploaded both artifacts successfully from the `release-prep-v0.3.1` branch.
 
 ## 0.2.1 Workflow Refinements
 
