@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"StreamSignal/internal/domain"
 )
@@ -18,12 +19,12 @@ func NewAnnouncementProfileRepository(db *sql.DB) *AnnouncementProfileRepository
 
 func (r *AnnouncementProfileRepository) List(ctx context.Context) ([]domain.AnnouncementProfile, error) {
 	rows, err := r.db.QueryContext(ctx, `
-select id, name, description, default_stream_url, default_category, default_message, default_hashtags,
+select id, name, description, default_stream_title, default_stream_url, default_category, default_message, default_hashtags,
   default_announcement_image_url, default_announcement_image_data_url,
   default_bluesky_card_thumbnail_url, default_bluesky_card_thumbnail_data_url,
-  coalesce(default_group_id, ''), created_at, updated_at
+  coalesce(default_group_id, ''), last_used_at, use_count, created_at, updated_at
 from announcement_profiles
-order by lower(name) asc`)
+order by last_used_at is null asc, last_used_at desc, use_count desc, lower(name) asc`)
 	if err != nil {
 		return nil, fmt.Errorf("list announcement profiles: %w", err)
 	}
@@ -45,10 +46,10 @@ order by lower(name) asc`)
 
 func (r *AnnouncementProfileRepository) Get(ctx context.Context, id string) (domain.AnnouncementProfile, error) {
 	row := r.db.QueryRowContext(ctx, `
-select id, name, description, default_stream_url, default_category, default_message, default_hashtags,
+select id, name, description, default_stream_title, default_stream_url, default_category, default_message, default_hashtags,
   default_announcement_image_url, default_announcement_image_data_url,
   default_bluesky_card_thumbnail_url, default_bluesky_card_thumbnail_data_url,
-  coalesce(default_group_id, ''), created_at, updated_at
+  coalesce(default_group_id, ''), last_used_at, use_count, created_at, updated_at
 from announcement_profiles
 where id = ?`, id)
 	profile, err := scanAnnouncementProfile(row)
@@ -63,10 +64,10 @@ where id = ?`, id)
 
 func (r *AnnouncementProfileRepository) GetByName(ctx context.Context, name string) (domain.AnnouncementProfile, error) {
 	row := r.db.QueryRowContext(ctx, `
-select id, name, description, default_stream_url, default_category, default_message, default_hashtags,
+select id, name, description, default_stream_title, default_stream_url, default_category, default_message, default_hashtags,
   default_announcement_image_url, default_announcement_image_data_url,
   default_bluesky_card_thumbnail_url, default_bluesky_card_thumbnail_data_url,
-  coalesce(default_group_id, ''), created_at, updated_at
+  coalesce(default_group_id, ''), last_used_at, use_count, created_at, updated_at
 from announcement_profiles
 where lower(name) = lower(?)`, name)
 	profile, err := scanAnnouncementProfile(row)
@@ -81,17 +82,22 @@ where lower(name) = lower(?)`, name)
 
 func (r *AnnouncementProfileRepository) Save(ctx context.Context, profile domain.AnnouncementProfile) error {
 	defaultGroupID := sql.NullString{String: profile.DefaultGroupID, Valid: profile.DefaultGroupID != ""}
+	lastUsedAt := sql.NullString{Valid: profile.LastUsedAt != nil}
+	if profile.LastUsedAt != nil {
+		lastUsedAt.String = formatTime(*profile.LastUsedAt)
+	}
 	_, err := r.db.ExecContext(ctx, `
 insert into announcement_profiles(
-  id, name, description, default_stream_url, default_category, default_message, default_hashtags,
+  id, name, description, default_stream_title, default_stream_url, default_category, default_message, default_hashtags,
   default_announcement_image_url, default_announcement_image_data_url,
   default_bluesky_card_thumbnail_url, default_bluesky_card_thumbnail_data_url,
-  default_group_id, created_at, updated_at
+  default_group_id, last_used_at, use_count, created_at, updated_at
 )
-values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(id) do update set
   name = excluded.name,
   description = excluded.description,
+  default_stream_title = excluded.default_stream_title,
   default_stream_url = excluded.default_stream_url,
   default_category = excluded.default_category,
   default_message = excluded.default_message,
@@ -101,11 +107,14 @@ on conflict(id) do update set
   default_bluesky_card_thumbnail_url = excluded.default_bluesky_card_thumbnail_url,
   default_bluesky_card_thumbnail_data_url = excluded.default_bluesky_card_thumbnail_data_url,
   default_group_id = excluded.default_group_id,
+  last_used_at = excluded.last_used_at,
+  use_count = excluded.use_count,
   created_at = excluded.created_at,
   updated_at = excluded.updated_at`,
 		profile.ID,
 		profile.Name,
 		profile.Description,
+		profile.DefaultStreamTitle,
 		profile.DefaultStreamURL,
 		profile.DefaultCategory,
 		profile.DefaultMessage,
@@ -115,11 +124,31 @@ on conflict(id) do update set
 		profile.DefaultBlueskyCardThumbnailURL,
 		profile.DefaultBlueskyCardThumbnailDataURL,
 		defaultGroupID,
+		lastUsedAt,
+		profile.UseCount,
 		formatTime(profile.CreatedAt),
 		formatTime(profile.UpdatedAt),
 	)
 	if err != nil {
 		return fmt.Errorf("save announcement profile %q: %w", profile.ID, err)
+	}
+	return nil
+}
+
+func (r *AnnouncementProfileRepository) MarkUsed(ctx context.Context, id string, usedAt time.Time) error {
+	result, err := r.db.ExecContext(ctx, `
+update announcement_profiles
+set last_used_at = ?, use_count = use_count + 1, updated_at = ?
+where id = ?`, formatTime(usedAt), formatTime(usedAt), id)
+	if err != nil {
+		return fmt.Errorf("mark announcement profile %q used: %w", id, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark announcement profile %q used rows affected: %w", id, err)
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
 	}
 	return nil
 }
@@ -134,6 +163,7 @@ func (r *AnnouncementProfileRepository) Delete(ctx context.Context, id string) e
 
 func scanAnnouncementProfile(scanner rowScanner) (domain.AnnouncementProfile, error) {
 	var profile domain.AnnouncementProfile
+	var lastUsedAt sql.NullString
 	var createdAt string
 	var updatedAt string
 
@@ -141,6 +171,7 @@ func scanAnnouncementProfile(scanner rowScanner) (domain.AnnouncementProfile, er
 		&profile.ID,
 		&profile.Name,
 		&profile.Description,
+		&profile.DefaultStreamTitle,
 		&profile.DefaultStreamURL,
 		&profile.DefaultCategory,
 		&profile.DefaultMessage,
@@ -150,6 +181,8 @@ func scanAnnouncementProfile(scanner rowScanner) (domain.AnnouncementProfile, er
 		&profile.DefaultBlueskyCardThumbnailURL,
 		&profile.DefaultBlueskyCardThumbnailDataURL,
 		&profile.DefaultGroupID,
+		&lastUsedAt,
+		&profile.UseCount,
 		&createdAt,
 		&updatedAt,
 	)
@@ -164,6 +197,13 @@ func scanAnnouncementProfile(scanner rowScanner) (domain.AnnouncementProfile, er
 	parsedUpdatedAt, err := parseTime(updatedAt)
 	if err != nil {
 		return domain.AnnouncementProfile{}, fmt.Errorf("parse announcement profile updated_at: %w", err)
+	}
+	if lastUsedAt.Valid && lastUsedAt.String != "" {
+		parsedLastUsedAt, err := parseTime(lastUsedAt.String)
+		if err != nil {
+			return domain.AnnouncementProfile{}, fmt.Errorf("parse announcement profile last_used_at: %w", err)
+		}
+		profile.LastUsedAt = &parsedLastUsedAt
 	}
 
 	profile.CreatedAt = parsedCreatedAt

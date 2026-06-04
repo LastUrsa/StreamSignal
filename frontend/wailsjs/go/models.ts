@@ -102,6 +102,7 @@ export namespace domain {
 	    id: string;
 	    name: string;
 	    description: string;
+	    defaultStreamTitle: string;
 	    defaultStreamURL: string;
 	    defaultCategory: string;
 	    defaultMessage: string;
@@ -111,6 +112,9 @@ export namespace domain {
 	    defaultBlueskyCardThumbnailURL: string;
 	    defaultBlueskyCardThumbnailDataURL: string;
 	    defaultGroupID: string;
+	    // Go type: time
+	    lastUsedAt?: any;
+	    useCount: number;
 	    // Go type: time
 	    createdAt: any;
 	    // Go type: time
@@ -125,6 +129,7 @@ export namespace domain {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.defaultStreamTitle = source["defaultStreamTitle"];
 	        this.defaultStreamURL = source["defaultStreamURL"];
 	        this.defaultCategory = source["defaultCategory"];
 	        this.defaultMessage = source["defaultMessage"];
@@ -134,6 +139,8 @@ export namespace domain {
 	        this.defaultBlueskyCardThumbnailURL = source["defaultBlueskyCardThumbnailURL"];
 	        this.defaultBlueskyCardThumbnailDataURL = source["defaultBlueskyCardThumbnailDataURL"];
 	        this.defaultGroupID = source["defaultGroupID"];
+	        this.lastUsedAt = this.convertValues(source["lastUsedAt"], null);
+	        this.useCount = source["useCount"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }

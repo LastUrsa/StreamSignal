@@ -60,6 +60,14 @@ Run the app in development mode:
 wails dev
 ```
 
+Run a sandboxed local test instance with separate database and credential storage:
+
+```bash
+STREAMSIGNAL_ENV=test wails dev
+```
+
+Production uses the normal `StreamSignal` app data folder and `streamsignal` credential namespace. Any non-production `STREAMSIGNAL_ENV` value uses its own namespaced store, such as `StreamSignal-test` and `streamsignal-test`, so test destinations and credentials do not mix with your personal streaming setup.
+
 Build the Windows desktop app from WSL:
 
 ```bash
@@ -70,6 +78,12 @@ Build and launch it for local review:
 
 ```bash
 ./scripts/build-prod-windows.sh --launch
+```
+
+Build and launch it against a sandboxed test data store:
+
+```bash
+./scripts/build-prod-windows.sh --launch --env test
 ```
 
 Build a macOS app bundle on a Mac:

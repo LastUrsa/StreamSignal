@@ -55,20 +55,23 @@ type DestinationGroupMembership struct {
 }
 
 type AnnouncementProfile struct {
-	ID                                 string    `json:"id"`
-	Name                               string    `json:"name"`
-	Description                        string    `json:"description"`
-	DefaultStreamURL                   string    `json:"defaultStreamURL"`
-	DefaultCategory                    string    `json:"defaultCategory"`
-	DefaultMessage                     string    `json:"defaultMessage"`
-	DefaultHashtags                    string    `json:"defaultHashtags"`
-	DefaultAnnouncementImageURL        string    `json:"defaultAnnouncementImageURL"`
-	DefaultAnnouncementImageDataURL    string    `json:"defaultAnnouncementImageDataURL"`
-	DefaultBlueskyCardThumbnailURL     string    `json:"defaultBlueskyCardThumbnailURL"`
-	DefaultBlueskyCardThumbnailDataURL string    `json:"defaultBlueskyCardThumbnailDataURL"`
-	DefaultGroupID                     string    `json:"defaultGroupID"`
-	CreatedAt                          time.Time `json:"createdAt"`
-	UpdatedAt                          time.Time `json:"updatedAt"`
+	ID                                 string     `json:"id"`
+	Name                               string     `json:"name"`
+	Description                        string     `json:"description"`
+	DefaultStreamTitle                 string     `json:"defaultStreamTitle"`
+	DefaultStreamURL                   string     `json:"defaultStreamURL"`
+	DefaultCategory                    string     `json:"defaultCategory"`
+	DefaultMessage                     string     `json:"defaultMessage"`
+	DefaultHashtags                    string     `json:"defaultHashtags"`
+	DefaultAnnouncementImageURL        string     `json:"defaultAnnouncementImageURL"`
+	DefaultAnnouncementImageDataURL    string     `json:"defaultAnnouncementImageDataURL"`
+	DefaultBlueskyCardThumbnailURL     string     `json:"defaultBlueskyCardThumbnailURL"`
+	DefaultBlueskyCardThumbnailDataURL string     `json:"defaultBlueskyCardThumbnailDataURL"`
+	DefaultGroupID                     string     `json:"defaultGroupID"`
+	LastUsedAt                         *time.Time `json:"lastUsedAt"`
+	UseCount                           int        `json:"useCount"`
+	CreatedAt                          time.Time  `json:"createdAt"`
+	UpdatedAt                          time.Time  `json:"updatedAt"`
 }
 
 type AppSettings struct {

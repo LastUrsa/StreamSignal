@@ -22,6 +22,8 @@ export function GeneratePreview(arg1:domain.Announcement):Promise<Array<domain.P
 
 export function GetAnnouncementProfile(arg1:string):Promise<domain.AnnouncementProfile>;
 
+export function GetDestination(arg1:string):Promise<domain.Destination>;
+
 export function GetDestinationGroup(arg1:string):Promise<domain.DestinationGroup>;
 
 export function GetDestinationGroupIDs(arg1:string):Promise<Array<string>>;
@@ -43,6 +45,8 @@ export function ListDestinationGroups():Promise<Array<domain.DestinationGroup>>;
 export function ListDestinations():Promise<Array<domain.Destination>>;
 
 export function ListPendingLiveNowSessions():Promise<Array<domain.ActiveLiveNowSession>>;
+
+export function MarkAnnouncementProfileUsed(arg1:string):Promise<void>;
 
 export function SaveDestination(arg1:domain.Destination):Promise<domain.Destination>;
 

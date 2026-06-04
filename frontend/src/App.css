@@ -585,6 +585,36 @@ button:focus-visible {
     font-size: 0.78rem;
 }
 
+.destination-group-metadata {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: fit-content;
+    max-width: 100%;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-transform: none;
+}
+
+.destination-group-metadata svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: var(--text-soft);
+}
+
+.destination-group-metadata span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+    font: inherit;
+    text-transform: none;
+}
+
 .destination-picker-list,
 .destination-card-grid {
     display: grid;
@@ -671,6 +701,30 @@ button:focus-visible {
 .profile-selector-panel {
     display: grid;
     gap: 10px;
+}
+
+.profile-selector-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.profile-selector-row .field {
+    min-width: 0;
+}
+
+.profile-action-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.profile-save-button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    flex: 0 0 44px;
 }
 
 .profile-selector-panel > small {
@@ -1018,7 +1072,7 @@ button:focus-visible {
 }
 
 .destination-editor-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
 }
 
@@ -1123,6 +1177,37 @@ button:focus-visible {
     height: 16px;
 }
 
+.destination-groups-field {
+    align-self: stretch;
+}
+
+.platform-label-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.compact-icon-button {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+}
+
+.destination-groups-field .field-label-row {
+    margin-bottom: 4px;
+}
+
+.flat-membership-list {
+    gap: 4px;
+}
+
+.flat-membership-list .checkbox-field {
+    min-height: 28px;
+    padding: 2px 0;
+    background: transparent;
+}
+
 .template-helper-header {
     display: flex;
     align-items: center;
@@ -1130,10 +1215,23 @@ button:focus-visible {
     gap: 12px;
 }
 
+.template-token-field {
+    display: grid;
+    gap: 8px;
+}
+
+.template-token-field .field-label-row {
+    justify-content: space-between;
+}
+
 .template-token-list {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+.compact-token-list {
+    gap: 6px;
 }
 
 .template-token {
@@ -1145,6 +1243,11 @@ button:focus-visible {
     font-family: "Cascadia Code", "Consolas", monospace;
     font-size: 0.82rem;
     cursor: pointer;
+}
+
+.compact-token-list .template-token {
+    padding: 5px 8px;
+    font-size: 0.78rem;
 }
 
 .template-token:hover {
@@ -1325,6 +1428,57 @@ button:focus-visible {
     color: #ffe2b0;
 }
 
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgb(7 12 16 / 68%);
+}
+
+.modal-panel {
+    width: min(100%, 460px);
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+
+.save-profile-modal {
+    display: grid;
+    gap: 16px;
+}
+
+.setup-modal {
+    display: grid;
+    width: min(calc(100vw - 32px), 680px);
+    max-height: none;
+    overflow: visible;
+    gap: 14px;
+    padding: 18px;
+}
+
+.setup-modal .guided-setup-list {
+    gap: 8px;
+}
+
+.setup-modal .guided-setup-step {
+    padding: 10px 12px;
+}
+
+.setup-modal .guided-setup-step p {
+    margin-top: 4px;
+}
+
+.modal-actions {
+    justify-content: flex-end;
+}
+
 .stacked-callout {
     display: grid;
     gap: 10px;
@@ -1430,8 +1584,13 @@ button:focus-visible {
     .form-grid,
     .log-filter-panel,
     .log-card,
+    .profile-selector-row,
     .profile-list .activity-card {
         grid-template-columns: 1fr;
+    }
+
+    .profile-action-buttons {
+        justify-content: flex-start;
     }
 
     .panel-header,

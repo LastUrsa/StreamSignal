@@ -4,7 +4,9 @@ param(
 
     [string]$BuildRoot = (Join-Path $env:TEMP "StreamSignal-prod-build"),
 
-    [switch]$Launch
+    [switch]$Launch,
+
+    [string]$LaunchEnvironment = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,7 +27,19 @@ try {
     wails build
     $exe = Join-Path $BuildRoot "build\bin\StreamSignal.exe"
     if ($Launch) {
-        Start-Process -FilePath $exe
+        $previousEnvironment = $env:STREAMSIGNAL_ENV
+        try {
+            if (-not [string]::IsNullOrWhiteSpace($LaunchEnvironment)) {
+                $env:STREAMSIGNAL_ENV = $LaunchEnvironment
+            }
+            Start-Process -FilePath $exe
+        } finally {
+            if ($null -eq $previousEnvironment) {
+                Remove-Item Env:\STREAMSIGNAL_ENV -ErrorAction SilentlyContinue
+            } else {
+                $env:STREAMSIGNAL_ENV = $previousEnvironment
+            }
+        }
     }
     Write-Host "Built $exe"
 } finally {

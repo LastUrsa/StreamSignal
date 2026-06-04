@@ -2,6 +2,7 @@ export interface AnnouncementProfileInput {
     id: string;
     name: string;
     description: string;
+    defaultStreamTitle: string;
     defaultStreamURL: string;
     defaultCategory: string;
     defaultMessage: string;
@@ -11,6 +12,8 @@ export interface AnnouncementProfileInput {
     defaultBlueskyCardThumbnailURL: string;
     defaultBlueskyCardThumbnailDataURL: string;
     defaultGroupID: string;
+    lastUsedAt?: string;
+    useCount?: number;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -19,6 +22,7 @@ export interface AnnouncementProfileFormState {
     id: string;
     name: string;
     description: string;
+    defaultStreamTitle: string;
     defaultStreamURL: string;
     defaultCategory: string;
     defaultMessage: string;
@@ -35,6 +39,7 @@ export function createEmptyAnnouncementProfileForm(): AnnouncementProfileFormSta
         id: '',
         name: '',
         description: '',
+        defaultStreamTitle: '',
         defaultStreamURL: '',
         defaultCategory: '',
         defaultMessage: '',
@@ -52,6 +57,7 @@ export function toAnnouncementProfileFormState(profile: AnnouncementProfileInput
         id: profile.id,
         name: profile.name,
         description: profile.description,
+        defaultStreamTitle: profile.defaultStreamTitle ?? '',
         defaultStreamURL: profile.defaultStreamURL,
         defaultCategory: profile.defaultCategory,
         defaultMessage: profile.defaultMessage,
@@ -69,6 +75,7 @@ export function toAnnouncementProfileInput(form: AnnouncementProfileFormState): 
         id: form.id,
         name: form.name,
         description: form.description,
+        defaultStreamTitle: form.defaultStreamTitle,
         defaultStreamURL: form.defaultStreamURL,
         defaultCategory: form.defaultCategory,
         defaultMessage: form.defaultMessage,

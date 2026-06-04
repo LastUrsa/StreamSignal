@@ -42,6 +42,10 @@ export function GetAnnouncementProfile(arg1) {
   return window['go']['main']['App']['GetAnnouncementProfile'](arg1);
 }
 
+export function GetDestination(arg1) {
+  return window['go']['main']['App']['GetDestination'](arg1);
+}
+
 export function GetDestinationGroup(arg1) {
   return window['go']['main']['App']['GetDestinationGroup'](arg1);
 }
@@ -84,6 +88,10 @@ export function ListDestinations() {
 
 export function ListPendingLiveNowSessions() {
   return window['go']['main']['App']['ListPendingLiveNowSessions']();
+}
+
+export function MarkAnnouncementProfileUsed(arg1) {
+  return window['go']['main']['App']['MarkAnnouncementProfileUsed'](arg1);
 }
 
 export function SaveDestination(arg1) {

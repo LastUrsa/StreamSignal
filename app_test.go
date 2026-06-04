@@ -313,6 +313,17 @@ func TestAppAnnouncementProfileBindingsPersistDuplicateDeleteAndLog(t *testing.T
 		t.Fatalf("expected duplicated profile to preserve defaults with copy name, got %+v", duplicate)
 	}
 
+	if err := app.MarkAnnouncementProfileUsed(saved.ID); err != nil {
+		t.Fatalf("mark announcement profile used: %v", err)
+	}
+	used, err := app.GetAnnouncementProfile(saved.ID)
+	if err != nil {
+		t.Fatalf("get used announcement profile: %v", err)
+	}
+	if used.LastUsedAt == nil || used.UseCount != 1 {
+		t.Fatalf("expected usage fields to update, got %+v", used)
+	}
+
 	if err := app.DeleteAnnouncementProfile(saved.ID); err != nil {
 		t.Fatalf("delete announcement profile: %v", err)
 	}
@@ -330,7 +341,7 @@ func TestAppAnnouncementProfileBindingsPersistDuplicateDeleteAndLog(t *testing.T
 	if err != nil {
 		t.Fatalf("get logs: %v", err)
 	}
-	for _, action := range []string{"create_announcement_profile", "duplicate_announcement_profile", "delete_announcement_profile"} {
+	for _, action := range []string{"create_announcement_profile", "duplicate_announcement_profile", "use_announcement_profile", "delete_announcement_profile"} {
 		if !logsContainAction(logs, action) {
 			t.Fatalf("expected %s log entry, got %+v", action, logs)
 		}

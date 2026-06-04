@@ -11,6 +11,7 @@ vi.mock('../../../wailsjs/go/main/App', () => ({
     ForceGoLive: vi.fn(),
     GeneratePreview: vi.fn(),
     GetAnnouncementProfile: vi.fn(),
+    GetDestination: vi.fn(),
     GetDestinationGroup: vi.fn(),
     GetDestinationGroupIDs: vi.fn(),
     GetDiagnostics: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../../../wailsjs/go/main/App', () => ({
     ListDestinationGroups: vi.fn(),
     ListPendingLiveNowSessions: vi.fn(),
     ListDestinations: vi.fn(),
+    MarkAnnouncementProfileUsed: vi.fn(),
     SaveDestination: vi.fn(),
     SaveAnnouncementProfile: vi.fn(),
     SaveDestinationGroup: vi.fn(),
@@ -44,6 +46,7 @@ import {
     forceGoLive,
     generatePreview,
     getAnnouncementProfile,
+    getDestination,
     getDestinationGroup,
     getDestinationGroupIDs,
     getGroupDestinations,
@@ -55,6 +58,7 @@ import {
     listDestinationGroups,
     listDestinations,
     listPendingLiveNowSessions,
+    markAnnouncementProfileUsed,
     saveAnnouncementProfile,
     saveDestination,
     saveDestinationGroup,
@@ -103,6 +107,7 @@ describe('streamsignal api wrappers', () => {
             id: 'music-profile',
             name: 'Music Stream',
             description: 'Music nights',
+            defaultStreamTitle: 'Late Night Music',
             defaultStreamURL: 'https://example.com/live',
             defaultCategory: 'Music',
             defaultMessage: 'See you there',
@@ -175,6 +180,7 @@ describe('streamsignal api wrappers', () => {
             content: '',
         } as never);
         vi.mocked(bindings.ListDestinations).mockResolvedValue([] as never);
+        vi.mocked(bindings.GetDestination).mockResolvedValue(destination as never);
         vi.mocked(bindings.ListDestinationGroups).mockResolvedValue([destinationGroup] as never);
         vi.mocked(bindings.GetDestinationGroup).mockResolvedValue(destinationGroup as never);
         vi.mocked(bindings.SaveDestinationGroup).mockResolvedValue(destinationGroup as never);
@@ -188,6 +194,7 @@ describe('streamsignal api wrappers', () => {
         vi.mocked(bindings.GetAnnouncementProfile).mockResolvedValue(profile as never);
         vi.mocked(bindings.SaveAnnouncementProfile).mockResolvedValue(profile as never);
         vi.mocked(bindings.DuplicateAnnouncementProfile).mockResolvedValue({ ...profile, id: 'music-profile-copy', name: 'Music Stream Copy' } as never);
+        vi.mocked(bindings.MarkAnnouncementProfileUsed).mockResolvedValue(undefined as never);
         vi.mocked(bindings.DeleteAnnouncementProfile).mockResolvedValue(undefined as never);
         vi.mocked(bindings.SaveDestination).mockResolvedValue(destination as never);
         vi.mocked(bindings.DeleteDestination).mockResolvedValue(undefined as never);
@@ -208,6 +215,7 @@ describe('streamsignal api wrappers', () => {
         await listPendingLiveNowSessions();
         await clearPendingLiveNowSession('bluesky-main');
         await listDestinations();
+        await getDestination(destination.id);
         await listDestinationGroups();
         await getDestinationGroup(destinationGroupID);
         await saveDestinationGroup(destinationGroup);
@@ -221,6 +229,7 @@ describe('streamsignal api wrappers', () => {
         await getAnnouncementProfile(profile.id);
         await saveAnnouncementProfile(profile);
         await duplicateAnnouncementProfile(profile.id);
+        await markAnnouncementProfileUsed(profile.id);
         await deleteAnnouncementProfile(profile.id);
         await saveDestination(destination);
         await deleteDestination('discord-main');
@@ -237,6 +246,7 @@ describe('streamsignal api wrappers', () => {
         expect(bindings.ListPendingLiveNowSessions).toHaveBeenCalled();
         expect(bindings.ClearPendingLiveNowSession).toHaveBeenCalledWith('bluesky-main');
         expect(bindings.ListDestinations).toHaveBeenCalled();
+        expect(bindings.GetDestination).toHaveBeenCalledWith(destination.id);
         expect(bindings.ListDestinationGroups).toHaveBeenCalled();
         expect(bindings.GetDestinationGroup).toHaveBeenCalledWith(destinationGroupID);
         expect(bindings.SaveDestinationGroup).toHaveBeenCalledWith(expect.objectContaining({
@@ -255,11 +265,13 @@ describe('streamsignal api wrappers', () => {
         expect(bindings.SaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
             id: profile.id,
             name: profile.name,
+            defaultStreamTitle: profile.defaultStreamTitle,
             defaultStreamURL: profile.defaultStreamURL,
             defaultAnnouncementImageURL: profile.defaultAnnouncementImageURL,
             defaultGroupID: profile.defaultGroupID,
         }));
         expect(bindings.DuplicateAnnouncementProfile).toHaveBeenCalledWith(profile.id);
+        expect(bindings.MarkAnnouncementProfileUsed).toHaveBeenCalledWith(profile.id);
         expect(bindings.DeleteAnnouncementProfile).toHaveBeenCalledWith(profile.id);
         expect(bindings.SaveDestination).toHaveBeenCalledWith(expect.objectContaining({
             id: destination.id,

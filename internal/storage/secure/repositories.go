@@ -8,6 +8,7 @@ import (
 
 	"StreamSignal/internal/domain"
 	"StreamSignal/internal/ports"
+	"StreamSignal/internal/runtimeenv"
 )
 
 const secretRefPrefix = "secret://"
@@ -335,9 +336,9 @@ func isSecretRef(value string) bool {
 }
 
 func destinationSecretKey(destinationID, field string) string {
-	return fmt.Sprintf("streamsignal/destinations/%s/%s", destinationID, field)
+	return fmt.Sprintf("%s/destinations/%s/%s", runtimeenv.SecretNamespace(), destinationID, field)
 }
 
 func liveNowSecretKey(destinationID string) string {
-	return fmt.Sprintf("streamsignal/live-now/%s/credential", destinationID)
+	return fmt.Sprintf("%s/live-now/%s/credential", runtimeenv.SecretNamespace(), destinationID)
 }

@@ -9,6 +9,7 @@ type migration struct {
 	version int
 	name    string
 	sql     string
+	apply   func(*sql.Tx) error
 }
 
 var migrations = []migration{
@@ -130,6 +131,7 @@ create table if not exists announcement_profiles (
   id text primary key,
   name text not null,
   description text not null,
+  default_stream_title text not null,
   default_stream_url text not null,
   default_category text not null,
   default_message text not null,
@@ -144,6 +146,23 @@ create table if not exists announcement_profiles (
   foreign key (default_group_id) references destination_groups(id) on delete set null
 );
 create unique index if not exists announcement_profiles_name_unique on announcement_profiles(lower(name));`,
+	},
+	{
+		version: 10,
+		name:    "add_announcement_profile_usage",
+		apply: func(tx *sql.Tx) error {
+			if err := addColumnIfMissing(tx, "announcement_profiles", "last_used_at", "last_used_at text"); err != nil {
+				return err
+			}
+			return addColumnIfMissing(tx, "announcement_profiles", "use_count", "use_count integer not null default 0")
+		},
+	},
+	{
+		version: 11,
+		name:    "add_announcement_profile_stream_title",
+		apply: func(tx *sql.Tx) error {
+			return addColumnIfMissing(tx, "announcement_profiles", "default_stream_title", "default_stream_title text not null default ''")
+		},
 	},
 }
 
@@ -172,7 +191,7 @@ create table if not exists schema_migrations (
 			return fmt.Errorf("begin migration %d: %w", item.version, err)
 		}
 
-		if _, err := tx.Exec(item.sql); err != nil {
+		if err := applyMigration(tx, item); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("apply migration %d (%s): %w", item.version, item.name, err)
 		}
@@ -187,5 +206,44 @@ create table if not exists schema_migrations (
 		}
 	}
 
+	return nil
+}
+
+func applyMigration(tx *sql.Tx, item migration) error {
+	if item.apply != nil {
+		return item.apply(tx)
+	}
+	_, err := tx.Exec(item.sql)
+	return err
+}
+
+func addColumnIfMissing(tx *sql.Tx, table string, column string, definition string) error {
+	rows, err := tx.Query(fmt.Sprintf(`pragma table_info(%s)`, table))
+	if err != nil {
+		return fmt.Errorf("inspect %s columns: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var primaryKey int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return fmt.Errorf("scan %s column metadata: %w", table, err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate %s column metadata: %w", table, err)
+	}
+
+	if _, err := tx.Exec(fmt.Sprintf(`alter table %s add column %s`, table, definition)); err != nil {
+		return fmt.Errorf("add %s.%s: %w", table, column, err)
+	}
 	return nil
 }

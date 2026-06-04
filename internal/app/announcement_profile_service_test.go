@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"StreamSignal/internal/domain"
 	sqlitestore "StreamSignal/internal/storage/sqlite"
@@ -17,6 +18,7 @@ func TestAnnouncementProfileServiceSavesAndValidatesProfiles(t *testing.T) {
 	saved, err := service.Save(ctx, domain.AnnouncementProfile{
 		Name:                           "Music Stream",
 		Description:                    "Music announcements",
+		DefaultStreamTitle:             "Late Night Music",
 		DefaultStreamURL:               "https://example.com/live",
 		DefaultCategory:                "Music",
 		DefaultMessage:                 "Going live with music.",
@@ -30,6 +32,9 @@ func TestAnnouncementProfileServiceSavesAndValidatesProfiles(t *testing.T) {
 	}
 	if saved.ID == "" {
 		t.Fatal("expected generated profile id")
+	}
+	if saved.DefaultStreamTitle != "Late Night Music" {
+		t.Fatalf("expected stream title to round trip, got %+v", saved)
 	}
 
 	_, err = service.Save(ctx, domain.AnnouncementProfile{Name: " music stream "})
@@ -45,6 +50,45 @@ func TestAnnouncementProfileServiceSavesAndValidatesProfiles(t *testing.T) {
 	_, err = service.Save(ctx, domain.AnnouncementProfile{Name: "Bad Group", DefaultGroupID: "missing-group"})
 	if err == nil || !strings.Contains(err.Error(), "group") {
 		t.Fatalf("expected missing group validation error, got %v", err)
+	}
+}
+
+func TestAnnouncementProfileServiceMarksUsageAndPreservesItOnSave(t *testing.T) {
+	db := openDestinationGroupServiceDB(t)
+	ctx := context.Background()
+	repository := sqlitestore.NewAnnouncementProfileRepository(db)
+	service := NewAnnouncementProfileService(repository, sqlitestore.NewDestinationGroupRepository(db))
+	usedAt := time.Date(2026, 6, 4, 12, 30, 0, 0, time.UTC)
+	service.clock = fixedClock{now: usedAt}
+
+	saved, err := service.Save(ctx, domain.AnnouncementProfile{
+		Name:           "Music Stream",
+		DefaultMessage: "Going live with music.",
+	})
+	if err != nil {
+		t.Fatalf("save profile: %v", err)
+	}
+
+	if err := service.MarkUsed(ctx, saved.ID); err != nil {
+		t.Fatalf("mark profile used: %v", err)
+	}
+
+	used, err := service.Get(ctx, saved.ID)
+	if err != nil {
+		t.Fatalf("get used profile: %v", err)
+	}
+	if used.LastUsedAt == nil || !used.LastUsedAt.Equal(usedAt) || used.UseCount != 1 {
+		t.Fatalf("expected usage fields to be updated, got %+v", used)
+	}
+
+	used.Description = "Updated description"
+	service.clock = fixedClock{now: usedAt.Add(time.Hour)}
+	updated, err := service.Save(ctx, used)
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+	if updated.LastUsedAt == nil || !updated.LastUsedAt.Equal(usedAt) || updated.UseCount != 1 {
+		t.Fatalf("expected usage fields to be preserved, got %+v", updated)
 	}
 }
 

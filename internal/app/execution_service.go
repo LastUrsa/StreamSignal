@@ -373,8 +373,10 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 		if destination.Platform == domain.PlatformBluesky {
 			liveStatusEnabled, err := blueskyLiveStatusEnabledForDestination(destination)
 			if err != nil {
+				liveStatusErr := err
 				if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-					return nil, domain.AppSettings{}, nil, err
+					results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", liveStatusErr.Error()), err))
+					continue
 				}
 				results = append(results, domain.ExecutionResult{
 					DestinationID:   destination.ID,
@@ -391,8 +393,10 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 				message = "Published successfully. Live Status off."
 			} else {
 				if err := s.applyBlueskyLiveNow(ctx, destination, normalized); err != nil {
+					liveNowErr := err
 					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-						return nil, domain.AppSettings{}, nil, err
+						results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Now update failed: %s", liveNowErr.Error()), err))
+						continue
 					}
 					results = append(results, domain.ExecutionResult{
 						DestinationID:   destination.ID,
@@ -406,8 +410,10 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 					continue
 				}
 				if err := s.trackBlueskyLiveNowSession(ctx, destination, normalized, now); err != nil {
+					trackingErr := err
 					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-						return nil, domain.AppSettings{}, nil, err
+						results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", trackingErr.Error()), err))
+						continue
 					}
 					results = append(results, domain.ExecutionResult{
 						DestinationID:   destination.ID,
@@ -425,7 +431,8 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 		}
 
 		if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-			return nil, domain.AppSettings{}, nil, err
+			results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, "", err))
+			continue
 		}
 
 		results = append(results, domain.ExecutionResult{
@@ -473,7 +480,20 @@ func resolveAnnouncementDestinations(
 		if err != nil {
 			return nil, err
 		}
-		return enabledDestinations(groupDestinations), nil
+		hydratedDestinations := make([]domain.Destination, 0, len(groupDestinations))
+		for _, groupDestination := range groupDestinations {
+			if !groupDestination.Enabled {
+				continue
+			}
+			destination, err := destinations.Get(ctx, groupDestination.ID)
+			if err != nil {
+				return nil, err
+			}
+			if destination.Enabled {
+				hydratedDestinations = append(hydratedDestinations, destination)
+			}
+		}
+		return hydratedDestinations, nil
 	}
 
 	allDestinations, err := destinations.List(ctx)
@@ -491,6 +511,22 @@ func enabledDestinations(destinations []domain.Destination) []domain.Destination
 		}
 	}
 	return enabled
+}
+
+func publishedWithPostHistoryFailureResult(destination domain.Destination, content string, receipt *domain.PublishReceipt, baseMessage string, err error) domain.ExecutionResult {
+	message := fmt.Sprintf("Published successfully, but duplicate tracking failed: %s", err.Error())
+	if strings.TrimSpace(baseMessage) != "" {
+		message = fmt.Sprintf("%s. Duplicate tracking also failed: %s", strings.TrimRight(baseMessage, "."), err.Error())
+	}
+	return domain.ExecutionResult{
+		DestinationID:   destination.ID,
+		DestinationName: destination.Name,
+		Platform:        destination.Platform,
+		State:           domain.ExecutionStateFailed,
+		Message:         message,
+		Content:         content,
+		Receipt:         receipt,
+	}
 }
 
 func (s *ExecutionService) applyBlueskyLiveNow(ctx context.Context, destination domain.Destination, announcement domain.Announcement) error {

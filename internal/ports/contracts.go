@@ -33,6 +33,7 @@ type AnnouncementProfileRepository interface {
 	Get(ctx context.Context, id string) (domain.AnnouncementProfile, error)
 	GetByName(ctx context.Context, name string) (domain.AnnouncementProfile, error)
 	Save(ctx context.Context, profile domain.AnnouncementProfile) error
+	MarkUsed(ctx context.Context, id string, usedAt time.Time) error
 	Delete(ctx context.Context, id string) error
 }
 

@@ -57,6 +57,7 @@ Keep targeted coverage around:
 - duplicate-publish warning and confirmation behavior
 - Bluesky `Live Now` set, clear, duration, opt-out, and recovery behavior
 - credential persistence through secret references rather than raw values
+- non-production runtime data and credential namespace isolation
 - Discord, Bluesky, and Mastodon publisher payloads
 - remote image and preview URL validation
 - settings and profile defaults that prefill Home sessions without overriding user edits unexpectedly

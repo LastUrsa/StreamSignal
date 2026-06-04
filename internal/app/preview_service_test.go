@@ -19,8 +19,13 @@ func (s *destinationListStub) List(context.Context) ([]domain.Destination, error
 	return append([]domain.Destination(nil), s.items...), nil
 }
 
-func (s *destinationListStub) Get(context.Context, string) (domain.Destination, error) {
-	panic("unexpected Get call")
+func (s *destinationListStub) Get(_ context.Context, id string) (domain.Destination, error) {
+	for _, item := range s.items {
+		if item.ID == id {
+			return item, nil
+		}
+	}
+	return domain.Destination{}, sql.ErrNoRows
 }
 
 func (s *destinationListStub) Save(context.Context, domain.Destination) error {
@@ -188,7 +193,18 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinations(t *testing.T) {
 }
 
 func TestPreviewServiceGeneratesItemsForSelectedDestinationGroup(t *testing.T) {
-	destinations := &destinationListStub{}
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "discord-main",
+				Platform:   domain.PlatformDiscord,
+				Name:       "Main Discord",
+				Enabled:    true,
+				Template:   "{{stream_title}}",
+				ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+			},
+		},
+	}
 	settings := &settingsLoadStub{item: domain.DefaultAppSettings()}
 	groups := &destinationGroupRepositoryStub{
 		destinationsByGroup: map[string][]domain.Destination{
@@ -199,7 +215,7 @@ func TestPreviewServiceGeneratesItemsForSelectedDestinationGroup(t *testing.T) {
 					Name:       "Main Discord",
 					Enabled:    true,
 					Template:   "{{stream_title}}",
-					ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+					ConfigJSON: `{"webhookKey":"secret://streamsignal/destinations/discord-main/discord-webhook"}`,
 				},
 				{
 					ID:         "discord-disabled",

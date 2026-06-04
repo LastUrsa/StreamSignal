@@ -64,6 +64,8 @@ func (s *AnnouncementProfileService) Save(ctx context.Context, profile domain.An
 		existing, err := s.repository.Get(ctx, profile.ID)
 		if err == nil {
 			profile.CreatedAt = existing.CreatedAt
+			profile.LastUsedAt = existing.LastUsedAt
+			profile.UseCount = existing.UseCount
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return domain.AnnouncementProfile{}, err
 		} else if profile.CreatedAt.IsZero() {
@@ -81,6 +83,14 @@ func (s *AnnouncementProfileService) Save(ctx context.Context, profile domain.An
 	return profile, nil
 }
 
+func (s *AnnouncementProfileService) MarkUsed(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("announcement profile id is required")
+	}
+	return s.repository.MarkUsed(ctx, id, s.clock.Now())
+}
+
 func (s *AnnouncementProfileService) Duplicate(ctx context.Context, id string) (domain.AnnouncementProfile, error) {
 	source, err := s.Get(ctx, id)
 	if err != nil {
@@ -89,6 +99,8 @@ func (s *AnnouncementProfileService) Duplicate(ctx context.Context, id string) (
 	clone := source
 	clone.ID = ""
 	clone.Name = s.duplicateName(ctx, source.Name)
+	clone.LastUsedAt = nil
+	clone.UseCount = 0
 	clone.CreatedAt = s.clock.Now()
 	clone.UpdatedAt = clone.CreatedAt
 	return s.Save(ctx, clone)
@@ -106,6 +118,7 @@ func normalizeAnnouncementProfile(profile domain.AnnouncementProfile) domain.Ann
 	profile.ID = strings.TrimSpace(profile.ID)
 	profile.Name = strings.TrimSpace(profile.Name)
 	profile.Description = strings.TrimSpace(profile.Description)
+	profile.DefaultStreamTitle = strings.TrimSpace(profile.DefaultStreamTitle)
 	profile.DefaultStreamURL = strings.TrimSpace(profile.DefaultStreamURL)
 	profile.DefaultCategory = strings.TrimSpace(profile.DefaultCategory)
 	profile.DefaultMessage = strings.TrimSpace(profile.DefaultMessage)
