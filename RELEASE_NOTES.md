@@ -2,13 +2,14 @@
 
 User-facing release notes and planned artifact names. Keep this focused on changes that matter to users, testers, and release packaging.
 
-## 0.3.0 Announcement Profiles
+## 0.3.0 Announcement Profiles And Destination Groups
 
-StreamSignal 0.3.0 is a feature release focused on reusable announcement presets and cleaner media handling on Home.
+StreamSignal 0.3.0 is a feature release focused on reusable announcement presets, optional Destination Groups, and cleaner media handling on Home.
 
 ### Highlights
 
 - Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
+- Added Destination Groups as optional saved destination sets while preserving individual destination selection for one-off posting.
 - Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
 - Kept destination-level media as a fallback for existing saved destination configuration.
 - Added a dedicated Profiles workspace and Home **Announcement Preset** selector so profiles read as prefill presets, not a separate posting mode.
@@ -16,6 +17,10 @@ StreamSignal 0.3.0 is a feature release focused on reusable announcement presets
 ### Announcement Profiles
 
 Announcement Profiles are prefill presets for repeated stream types. Selecting one on Home fills the announcement fields and optional media defaults; if the preset has a Destination Group, Home switches to that group for review before publishing.
+
+### Destination Groups
+
+Destination Groups let users save reusable sets of destinations for common posting workflows. Home still supports selecting individual destinations directly, and a selected profile can preselect its associated group for review before publishing.
 
 ### Security And Reliability
 
