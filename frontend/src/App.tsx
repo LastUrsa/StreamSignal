@@ -1480,7 +1480,7 @@ function App() {
             } else {
                 resetProfileForm();
             }
-            setProfileStatus('Announcement profile saved.');
+            setProfileStatus('Announcement preset saved.');
             await refreshAnnouncementProfiles();
         } catch (err: unknown) {
             setProfileError(errorMessage(err, 'Unable to save announcement profile.'));
@@ -1492,7 +1492,7 @@ function App() {
         try {
             const duplicate = await duplicateAnnouncementProfile(profile.id);
             setProfileForm(toAnnouncementProfileFormState(duplicate));
-            setProfileStatus('Announcement profile duplicated.');
+            setProfileStatus('Announcement preset duplicated.');
             await refreshAnnouncementProfiles();
         } catch (err: unknown) {
             setProfileError(errorMessage(err, 'Unable to duplicate announcement profile.'));
@@ -1510,7 +1510,7 @@ function App() {
             if (profileForm.id === profile.id) {
                 resetProfileForm();
             }
-            setProfileStatus('Announcement profile deleted.');
+            setProfileStatus('Announcement preset deleted.');
             await refreshAnnouncementProfiles();
         } catch (err: unknown) {
             setProfileError(errorMessage(err, 'Unable to delete announcement profile.'));
@@ -2004,18 +2004,18 @@ function App() {
     const renderAnnouncementProfileSelector = () => (
         <section className="mini-panel profile-selector-panel">
             <label className="field">
-                <span>Announcement Profile</span>
-                <select aria-label="Announcement Profile" value={selectedAnnouncementProfileID} onChange={(event) => void selectAnnouncementProfile(event.target.value)}>
-                    <option value="">Manual / No Profile</option>
+                <span>Announcement Preset</span>
+                <select aria-label="Announcement Preset" value={selectedAnnouncementProfileID} onChange={(event) => void selectAnnouncementProfile(event.target.value)}>
+                    <option value="">Manual / No Preset</option>
                     {announcementProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
                 </select>
             </label>
             {activeAnnouncementProfile ? <small>{activeAnnouncementProfile.description || 'Preset applied. Review fields before publishing.'}</small> : null}
             {pendingProfileID ? (
                 <div className="warning-banner stacked-callout compact-callout">
-                    <p>Applying a new profile will replace current announcement values.</p>
+                    <p>Applying a new preset will replace current announcement values.</p>
                     <div className="quick-action-row">
-                        <button type="button" className="primary-button gold-button" onClick={() => void applyAnnouncementProfile(pendingProfileID)}>Apply Profile</button>
+                        <button type="button" className="primary-button gold-button" onClick={() => void applyAnnouncementProfile(pendingProfileID)}>Apply Preset</button>
                         <button type="button" className="ghost-button" onClick={() => setPendingProfileID(null)}>Cancel</button>
                     </div>
                 </div>
@@ -2094,15 +2094,15 @@ function App() {
             <div className="panel-header compact-header">
                 <div>
                     <h2>Announcement Profiles</h2>
-                    <p>Save reusable presets for stream types.</p>
+                    <p>Manage prefill presets for stream types.</p>
                 </div>
-                <button type="button" className="ghost-button" onClick={resetProfileForm}><Send aria-hidden="true" />New Profile</button>
+                <button type="button" className="ghost-button" onClick={resetProfileForm}><Send aria-hidden="true" />New Preset</button>
             </div>
             {profileError ? <p className="error-banner">{profileError}</p> : null}
             {profileStatus ? <p className="success-banner">{profileStatus}</p> : null}
             <div className="compact-list profile-list">
                 {announcementProfiles.length === 0 ? (
-                    <div className="empty-state compact-empty-state"><h3>No profiles yet</h3><p>Create presets for the stream types you repeat.</p></div>
+                    <div className="empty-state compact-empty-state"><h3>No presets yet</h3><p>Create prefill presets for the stream types you repeat.</p></div>
                 ) : announcementProfiles.map((profile) => {
                     const group = destinationGroups.find((item) => item.id === profile.defaultGroupID);
                     return (
@@ -2124,8 +2124,8 @@ function App() {
             </div>
             <form className="announcement-form compact-form" onSubmit={onAnnouncementProfileSubmit}>
                 <div className="form-grid">
-                    <label className="field"><span>Profile Name</span><input aria-label="Profile Name" value={profileForm.name} onChange={(event) => updateProfileForm('name', event.target.value)} placeholder="Music Stream" maxLength={80} /></label>
-                    <label className="field"><span>Description</span><input aria-label="Profile Description" value={profileForm.description} onChange={(event) => updateProfileForm('description', event.target.value)} placeholder="Music announcements and hashtags" maxLength={250} /></label>
+                    <label className="field"><span>Preset Name</span><input aria-label="Preset Name" value={profileForm.name} onChange={(event) => updateProfileForm('name', event.target.value)} placeholder="Music Stream" maxLength={80} /></label>
+                    <label className="field"><span>Description</span><input aria-label="Preset Description" value={profileForm.description} onChange={(event) => updateProfileForm('description', event.target.value)} placeholder="Music announcements and hashtags" maxLength={250} /></label>
                     <label className="field"><span>Stream URL</span><input aria-label="Profile Stream URL" value={profileForm.defaultStreamURL} onChange={(event) => updateProfileForm('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /></label>
                     <label className="field"><span>Category / Game</span><input aria-label="Profile Category" value={profileForm.defaultCategory} onChange={(event) => updateProfileForm('defaultCategory', event.target.value)} placeholder="Music, FFXIV, Variety..." /></label>
                     <label className="field"><span>Hashtags</span><input aria-label="Profile Hashtags" value={profileForm.defaultHashtags} onChange={(event) => updateProfileForm('defaultHashtags', event.target.value)} placeholder="#VTuber #Music" /></label>
@@ -2133,7 +2133,7 @@ function App() {
                 </div>
                 <label className="field"><span>Message</span><textarea aria-label="Profile Message" value={profileForm.defaultMessage} onChange={(event) => updateProfileForm('defaultMessage', event.target.value)} rows={3} placeholder="What are we getting into?" /></label>
                 <details className="config-section media-section">
-                    <summary className="config-section-title"><span><FileText aria-hidden="true" /> Profile Media</span><small>Optional image defaults</small></summary>
+                    <summary className="config-section-title"><span><FileText aria-hidden="true" /> Preset Media</span><small>Optional image defaults</small></summary>
                     <div className="config-section-body">
                         <div className="form-grid">
                             <label className="field"><span>Announcement Image URL</span><input aria-label="Profile Announcement Image URL" value={profileForm.defaultAnnouncementImageURL} onChange={(event) => { updateProfileForm('defaultAnnouncementImageURL', event.target.value); if (event.target.value.trim() !== '') updateProfileForm('defaultAnnouncementImageDataURL', ''); }} placeholder="https://example.com/promo.png" /></label>
@@ -2162,7 +2162,7 @@ function App() {
                     </div>
                 </details>
                 <div className="action-cluster-main">
-                    <button type="submit" className="primary-button gold-button">{profileForm.id ? 'Save Profile' : 'Create Profile'}</button>
+                    <button type="submit" className="primary-button gold-button">{profileForm.id ? 'Save Preset' : 'Create Preset'}</button>
                 </div>
             </form>
         </article>
