@@ -4,6 +4,10 @@ export interface AnnouncementInput {
     category: string;
     message: string;
     hashtags: string;
+    announcementImageURL: string;
+    announcementImageDataURL: string;
+    blueskyCardThumbnailURL: string;
+    blueskyCardThumbnailDataURL: string;
     destinationGroupID?: string;
 }
 

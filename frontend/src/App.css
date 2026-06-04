@@ -668,6 +668,15 @@ button:focus-visible {
     margin-top: 12px;
 }
 
+.profile-selector-panel {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-selector-panel > small {
+    color: var(--text-muted);
+}
+
 .recovery-card {
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -918,10 +927,19 @@ button:focus-visible {
     grid-template-columns: auto 1fr auto;
 }
 
+.activity-card.active {
+    border-color: color-mix(in srgb, var(--accent-gold) 50%, var(--border) 50%);
+    background: color-mix(in srgb, var(--surface-strong) 90%, var(--accent-gold) 10%);
+}
+
 .activity-card p,
 .log-card p {
     margin: 3px 0 0;
     color: var(--text-muted);
+}
+
+.activity-card small {
+    color: var(--metadata);
 }
 
 .status-badge {
@@ -1015,6 +1033,9 @@ button:focus-visible {
 
 .config-section summary {
     cursor: pointer;
+    margin: -14px;
+    padding: 14px;
+    width: calc(100% + 28px);
 }
 
 .config-section summary,
@@ -1038,10 +1059,37 @@ button:focus-visible {
     color: var(--metadata);
 }
 
+.config-section[open] > summary {
+    margin: -14px -14px 0;
+}
+
 .config-section-body {
     display: grid;
     gap: 12px;
     margin-top: 12px;
+}
+
+.media-section {
+    margin-top: 2px;
+}
+
+.media-section input[type="file"] {
+    min-height: 44px;
+    padding: 8px 10px;
+}
+
+.upload-selection-indicator {
+    justify-self: start;
+    width: max-content;
+    max-width: 100%;
+    padding: 5px 8px;
+    border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border) 55%);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--success) 12%, var(--surface-strong) 88%);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1.2;
 }
 
 .open-section {
@@ -1142,6 +1190,27 @@ button:focus-visible {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
     gap: 14px;
+}
+
+.announcement-profiles-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.profiles-workspace .announcement-profiles-panel {
+    width: 100%;
+}
+
+.announcement-profiles-panel .panel-header {
+    margin-bottom: 0;
+}
+
+.profile-list {
+    gap: 10px;
+}
+
+.profile-list .activity-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .settings-page-panel {
@@ -1261,6 +1330,14 @@ button:focus-visible {
     gap: 10px;
 }
 
+.compact-callout {
+    padding: 12px;
+}
+
+.compact-callout p {
+    margin: 0;
+}
+
 .note-list {
     margin: 0;
     padding-left: 18px;
@@ -1320,7 +1397,7 @@ button:focus-visible {
     }
 
     .sidebar-nav {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
     }
 
     .dashboard-top-grid,
@@ -1352,7 +1429,8 @@ button:focus-visible {
 
     .form-grid,
     .log-filter-panel,
-    .log-card {
+    .log-card,
+    .profile-list .activity-card {
         grid-template-columns: 1fr;
     }
 

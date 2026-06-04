@@ -3,16 +3,19 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import * as api from './lib/api/streamsignal';
+import type { AnnouncementProfileInput } from './types/announcement-profile';
 import type { DestinationInput } from './types/destination';
-import type { PreviewItem } from './types/preview';
+import type { AnnouncementInput, PreviewItem } from './types/preview';
 import type { AppSettings } from './types/settings';
 
 const STORED_SECRET_TOKEN = '[stored securely]';
 
 vi.mock('./lib/api/streamsignal', () => ({
     clearPendingLiveNowSession: vi.fn(),
+    deleteAnnouncementProfile: vi.fn(),
     deleteDestination: vi.fn(),
     deleteDestinationGroup: vi.fn(),
+    duplicateAnnouncementProfile: vi.fn(),
     duplicateDestinationGroup: vi.fn(),
     endStream: vi.fn(),
     errorMessage: (err: unknown, fallback: string) => {
@@ -32,10 +35,12 @@ vi.mock('./lib/api/streamsignal', () => ({
     getSettings: vi.fn(),
     generatePreview: vi.fn(),
     goLive: vi.fn(),
+    listAnnouncementProfiles: vi.fn(),
     listDestinationGroups: vi.fn(),
     listPendingLiveNowSessions: vi.fn(),
     listDestinations: vi.fn(),
     saveDestination: vi.fn(),
+    saveAnnouncementProfile: vi.fn(),
     saveDestinationGroup: vi.fn(),
     saveSettings: vi.fn(),
     setDestinationGroups: vi.fn(),
@@ -44,7 +49,9 @@ vi.mock('./lib/api/streamsignal', () => ({
 }));
 
 const mockedClearPendingLiveNowSession = vi.mocked(api.clearPendingLiveNowSession);
+const mockedDeleteAnnouncementProfile = vi.mocked(api.deleteAnnouncementProfile);
 const mockedDeleteDestination = vi.mocked(api.deleteDestination);
+const mockedDuplicateAnnouncementProfile = vi.mocked(api.duplicateAnnouncementProfile);
 const mockedEndStream = vi.mocked(api.endStream);
 const mockedForceGoLive = vi.mocked(api.forceGoLive);
 const mockedGetDiagnostics = vi.mocked(api.getDiagnostics);
@@ -54,10 +61,12 @@ const mockedGetLogs = vi.mocked(api.getLogs);
 const mockedGetSettings = vi.mocked(api.getSettings);
 const mockedGeneratePreview = vi.mocked(api.generatePreview);
 const mockedGoLive = vi.mocked(api.goLive);
+const mockedListAnnouncementProfiles = vi.mocked(api.listAnnouncementProfiles);
 const mockedListDestinationGroups = vi.mocked(api.listDestinationGroups);
 const mockedListPendingLiveNowSessions = vi.mocked(api.listPendingLiveNowSessions);
 const mockedListDestinations = vi.mocked(api.listDestinations);
 const mockedSaveDestination = vi.mocked(api.saveDestination);
+const mockedSaveAnnouncementProfile = vi.mocked(api.saveAnnouncementProfile);
 const mockedSaveDestinationGroup = vi.mocked(api.saveDestinationGroup);
 const mockedSetDestinationGroups = vi.mocked(api.setDestinationGroups);
 const mockedSetGroupDestinations = vi.mocked(api.setGroupDestinations);
@@ -105,6 +114,40 @@ function destination(overrides: Partial<DestinationInput> & Pick<DestinationInpu
     };
 }
 
+function announcement(overrides: Partial<AnnouncementInput> = {}): AnnouncementInput {
+    return {
+        streamTitle: '',
+        streamURL: '',
+        category: '',
+        message: '',
+        hashtags: '',
+        announcementImageURL: '',
+        announcementImageDataURL: '',
+        blueskyCardThumbnailURL: '',
+        blueskyCardThumbnailDataURL: '',
+        ...overrides,
+    };
+}
+
+function profile(overrides: Partial<AnnouncementProfileInput> & Pick<AnnouncementProfileInput, 'id' | 'name'>): AnnouncementProfileInput {
+    return {
+        id: overrides.id,
+        name: overrides.name,
+        description: overrides.description ?? '',
+        defaultStreamURL: overrides.defaultStreamURL ?? '',
+        defaultCategory: overrides.defaultCategory ?? '',
+        defaultMessage: overrides.defaultMessage ?? '',
+        defaultHashtags: overrides.defaultHashtags ?? '',
+        defaultAnnouncementImageURL: overrides.defaultAnnouncementImageURL ?? '',
+        defaultAnnouncementImageDataURL: overrides.defaultAnnouncementImageDataURL ?? '',
+        defaultBlueskyCardThumbnailURL: overrides.defaultBlueskyCardThumbnailURL ?? '',
+        defaultBlueskyCardThumbnailDataURL: overrides.defaultBlueskyCardThumbnailDataURL ?? '',
+        defaultGroupID: overrides.defaultGroupID ?? '',
+        createdAt: overrides.createdAt ?? '',
+        updatedAt: overrides.updatedAt ?? '',
+    };
+}
+
 describe('App', () => {
     beforeEach(() => {
         mockedGetSettings.mockResolvedValue({
@@ -130,12 +173,35 @@ describe('App', () => {
             content: '',
         });
         mockedListDestinations.mockResolvedValue([]);
+        mockedListAnnouncementProfiles.mockResolvedValue([]);
         mockedListDestinationGroups.mockResolvedValue([{ id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' }]);
         mockedGetGroupDestinations.mockResolvedValue([]);
         mockedGetDestinationGroupIDs.mockResolvedValue(['all-destinations']);
         mockedSaveDestination.mockImplementation(async (destination) => ({
             ...destination,
             id: destination.id || 'generated-id',
+        }));
+        mockedSaveAnnouncementProfile.mockImplementation(async (profile) => ({
+            ...profile,
+            id: profile.id || 'generated-profile-id',
+            createdAt: '',
+            updatedAt: '',
+        }));
+        mockedDuplicateAnnouncementProfile.mockImplementation(async (id) => ({
+            id: `${id}-copy`,
+            name: 'Copied Profile',
+            description: '',
+            defaultStreamURL: '',
+            defaultCategory: '',
+            defaultMessage: '',
+            defaultHashtags: '',
+            defaultAnnouncementImageURL: '',
+            defaultAnnouncementImageDataURL: '',
+            defaultBlueskyCardThumbnailURL: '',
+            defaultBlueskyCardThumbnailDataURL: '',
+            defaultGroupID: '',
+            createdAt: '',
+            updatedAt: '',
         }));
         mockedSaveDestinationGroup.mockImplementation(async (group) => ({
             ...group,
@@ -152,6 +218,7 @@ describe('App', () => {
             message: 'Discord webhook verified successfully.',
         });
         mockedDeleteDestination.mockResolvedValue();
+        mockedDeleteAnnouncementProfile.mockResolvedValue();
     });
 
     afterEach(() => {
@@ -186,13 +253,10 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockedGeneratePreview).toHaveBeenCalledWith(
-                {
+                announcement({
                     streamTitle: 'Going Live',
                     streamURL: 'https://example.com/live',
-                    category: '',
-                    message: '',
-                    hashtags: '',
-                },
+                }),
                 '',
                 [],
             );
@@ -489,13 +553,7 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockedGeneratePreview).toHaveBeenCalledWith(
-                {
-                    streamTitle: '',
-                    streamURL: '',
-                    category: '',
-                    message: '',
-                    hashtags: '',
-                },
+                announcement(),
                 'main-announcements',
                 [],
             );
@@ -562,17 +620,108 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalledWith(
-                {
-                    streamTitle: '',
-                    streamURL: '',
-                    category: '',
-                    message: '',
-                    hashtags: '',
-                },
+                announcement(),
                 'all-destinations',
                 [],
             );
         });
+    });
+
+    it('applies an announcement profile to Home fields and destination group', async () => {
+        mockedListDestinationGroups.mockResolvedValue([
+            { id: 'all-destinations', name: 'All Destinations', description: '', createdAt: '', updatedAt: '' },
+            { id: 'music-announcements', name: 'Music Announcements', description: '', createdAt: '', updatedAt: '' },
+        ]);
+        mockedListDestinations.mockResolvedValue([
+            destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' }),
+        ]);
+        mockedGetGroupDestinations.mockImplementation(async (groupID) =>
+            groupID === 'music-announcements'
+                ? [destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' })]
+                : [],
+        );
+        mockedListAnnouncementProfiles.mockResolvedValue([
+            profile({
+                id: 'music-profile',
+                name: 'Music Stream',
+                description: 'Music announcements',
+                defaultStreamURL: 'https://example.com/music',
+                defaultCategory: 'Music',
+                defaultMessage: 'Going live with music.',
+                defaultHashtags: '#VTuber #Music',
+                defaultAnnouncementImageURL: 'https://example.com/promo.png',
+                defaultBlueskyCardThumbnailURL: 'https://example.com/card.png',
+                defaultGroupID: 'music-announcements',
+            }),
+        ]);
+
+        render(<App />);
+
+        expect(await screen.findByText('Music Stream')).toBeInTheDocument();
+        fireEvent.change(await screen.findByLabelText('Announcement Profile'), {
+            target: { value: 'music-profile' },
+        });
+
+        expect(await screen.findByDisplayValue('https://example.com/music')).toBeInTheDocument();
+        expect(screen.getByLabelText('Category / Game')).toHaveValue('Music');
+        expect(screen.getByLabelText('Optional Message')).toHaveValue('Going live with music.');
+        expect(screen.getByLabelText('Hashtags')).toHaveValue('#VTuber #Music');
+        expect(await screen.findByText('Music Announcements · 1 destination')).toBeInTheDocument();
+        expect(screen.getByLabelText('Announcement Image URL')).toHaveValue('https://example.com/promo.png');
+        expect(screen.getByLabelText('Bluesky Link Card Thumbnail URL')).toHaveValue('https://example.com/card.png');
+    });
+
+    it('shows selected upload indicators for Home announcement media', async () => {
+        mockedListDestinations.mockResolvedValue([
+            destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' }),
+        ]);
+        mockedGetGroupDestinations.mockResolvedValue([
+            destination({ id: 'bluesky-main', name: 'Main Bluesky', platform: 'bluesky', configJSON: '{"accountIdentifier":"streamer.test","credentialKey":"bluesky/main"}' }),
+        ]);
+
+        render(<App />);
+
+        const image = new File(['tiny-image'], 'promo.png', { type: 'image/png' });
+        fireEvent.change(await screen.findByLabelText('Announcement Image Upload'), {
+            target: { files: [image] },
+        });
+        fireEvent.change(await screen.findByLabelText('Bluesky Link Card Thumbnail Upload'), {
+            target: { files: [image] },
+        });
+
+        expect(await screen.findByText('Image upload selected')).toBeInTheDocument();
+        expect(await screen.findByText('Thumbnail upload selected')).toBeInTheDocument();
+    });
+
+    it('saves an announcement profile from Profiles', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Profiles' }));
+        fireEvent.change(await screen.findByLabelText('Profile Name'), {
+            target: { value: 'Music Stream' },
+        });
+        fireEvent.change(screen.getByLabelText('Profile Stream URL'), {
+            target: { value: 'https://example.com/music' },
+        });
+        fireEvent.change(screen.getByLabelText('Profile Hashtags'), {
+            target: { value: '#VTuber #Music' },
+        });
+        fireEvent.change(screen.getByLabelText('Profile Announcement Image URL'), {
+            target: { value: 'https://example.com/promo.png' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Create Profile' }));
+
+        await waitFor(() => {
+            expect(mockedSaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
+                id: '',
+                name: 'Music Stream',
+                defaultStreamURL: 'https://example.com/music',
+                defaultHashtags: '#VTuber #Music',
+                defaultAnnouncementImageURL: 'https://example.com/promo.png',
+            }));
+        });
+        expect(await screen.findByText('Announcement profile saved.')).toBeInTheDocument();
     });
 
     it('publishes only checked individual destinations from Home', async () => {
@@ -621,13 +770,7 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockedGoLive).toHaveBeenCalledWith(
-                {
-                    streamTitle: '',
-                    streamURL: '',
-                    category: '',
-                    message: '',
-                    hashtags: '',
-                },
+                announcement(),
                 '',
                 ['discord-test'],
             );
@@ -1498,13 +1641,7 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockedForceGoLive).toHaveBeenCalledWith(
-                {
-                    streamTitle: '',
-                    streamURL: '',
-                    category: '',
-                    message: '',
-                    hashtags: '',
-                },
+                announcement(),
                 '',
                 [],
             );

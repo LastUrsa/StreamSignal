@@ -13,12 +13,13 @@ Ship StreamSignal in a way that is:
 
 ## Product Workflow
 
-- [ ] verify Home, Destinations, Settings, and debug-only Logs follow a clear workflow
+- [ ] verify Home, Destinations, Profiles, Settings, and debug-only Logs follow a clear workflow
 - [ ] verify production builds hide debug-only surfaces
 - [ ] verify Preview shows Go Live messages and enabled End Stream messages before publishing
 - [ ] verify Go Live publishes only to the selected individual destinations or selected Destination Group
 - [ ] verify End Stream posts only to selected destinations with End Stream enabled
 - [ ] verify Destination Groups remain optional and do not block individual Home destination selection
+- [ ] verify Announcement Profiles prefill Home fields, media, and optional Destination Groups
 - [ ] verify Bluesky `Live Now` set, clear, opt-out, duration, and recovery behavior
 - [ ] verify duplicate warning and force-confirm flows
 - [ ] verify Destination Groups persist across app restarts and never imply provider sandbox modes

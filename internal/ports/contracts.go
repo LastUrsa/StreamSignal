@@ -28,6 +28,14 @@ type DestinationGroupRepository interface {
 	RemoveDestination(ctx context.Context, groupID string, destinationID string) error
 }
 
+type AnnouncementProfileRepository interface {
+	List(ctx context.Context) ([]domain.AnnouncementProfile, error)
+	Get(ctx context.Context, id string) (domain.AnnouncementProfile, error)
+	GetByName(ctx context.Context, name string) (domain.AnnouncementProfile, error)
+	Save(ctx context.Context, profile domain.AnnouncementProfile) error
+	Delete(ctx context.Context, id string) error
+}
+
 type SettingsRepository interface {
 	Load(ctx context.Context) (domain.AppSettings, error)
 	Save(ctx context.Context, settings domain.AppSettings) error

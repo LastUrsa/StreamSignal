@@ -2,6 +2,14 @@
 
 User-facing release notes and planned artifact names. Keep this focused on changes that matter to users, testers, and release packaging.
 
+## Next Feature Release
+
+### Highlights
+
+- Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
+- Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
+- Kept destination-level media as a fallback for existing saved destination configuration.
+
 ## 0.2.1 Workflow Refinements
 
 StreamSignal 0.2.1 is a patch release focused on tightening the Home publishing workflow and removing hidden default behavior.

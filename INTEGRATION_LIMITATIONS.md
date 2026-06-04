@@ -21,9 +21,9 @@ This maintainer-facing reference records practical platform constraints that sha
 - StreamSignal currently uses account identifier plus app password authentication.
 - Bluesky `Live Now` support depends on Bluesky's current API and product behavior.
 - StreamSignal sets and clears the dedicated `Live Now` status record. It does not modify normal profile text as part of the live workflow.
-- StreamSignal can attach a stream-card thumbnail by fetching a direct HTTP(S) image URL or by uploading a local image selected in the destination form.
-- StreamSignal can also attach an additional Bluesky image when no stream preview card is posted. If both are configured, the stream preview card takes priority.
-- Uploaded local card images are resized in the frontend when needed, stored in local destination configuration as image data, and uploaded to Bluesky as a blob when posting.
+- StreamSignal can attach a stream-card thumbnail by fetching a direct HTTP(S) image URL or by uploading a local image selected on Home. Destination-level thumbnail settings remain as fallback configuration.
+- StreamSignal can also attach an additional Bluesky announcement image when no stream preview card is posted. If both are configured, the stream preview card takes priority.
+- Uploaded local card images are resized in the frontend when needed, stored locally as image data, and uploaded to Bluesky as a blob when posting.
 - Bluesky image URLs are fetched only after public-address validation; localhost, private network, link-local, unspecified, and multicast targets are rejected.
 - Bluesky images must fit Bluesky's current blob limits, so oversized images may be compressed or rejected.
 - StreamSignal does not currently fetch a Twitch profile image or stream thumbnail automatically. If Twitch metadata does not provide the expected preview, configure a card thumbnail manually.
@@ -34,9 +34,9 @@ This maintainer-facing reference records practical platform constraints that sha
 - StreamSignal currently uses manual instance URL plus access token setup.
 - Mastodon compatibility depends on the target instance supporting the expected API behavior.
 - Because Mastodon is federated, behavior can vary slightly by instance policy, version, or token permissions.
-- StreamSignal can attach one optional additional image by fetching a public HTTP(S) image URL or by uploading a local image selected in the destination form.
+- StreamSignal can attach one optional additional image by fetching a public HTTP(S) image URL or by uploading a local image selected on Home. Destination-level image settings remain as fallback configuration.
 - Mastodon image URLs are fetched only after public-address validation; localhost, private network, link-local, unspecified, and multicast targets are rejected.
-- Local Mastodon image uploads are resized in the frontend when needed, stored in local destination configuration as image data, uploaded to the instance media API, and attached to the status post.
+- Local Mastodon image uploads are resized in the frontend when needed, stored locally as image data, uploaded to the instance media API, and attached to the status post.
 
 ## Cross-Platform Constraints
 

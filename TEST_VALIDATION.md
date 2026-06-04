@@ -53,12 +53,13 @@ Keep targeted coverage around:
 
 - Preview remaining network-safe except for explicit link-preview metadata paths
 - Go Live and End Stream destination selection
+- Announcement Profiles applying Home fields, media defaults, and destination groups
 - duplicate-publish warning and confirmation behavior
 - Bluesky `Live Now` set, clear, duration, opt-out, and recovery behavior
 - credential persistence through secret references rather than raw values
 - Discord, Bluesky, and Mastodon publisher payloads
 - remote image and preview URL validation
-- settings defaults that prefill fresh Home sessions without overriding user edits
+- settings and profile defaults that prefill Home sessions without overriding user edits unexpectedly
 
 ## PR Review Guidance
 

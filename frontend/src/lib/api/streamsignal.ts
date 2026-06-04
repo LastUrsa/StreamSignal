@@ -1,29 +1,35 @@
 import {
     ClearPendingLiveNowSession,
+    DeleteAnnouncementProfile,
     DeleteDestination,
     DeleteDestinationGroup,
+    DuplicateAnnouncementProfile,
     DuplicateDestinationGroup,
     EndStream,
     ForceGoLive,
     GeneratePreview,
+    GetAnnouncementProfile,
     GetDestinationGroup,
     GetDestinationGroupIDs,
     GetDiagnostics,
     GetGroupDestinations,
     GetLogs,
     GoLive,
+    ListAnnouncementProfiles,
     ListDestinationGroups,
     GetSettings,
     ListPendingLiveNowSessions,
     ListDestinations,
     SaveDestination,
     SaveDestinationGroup,
+    SaveAnnouncementProfile,
     SaveSettings,
     SetDestinationGroups,
     SetGroupDestinations,
     TestDestinationConnection,
 } from '../../../wailsjs/go/main/App';
 import { domain } from '../../../wailsjs/go/models';
+import type { AnnouncementProfileInput } from '../../types/announcement-profile';
 import type { CredentialCheckResult } from '../../types/credential-check';
 import type { DestinationGroupInput } from '../../types/destination-group';
 import type { DestinationInput, DestinationPlatform } from '../../types/destination';
@@ -128,6 +134,34 @@ function toDestinationGroupInput(group: domain.DestinationGroup): DestinationGro
         description: group.description,
         createdAt: group.createdAt ? String(group.createdAt) : '',
         updatedAt: group.updatedAt ? String(group.updatedAt) : '',
+    };
+}
+
+function toAnnouncementProfileModel(profile: AnnouncementProfileInput): domain.AnnouncementProfile {
+    const { createdAt, updatedAt, ...rest } = profile;
+    return domain.AnnouncementProfile.createFrom({
+        ...rest,
+        ...(createdAt ? { createdAt } : {}),
+        ...(updatedAt ? { updatedAt } : {}),
+    });
+}
+
+function toAnnouncementProfileInput(profile: domain.AnnouncementProfile): AnnouncementProfileInput {
+    return {
+        id: profile.id,
+        name: profile.name,
+        description: profile.description,
+        defaultStreamURL: profile.defaultStreamURL,
+        defaultCategory: profile.defaultCategory,
+        defaultMessage: profile.defaultMessage,
+        defaultHashtags: profile.defaultHashtags,
+        defaultAnnouncementImageURL: profile.defaultAnnouncementImageURL,
+        defaultAnnouncementImageDataURL: profile.defaultAnnouncementImageDataURL,
+        defaultBlueskyCardThumbnailURL: profile.defaultBlueskyCardThumbnailURL,
+        defaultBlueskyCardThumbnailDataURL: profile.defaultBlueskyCardThumbnailDataURL,
+        defaultGroupID: profile.defaultGroupID,
+        createdAt: profile.createdAt ? String(profile.createdAt) : '',
+        updatedAt: profile.updatedAt ? String(profile.updatedAt) : '',
     };
 }
 
@@ -254,6 +288,26 @@ export function duplicateDestinationGroup(id: string): Promise<DestinationGroupI
 
 export function deleteDestinationGroup(id: string): Promise<void> {
     return DeleteDestinationGroup(id);
+}
+
+export function listAnnouncementProfiles(): Promise<AnnouncementProfileInput[]> {
+    return ListAnnouncementProfiles().then((profiles: domain.AnnouncementProfile[] | null) => asArray(profiles).map(toAnnouncementProfileInput));
+}
+
+export function getAnnouncementProfile(id: string): Promise<AnnouncementProfileInput> {
+    return GetAnnouncementProfile(id).then(toAnnouncementProfileInput);
+}
+
+export function saveAnnouncementProfile(profile: AnnouncementProfileInput): Promise<AnnouncementProfileInput> {
+    return SaveAnnouncementProfile(toAnnouncementProfileModel(profile)).then(toAnnouncementProfileInput);
+}
+
+export function duplicateAnnouncementProfile(id: string): Promise<AnnouncementProfileInput> {
+    return DuplicateAnnouncementProfile(id).then(toAnnouncementProfileInput);
+}
+
+export function deleteAnnouncementProfile(id: string): Promise<void> {
+    return DeleteAnnouncementProfile(id);
 }
 
 export function getGroupDestinations(groupID: string): Promise<DestinationInput[]> {

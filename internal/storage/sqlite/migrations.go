@@ -122,6 +122,29 @@ select 'all-destinations', id from destinations;`,
 		sql: `
 alter table settings add column selected_destination_group_id text not null default 'all-destinations';`,
 	},
+	{
+		version: 9,
+		name:    "create_announcement_profiles",
+		sql: `
+create table if not exists announcement_profiles (
+  id text primary key,
+  name text not null,
+  description text not null,
+  default_stream_url text not null,
+  default_category text not null,
+  default_message text not null,
+  default_hashtags text not null,
+  default_announcement_image_url text not null,
+  default_announcement_image_data_url text not null,
+  default_bluesky_card_thumbnail_url text not null,
+  default_bluesky_card_thumbnail_data_url text not null,
+  default_group_id text,
+  created_at text not null,
+  updated_at text not null,
+  foreign key (default_group_id) references destination_groups(id) on delete set null
+);
+create unique index if not exists announcement_profiles_name_unique on announcement_profiles(lower(name));`,
+	},
 }
 
 func ApplyMigrations(db *sql.DB) error {
