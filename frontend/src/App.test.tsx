@@ -658,7 +658,7 @@ describe('App', () => {
         render(<App />);
 
         expect(await screen.findByText('Music Stream')).toBeInTheDocument();
-        fireEvent.change(await screen.findByLabelText('Announcement Profile'), {
+        fireEvent.change(await screen.findByLabelText('Announcement Preset'), {
             target: { value: 'music-profile' },
         });
 
@@ -697,7 +697,7 @@ describe('App', () => {
         render(<App />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Profiles' }));
-        fireEvent.change(await screen.findByLabelText('Profile Name'), {
+        fireEvent.change(await screen.findByLabelText('Preset Name'), {
             target: { value: 'Music Stream' },
         });
         fireEvent.change(screen.getByLabelText('Profile Stream URL'), {
@@ -710,7 +710,7 @@ describe('App', () => {
             target: { value: 'https://example.com/promo.png' },
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Create Profile' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Create Preset' }));
 
         await waitFor(() => {
             expect(mockedSaveAnnouncementProfile).toHaveBeenCalledWith(expect.objectContaining({
@@ -721,7 +721,7 @@ describe('App', () => {
                 defaultAnnouncementImageURL: 'https://example.com/promo.png',
             }));
         });
-        expect(await screen.findByText('Announcement profile saved.')).toBeInTheDocument();
+        expect(await screen.findByText('Announcement preset saved.')).toBeInTheDocument();
     });
 
     it('publishes only checked individual destinations from Home', async () => {

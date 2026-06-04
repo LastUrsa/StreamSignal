@@ -262,6 +262,81 @@ func TestAppEndStreamDelegatesToExecutionServiceAndLogs(t *testing.T) {
 	}
 }
 
+func TestAppAnnouncementProfileBindingsPersistDuplicateDeleteAndLog(t *testing.T) {
+	app := newTestApp(t)
+
+	group, err := app.SaveDestinationGroup(domain.DestinationGroup{
+		Name:        "Music Announcements",
+		Description: "Music stream destinations",
+	})
+	if err != nil {
+		t.Fatalf("save destination group: %v", err)
+	}
+
+	saved, err := app.SaveAnnouncementProfile(domain.AnnouncementProfile{
+		Name:                               "Music Stream",
+		Description:                        "Music stream preset",
+		DefaultStreamURL:                   "https://example.com/music",
+		DefaultCategory:                    "Music",
+		DefaultMessage:                     "Going live with music.",
+		DefaultHashtags:                    "#VTuber #Music",
+		DefaultAnnouncementImageURL:        "https://example.com/promo.png",
+		DefaultBlueskyCardThumbnailDataURL: "data:image/png;base64,ZmFrZQ==",
+		DefaultGroupID:                     group.ID,
+	})
+	if err != nil {
+		t.Fatalf("save announcement profile: %v", err)
+	}
+	if saved.ID == "" {
+		t.Fatal("expected saved announcement profile id")
+	}
+	if saved.DefaultGroupID != group.ID || saved.DefaultAnnouncementImageURL != "https://example.com/promo.png" {
+		t.Fatalf("expected saved defaults, got %+v", saved)
+	}
+
+	loaded, err := app.GetAnnouncementProfile(saved.ID)
+	if err != nil {
+		t.Fatalf("get announcement profile: %v", err)
+	}
+	if loaded.Name != saved.Name || loaded.DefaultGroupID != group.ID {
+		t.Fatalf("expected loaded profile to match saved profile, got %+v", loaded)
+	}
+
+	duplicate, err := app.DuplicateAnnouncementProfile(saved.ID)
+	if err != nil {
+		t.Fatalf("duplicate announcement profile: %v", err)
+	}
+	if duplicate.ID == saved.ID {
+		t.Fatal("expected duplicated profile to have a new id")
+	}
+	if !strings.Contains(duplicate.Name, "Copy") || duplicate.DefaultMessage != saved.DefaultMessage || duplicate.DefaultGroupID != group.ID {
+		t.Fatalf("expected duplicated profile to preserve defaults with copy name, got %+v", duplicate)
+	}
+
+	if err := app.DeleteAnnouncementProfile(saved.ID); err != nil {
+		t.Fatalf("delete announcement profile: %v", err)
+	}
+	profiles, err := app.ListAnnouncementProfiles()
+	if err != nil {
+		t.Fatalf("list announcement profiles: %v", err)
+	}
+	for _, profile := range profiles {
+		if profile.ID == saved.ID {
+			t.Fatalf("expected deleted profile to be removed, got %+v", profiles)
+		}
+	}
+
+	logs, err := app.GetLogs()
+	if err != nil {
+		t.Fatalf("get logs: %v", err)
+	}
+	for _, action := range []string{"create_announcement_profile", "duplicate_announcement_profile", "delete_announcement_profile"} {
+		if !logsContainAction(logs, action) {
+			t.Fatalf("expected %s log entry, got %+v", action, logs)
+		}
+	}
+}
+
 func TestAppRecoveryBindingsReturnErrorsForMissingSessions(t *testing.T) {
 	app := newTestApp(t)
 
@@ -336,4 +411,13 @@ func TestAppRecoveryBindingsSurfaceSeededSession(t *testing.T) {
 	if len(pending) != 1 || pending[0].DestinationID != "bluesky-main" {
 		t.Fatalf("expected seeded pending session, got %+v", pending)
 	}
+}
+
+func logsContainAction(logs []domain.LogEntry, action string) bool {
+	for _, entry := range logs {
+		if entry.Action == action && entry.Status == "SUCCESS" {
+			return true
+		}
+	}
+	return false
 }
