@@ -6,7 +6,9 @@ param(
 
     [switch]$Launch,
 
-    [string]$LaunchEnvironment = ""
+    [string]$LaunchEnvironment = "",
+
+    [switch]$Nsis
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +26,16 @@ tar -xf $SourceArchive -C $BuildRoot
 
 Push-Location $BuildRoot
 try {
-    wails build
+    $buildArgs = @("build")
+    if ($Nsis) {
+        foreach ($nsisPath in @("${env:ProgramFiles(x86)}\NSIS", "${env:ProgramFiles}\NSIS")) {
+            if ((Test-Path (Join-Path $nsisPath "makensis.exe")) -and ($env:Path -notlike "*$nsisPath*")) {
+                $env:Path = "$nsisPath;$env:Path"
+            }
+        }
+        $buildArgs += @("-platform", "windows/amd64", "-nsis")
+    }
+    & wails @buildArgs
     $exe = Join-Path $BuildRoot "build\bin\StreamSignal.exe"
     if ($Launch) {
         $previousEnvironment = $env:STREAMSIGNAL_ENV

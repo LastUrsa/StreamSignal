@@ -4,6 +4,10 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
+Current release target: `0.3.1`.
+
+Latest validation: GitHub Release Build run `26979277052` passed provider-backed E2E, Windows installer, and macOS DMG jobs.
+
 Ship StreamSignal in a way that is:
 
 - safe for real user credentials
