@@ -2,17 +2,39 @@
 
 User-facing release notes and planned artifact names. Keep this focused on changes that matter to users, testers, and release packaging.
 
-## Next Feature Release
+## 0.3.0 Announcement Profiles
+
+StreamSignal 0.3.0 is a feature release focused on reusable announcement presets and cleaner media handling on Home.
 
 ### Highlights
 
 - Added Announcement Profiles so repeated stream types can prefill Home fields, hashtags, media, and an optional Destination Group.
 - Moved announcement media to Home, with one shared announcement image for providers that support attached images and a separate Bluesky link card thumbnail.
 - Kept destination-level media as a fallback for existing saved destination configuration.
+- Added a dedicated Profiles workspace and Home **Announcement Preset** selector so profiles read as prefill presets, not a separate posting mode.
 
 ### Announcement Profiles
 
 Announcement Profiles are prefill presets for repeated stream types. Selecting one on Home fills the announcement fields and optional media defaults; if the preset has a Destination Group, Home switches to that group for review before publishing.
+
+### Security And Reliability
+
+- Runtime secrets remain stored in the OS credential store rather than directly in SQLite.
+- Announcement Profile Wails bindings now have app-level coverage for save, duplicate, and delete behavior.
+- Provider-backed workflow E2E still runs separately because it creates real test-account posts and deletes them afterward.
+- `npm audit` and `govulncheck` passed locally during release prep.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.3.0-windows-amd64-installer.exe`
+- `StreamSignal-0.3.0-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.3.0-windows-amd64-installer`
+- `streamsignal-0.3.0-macos-universal-dmg`
 
 ## 0.2.1 Workflow Refinements
 
