@@ -26,8 +26,10 @@ import discordLogo from './assets/platforms/discord.svg';
 import mastodonLogo from './assets/platforms/mastodon.svg';
 import {
     clearPendingLiveNowSession,
+    deleteAnnouncementProfile,
     deleteDestination,
     deleteDestinationGroup,
+    duplicateAnnouncementProfile,
     duplicateDestinationGroup,
     endStream,
     errorMessage,
@@ -38,17 +40,26 @@ import {
     getGroupDestinations,
     getLogs,
     goLive,
+    listAnnouncementProfiles,
     listDestinationGroups,
     listPendingLiveNowSessions,
     getSettings,
     listDestinations,
     saveDestination,
+    saveAnnouncementProfile,
     saveDestinationGroup,
     saveSettings,
     setDestinationGroups as saveDestinationGroupsForDestination,
     setGroupDestinations,
     testDestinationConnection,
 } from './lib/api/streamsignal';
+import {
+    createEmptyAnnouncementProfileForm,
+    toAnnouncementProfileFormState,
+    toAnnouncementProfileInput,
+    type AnnouncementProfileFormState,
+    type AnnouncementProfileInput,
+} from './types/announcement-profile';
 import type { CredentialCheckResult } from './types/credential-check';
 import {
     createEmptyDestinationForm,
@@ -74,12 +85,12 @@ import type { AnnouncementInput, PreviewItem } from './types/preview';
 import type { LogEntry } from './types/log-entry';
 import type { AppSettings } from './types/settings';
 
-type TabKey = 'home' | 'destinations' | 'settings' | 'logs';
+type TabKey = 'home' | 'destinations' | 'profiles' | 'settings' | 'logs';
 
 const STORED_SECRET_TOKEN = '[stored securely]';
 const SHOW_DEBUG_WORKFLOW_UI = import.meta.env.DEV || import.meta.env.MODE === 'debug';
-const TAB_KEYS: TabKey[] = ['home', 'destinations', 'settings', 'logs'];
-const PRODUCTION_TAB_KEYS: TabKey[] = ['home', 'destinations', 'settings'];
+const TAB_KEYS: TabKey[] = ['home', 'destinations', 'profiles', 'settings', 'logs'];
+const PRODUCTION_TAB_KEYS: TabKey[] = ['home', 'destinations', 'profiles', 'settings'];
 
 const initialAnnouncement: AnnouncementInput = {
     streamTitle: '',
@@ -87,6 +98,10 @@ const initialAnnouncement: AnnouncementInput = {
     category: '',
     message: '',
     hashtags: '',
+    announcementImageURL: '',
+    announcementImageDataURL: '',
+    blueskyCardThumbnailURL: '',
+    blueskyCardThumbnailDataURL: '',
 };
 
 const initialDestination = createEmptyDestinationForm();
@@ -637,6 +652,14 @@ function App() {
     const [destinationConnectionLoading, setDestinationConnectionLoading] = useState(false);
     const [destinationHelperStatus, setDestinationHelperStatus] = useState<string | null>(null);
 
+    const [announcementProfiles, setAnnouncementProfiles] = useState<AnnouncementProfileInput[]>([]);
+    const [selectedAnnouncementProfileID, setSelectedAnnouncementProfileID] = useState('');
+    const [profileForm, setProfileForm] = useState<AnnouncementProfileFormState>(createEmptyAnnouncementProfileForm());
+    const [profileStatus, setProfileStatus] = useState<string | null>(null);
+    const [profileError, setProfileError] = useState<string | null>(null);
+    const [pendingProfileID, setPendingProfileID] = useState<string | null>(null);
+    const [profileDirty, setProfileDirty] = useState(false);
+
     const [settings, setSettings] = useState<AppSettings>(defaultSettings);
     const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
     const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -650,6 +673,10 @@ function App() {
     const streamURLTouched = useRef(false);
     const hashtagsTouched = useRef(false);
     const workflowToastTimeout = useRef<number | null>(null);
+    const announcementImageInputRef = useRef<HTMLInputElement | null>(null);
+    const announcementProfileImageInputRef = useRef<HTMLInputElement | null>(null);
+    const announcementProfileBlueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
+    const homeBlueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const discordThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyThumbnailInputRef = useRef<HTMLInputElement | null>(null);
     const blueskyAdditionalImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -661,6 +688,7 @@ function App() {
     useEffect(() => {
         void refreshDestinations();
         void refreshDestinationGroups();
+        void refreshAnnouncementProfiles();
         void refreshSettings();
         if (SHOW_DEBUG_WORKFLOW_UI) {
             void refreshLogs();
@@ -698,6 +726,19 @@ function App() {
         } catch (err: unknown) {
             const message = errorMessage(err, 'Unable to load destination groups.');
             setDestinationError(message);
+        }
+    }
+
+    async function refreshAnnouncementProfiles() {
+        try {
+            const profiles = asArray(await listAnnouncementProfiles());
+            setAnnouncementProfiles(profiles);
+            if (selectedAnnouncementProfileID && !profiles.some((profile) => profile.id === selectedAnnouncementProfileID)) {
+                setSelectedAnnouncementProfileID('');
+                setProfileDirty(false);
+            }
+        } catch (err: unknown) {
+            setProfileError(errorMessage(err, 'Unable to load announcement profiles.'));
         }
     }
 
@@ -1120,6 +1161,9 @@ function App() {
         if (field === 'hashtags') {
             hashtagsTouched.current = true;
         }
+        if (selectedAnnouncementProfileID) {
+            setProfileDirty(true);
+        }
         setAnnouncement((current) => ({
             ...current,
             [field]: value,
@@ -1133,6 +1177,80 @@ function App() {
             ...current,
             [field]: value,
         }));
+    }
+
+    function clearAnnouncementImageUpload() {
+        if (announcementImageInputRef.current) {
+            announcementImageInputRef.current.value = '';
+        }
+        updateAnnouncement('announcementImageDataURL', '');
+    }
+
+    function clearHomeBlueskyThumbnailUpload() {
+        if (homeBlueskyThumbnailInputRef.current) {
+            homeBlueskyThumbnailInputRef.current.value = '';
+        }
+        updateAnnouncement('blueskyCardThumbnailDataURL', '');
+    }
+
+    async function onAnnouncementImageUpload(file: File | undefined) {
+        setPreviewError(null);
+        if (!file) {
+            return;
+        }
+        if (!file.type.startsWith('image/')) {
+            setPreviewError('Announcement image must be an image.');
+            return;
+        }
+        try {
+            const image = await prepareCardThumbnail(file, MASTODON_ADDITIONAL_IMAGE_MAX_BYTES);
+            setAnnouncement((current) => ({
+                ...current,
+                announcementImageURL: '',
+                announcementImageDataURL: image.dataURL,
+            }));
+            if (selectedAnnouncementProfileID) {
+                setProfileDirty(true);
+            }
+            if (announcementImageInputRef.current) {
+                announcementImageInputRef.current.value = '';
+            }
+        } catch (err: unknown) {
+            if (announcementImageInputRef.current) {
+                announcementImageInputRef.current.value = '';
+            }
+            setPreviewError(errorMessage(err, 'Unable to prepare selected image.'));
+        }
+    }
+
+    async function onHomeBlueskyThumbnailUpload(file: File | undefined) {
+        setPreviewError(null);
+        if (!file) {
+            return;
+        }
+        if (!file.type.startsWith('image/')) {
+            setPreviewError('Bluesky card thumbnail must be an image.');
+            return;
+        }
+        try {
+            const image = await prepareCardThumbnail(file, BLUESKY_CARD_THUMBNAIL_MAX_BYTES);
+            setAnnouncement((current) => ({
+                ...current,
+                blueskyCardThumbnailURL: '',
+                blueskyCardThumbnailDataURL: image.dataURL,
+            }));
+            if (selectedAnnouncementProfileID) {
+                setProfileDirty(true);
+            }
+            if (homeBlueskyThumbnailInputRef.current) {
+                homeBlueskyThumbnailInputRef.current.value = '';
+            }
+        } catch (err: unknown) {
+            if (homeBlueskyThumbnailInputRef.current) {
+                homeBlueskyThumbnailInputRef.current.value = '';
+            }
+            setPreviewError(errorMessage(err, 'Unable to prepare selected image.'));
+        }
     }
 
     function clearBlueskyThumbnailImage() {
@@ -1323,6 +1441,154 @@ function App() {
         }));
     }
 
+    function updateProfileForm<K extends keyof AnnouncementProfileFormState>(field: K, value: AnnouncementProfileFormState[K]) {
+        setProfileStatus(null);
+        setProfileError(null);
+        setProfileForm((current) => ({
+            ...current,
+            [field]: value,
+        }));
+    }
+
+    function resetProfileForm() {
+        setProfileForm(createEmptyAnnouncementProfileForm());
+        setProfileStatus(null);
+        setProfileError(null);
+        if (announcementProfileImageInputRef.current) {
+            announcementProfileImageInputRef.current.value = '';
+        }
+        if (announcementProfileBlueskyThumbnailInputRef.current) {
+            announcementProfileBlueskyThumbnailInputRef.current.value = '';
+        }
+    }
+
+    function editAnnouncementProfile(profile: AnnouncementProfileInput) {
+        setProfileForm(toAnnouncementProfileFormState(profile));
+        setProfileStatus(null);
+        setProfileError(null);
+    }
+
+    async function onAnnouncementProfileSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setProfileStatus(null);
+        setProfileError(null);
+        try {
+            const wasEditing = profileForm.id !== '';
+            const saved = await saveAnnouncementProfile(toAnnouncementProfileInput(profileForm));
+            if (wasEditing) {
+                setProfileForm(toAnnouncementProfileFormState(saved));
+            } else {
+                resetProfileForm();
+            }
+            setProfileStatus('Announcement profile saved.');
+            await refreshAnnouncementProfiles();
+        } catch (err: unknown) {
+            setProfileError(errorMessage(err, 'Unable to save announcement profile.'));
+        }
+    }
+
+    async function onDuplicateAnnouncementProfile(profile: AnnouncementProfileInput) {
+        setProfileError(null);
+        try {
+            const duplicate = await duplicateAnnouncementProfile(profile.id);
+            setProfileForm(toAnnouncementProfileFormState(duplicate));
+            setProfileStatus('Announcement profile duplicated.');
+            await refreshAnnouncementProfiles();
+        } catch (err: unknown) {
+            setProfileError(errorMessage(err, 'Unable to duplicate announcement profile.'));
+        }
+    }
+
+    async function onDeleteAnnouncementProfile(profile: AnnouncementProfileInput) {
+        setProfileError(null);
+        try {
+            await deleteAnnouncementProfile(profile.id);
+            if (selectedAnnouncementProfileID === profile.id) {
+                setSelectedAnnouncementProfileID('');
+                setProfileDirty(false);
+            }
+            if (profileForm.id === profile.id) {
+                resetProfileForm();
+            }
+            setProfileStatus('Announcement profile deleted.');
+            await refreshAnnouncementProfiles();
+        } catch (err: unknown) {
+            setProfileError(errorMessage(err, 'Unable to delete announcement profile.'));
+        }
+    }
+
+    async function selectAnnouncementProfile(profileID: string) {
+        if (profileID === selectedAnnouncementProfileID) {
+            return;
+        }
+        if (profileDirty && selectedAnnouncementProfileID && profileID !== '') {
+            setPendingProfileID(profileID);
+            return;
+        }
+        await applyAnnouncementProfile(profileID);
+    }
+
+    async function applyAnnouncementProfile(profileID: string) {
+        setPendingProfileID(null);
+        if (profileID === '') {
+            setSelectedAnnouncementProfileID('');
+            setProfileDirty(false);
+            return;
+        }
+        const profile = announcementProfiles.find((item) => item.id === profileID);
+        if (!profile) {
+            return;
+        }
+        streamURLTouched.current = profile.defaultStreamURL.trim() !== '';
+        hashtagsTouched.current = profile.defaultHashtags.trim() !== '';
+        setAnnouncement((current) => ({
+            ...current,
+            streamURL: profile.defaultStreamURL,
+            category: profile.defaultCategory,
+            message: profile.defaultMessage,
+            hashtags: profile.defaultHashtags,
+            announcementImageURL: profile.defaultAnnouncementImageURL,
+            announcementImageDataURL: profile.defaultAnnouncementImageDataURL,
+            blueskyCardThumbnailURL: profile.defaultBlueskyCardThumbnailURL,
+            blueskyCardThumbnailDataURL: profile.defaultBlueskyCardThumbnailDataURL,
+        }));
+        setSelectedAnnouncementProfileID(profile.id);
+        setProfileDirty(false);
+        if (profile.defaultGroupID) {
+            setHomeTargetMode('group');
+            await selectDestinationGroup(profile.defaultGroupID);
+        }
+    }
+
+    async function onProfileImageUpload(file: File | undefined, target: 'announcement' | 'bluesky-card') {
+        setProfileError(null);
+        if (!file) {
+            return;
+        }
+        if (!file.type.startsWith('image/')) {
+            setProfileError('Profile media must be an image.');
+            return;
+        }
+        const ref = target === 'announcement' ? announcementProfileImageInputRef : announcementProfileBlueskyThumbnailInputRef;
+        try {
+            const image = await prepareCardThumbnail(file, target === 'announcement' ? MASTODON_ADDITIONAL_IMAGE_MAX_BYTES : BLUESKY_CARD_THUMBNAIL_MAX_BYTES);
+            setProfileForm((current) => ({
+                ...current,
+                ...(target === 'announcement'
+                    ? { defaultAnnouncementImageURL: '', defaultAnnouncementImageDataURL: image.dataURL }
+                    : { defaultBlueskyCardThumbnailURL: '', defaultBlueskyCardThumbnailDataURL: image.dataURL }),
+            }));
+            if (ref.current) {
+                ref.current.value = '';
+            }
+        } catch (err: unknown) {
+            if (ref.current) {
+                ref.current.value = '';
+            }
+            setProfileError(errorMessage(err, 'Unable to prepare selected image.'));
+        }
+    }
+
     function toggleSessionDestination(destinationID: string) {
         setSelectedDestinationIDs((current) =>
             current.includes(destinationID) ? current.filter((id) => id !== destinationID) : [...current, destinationID],
@@ -1349,6 +1615,7 @@ function App() {
         setSettings(nextSettings);
         try {
             await saveSettings(nextSettings);
+            await refreshSelectedGroupDestinations(groupID);
         } catch (err: unknown) {
             setSettingsError(errorMessage(err, 'Unable to save selected destination group.'));
         }
@@ -1453,6 +1720,9 @@ function App() {
     const activeDestinationIDs = homeTargetMode === 'group' ? [] : activeDestinations.map((destination) => destination.id);
     const activeDestinationGroupID = homeTargetMode === 'group' ? selectedDestinationGroupID : '';
     const activeDestinationIDSet = new Set(activeDestinations.map((destination) => destination.id));
+    const activeAnnouncementProfile = announcementProfiles.find((profile) => profile.id === selectedAnnouncementProfileID);
+    const activeDestinationsSupportMedia = activeDestinations.some((destination) => destination.platform === 'discord' || destination.platform === 'bluesky' || destination.platform === 'mastodon');
+    const activeDestinationsIncludeBluesky = activeDestinations.some((destination) => destination.platform === 'bluesky');
     const selectedEndStreamPostCount = activeDestinations.filter((destination) => toDestinationFormState(destination).endStreamEnabled).length;
     const selectedLiveNowClearCount = pendingLiveNowSessions.filter((session) => activeDestinationIDSet.has(session.destinationID)).length;
     const destinationPanelSummary =
@@ -1470,6 +1740,7 @@ function App() {
     const sidebarItems: SidebarItem[] = [
         { key: 'home', label: 'Home', icon: Home },
         { key: 'destinations', label: 'Destinations', icon: Radio },
+        { key: 'profiles', label: 'Profiles', icon: ListChecks },
         ...(SHOW_DEBUG_WORKFLOW_UI ? [{ key: 'logs' as const, label: 'Logs', icon: Activity }] : []),
         { key: 'settings', label: 'Settings', icon: Settings, badge: pendingLiveNowSessions.length },
     ];
@@ -1562,10 +1833,12 @@ function App() {
 
         const form = toDestinationFormState(destination);
         const platform = item.platform.toLowerCase();
-        const discordImage = platform === 'discord' ? previewImageSource(form.discordCardThumbnailDataURL, form.discordCardThumbnailURL) : '';
-        const blueskyCardImage = platform === 'bluesky' ? previewImageSource(form.blueskyCardThumbnailDataURL, form.blueskyCardThumbnailURL) : '';
-        const blueskyAttachedImage = platform === 'bluesky' ? previewImageSource(form.blueskyAdditionalImageDataURL, form.blueskyAdditionalImageURL) : '';
-        const mastodonImage = platform === 'mastodon' ? previewImageSource(form.mastodonAdditionalImageDataURL, form.mastodonAdditionalImageURL) : '';
+        const announcementImage = previewImageSource(announcement.announcementImageDataURL, announcement.announcementImageURL);
+        const blueskyHomeCardImage = previewImageSource(announcement.blueskyCardThumbnailDataURL, announcement.blueskyCardThumbnailURL);
+        const discordImage = platform === 'discord' ? (announcementImage || previewImageSource(form.discordCardThumbnailDataURL, form.discordCardThumbnailURL)) : '';
+        const blueskyCardImage = platform === 'bluesky' ? (blueskyHomeCardImage || previewImageSource(form.blueskyCardThumbnailDataURL, form.blueskyCardThumbnailURL)) : '';
+        const blueskyAttachedImage = platform === 'bluesky' ? (announcementImage || previewImageSource(form.blueskyAdditionalImageDataURL, form.blueskyAdditionalImageURL)) : '';
+        const mastodonImage = platform === 'mastodon' ? (announcementImage || previewImageSource(form.mastodonAdditionalImageDataURL, form.mastodonAdditionalImageURL)) : '';
 
         if (platform === 'discord' && item.linkPreview) {
             return (
@@ -1728,6 +2001,173 @@ function App() {
         );
     };
 
+    const renderAnnouncementProfileSelector = () => (
+        <section className="mini-panel profile-selector-panel">
+            <label className="field">
+                <span>Announcement Profile</span>
+                <select aria-label="Announcement Profile" value={selectedAnnouncementProfileID} onChange={(event) => void selectAnnouncementProfile(event.target.value)}>
+                    <option value="">Manual / No Profile</option>
+                    {announcementProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                </select>
+            </label>
+            {activeAnnouncementProfile ? <small>{activeAnnouncementProfile.description || 'Preset applied. Review fields before publishing.'}</small> : null}
+            {pendingProfileID ? (
+                <div className="warning-banner stacked-callout compact-callout">
+                    <p>Applying a new profile will replace current announcement values.</p>
+                    <div className="quick-action-row">
+                        <button type="button" className="primary-button gold-button" onClick={() => void applyAnnouncementProfile(pendingProfileID)}>Apply Profile</button>
+                        <button type="button" className="ghost-button" onClick={() => setPendingProfileID(null)}>Cancel</button>
+                    </div>
+                </div>
+            ) : null}
+        </section>
+    );
+
+    const renderHomeMediaPanel = () => {
+        if (!activeDestinationsSupportMedia) {
+            return null;
+        }
+        return (
+            <details className="config-section media-section">
+                <summary className="config-section-title">
+                    <span><FileText aria-hidden="true" /> Media</span>
+                    <small>{activeDestinationsIncludeBluesky ? 'Announcement image and Bluesky card thumbnail' : 'Announcement image'}</small>
+                </summary>
+                <div className="config-section-body">
+                    <div className="form-grid">
+                        <label className="field">
+                            <span>Announcement Image URL</span>
+                            <input
+                                aria-label="Announcement Image URL"
+                                value={announcement.announcementImageURL}
+                                onChange={(event) => {
+                                    updateAnnouncement('announcementImageURL', event.target.value);
+                                    if (event.target.value.trim() !== '') clearAnnouncementImageUpload();
+                                }}
+                                placeholder="https://example.com/promo.png"
+                            />
+                        </label>
+                        <div className="field">
+                            <div className="field-label-row">
+                                <label htmlFor="announcement-image-upload">Announcement Image Upload</label>
+                                <button type="button" className="info-tooltip" aria-label="Announcement Image Upload information">
+                                    i<span role="tooltip">{announcement.announcementImageDataURL ? 'Uploaded image selected.' : 'Used by selected providers that support attached images.'}</span>
+                                </button>
+                            </div>
+                            <input id="announcement-image-upload" ref={announcementImageInputRef} aria-label="Announcement Image Upload" type="file" accept="image/*" onChange={(event) => void onAnnouncementImageUpload(event.target.files?.[0])} />
+                            {announcement.announcementImageDataURL ? <span className="upload-selection-indicator">Image upload selected</span> : null}
+                        </div>
+                        {activeDestinationsIncludeBluesky ? (
+                            <>
+                                <label className="field">
+                                    <span>Bluesky Link Card Thumbnail URL</span>
+                                    <input
+                                        aria-label="Bluesky Link Card Thumbnail URL"
+                                        value={announcement.blueskyCardThumbnailURL}
+                                        onChange={(event) => {
+                                            updateAnnouncement('blueskyCardThumbnailURL', event.target.value);
+                                            if (event.target.value.trim() !== '') clearHomeBlueskyThumbnailUpload();
+                                        }}
+                                        placeholder="https://example.com/card.png"
+                                    />
+                                </label>
+                                <div className="field">
+                                    <div className="field-label-row">
+                                        <label htmlFor="home-bluesky-card-thumbnail-upload">Bluesky Link Card Thumbnail Upload</label>
+                                        <button type="button" className="info-tooltip" aria-label="Bluesky Link Card Thumbnail Upload information">
+                                            i<span role="tooltip">{announcement.blueskyCardThumbnailDataURL ? 'Uploaded thumbnail selected.' : 'Used only for Bluesky link cards.'}</span>
+                                        </button>
+                                    </div>
+                                    <input id="home-bluesky-card-thumbnail-upload" ref={homeBlueskyThumbnailInputRef} aria-label="Bluesky Link Card Thumbnail Upload" type="file" accept="image/*" onChange={(event) => void onHomeBlueskyThumbnailUpload(event.target.files?.[0])} />
+                                    {announcement.blueskyCardThumbnailDataURL ? <span className="upload-selection-indicator">Thumbnail upload selected</span> : null}
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                </div>
+            </details>
+        );
+    };
+
+    const renderAnnouncementProfilesPanel = () => (
+        <article className="panel settings-panel announcement-profiles-panel">
+            <div className="panel-header compact-header">
+                <div>
+                    <h2>Announcement Profiles</h2>
+                    <p>Save reusable presets for stream types.</p>
+                </div>
+                <button type="button" className="ghost-button" onClick={resetProfileForm}><Send aria-hidden="true" />New Profile</button>
+            </div>
+            {profileError ? <p className="error-banner">{profileError}</p> : null}
+            {profileStatus ? <p className="success-banner">{profileStatus}</p> : null}
+            <div className="compact-list profile-list">
+                {announcementProfiles.length === 0 ? (
+                    <div className="empty-state compact-empty-state"><h3>No profiles yet</h3><p>Create presets for the stream types you repeat.</p></div>
+                ) : announcementProfiles.map((profile) => {
+                    const group = destinationGroups.find((item) => item.id === profile.defaultGroupID);
+                    return (
+                        <section className={profileForm.id === profile.id ? 'activity-card active' : 'activity-card'} key={profile.id}>
+                            <ListChecks aria-hidden="true" />
+                            <div>
+                                <strong>{profile.name}</strong>
+                                <p>{profile.description || 'No description'}</p>
+                                <small>{group ? `Group: ${group.name}` : 'Manual destination selection'}</small>
+                            </div>
+                            <div className="quick-action-row">
+                                <button type="button" className="ghost-button small-button" onClick={() => editAnnouncementProfile(profile)}>Edit</button>
+                                <button type="button" className="ghost-button icon-button" aria-label="Duplicate Profile" onClick={() => void onDuplicateAnnouncementProfile(profile)}><Copy aria-hidden="true" /></button>
+                                <button type="button" className="danger-button icon-button" aria-label="Delete Profile" onClick={() => void onDeleteAnnouncementProfile(profile)}><Trash2 aria-hidden="true" /></button>
+                            </div>
+                        </section>
+                    );
+                })}
+            </div>
+            <form className="announcement-form compact-form" onSubmit={onAnnouncementProfileSubmit}>
+                <div className="form-grid">
+                    <label className="field"><span>Profile Name</span><input aria-label="Profile Name" value={profileForm.name} onChange={(event) => updateProfileForm('name', event.target.value)} placeholder="Music Stream" maxLength={80} /></label>
+                    <label className="field"><span>Description</span><input aria-label="Profile Description" value={profileForm.description} onChange={(event) => updateProfileForm('description', event.target.value)} placeholder="Music announcements and hashtags" maxLength={250} /></label>
+                    <label className="field"><span>Stream URL</span><input aria-label="Profile Stream URL" value={profileForm.defaultStreamURL} onChange={(event) => updateProfileForm('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /></label>
+                    <label className="field"><span>Category / Game</span><input aria-label="Profile Category" value={profileForm.defaultCategory} onChange={(event) => updateProfileForm('defaultCategory', event.target.value)} placeholder="Music, FFXIV, Variety..." /></label>
+                    <label className="field"><span>Hashtags</span><input aria-label="Profile Hashtags" value={profileForm.defaultHashtags} onChange={(event) => updateProfileForm('defaultHashtags', event.target.value)} placeholder="#VTuber #Music" /></label>
+                    <label className="field"><span>Destination Group</span><select aria-label="Profile Destination Group" value={profileForm.defaultGroupID} onChange={(event) => updateProfileForm('defaultGroupID', event.target.value)}><option value="">Manual / No Group</option>{destinationGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
+                </div>
+                <label className="field"><span>Message</span><textarea aria-label="Profile Message" value={profileForm.defaultMessage} onChange={(event) => updateProfileForm('defaultMessage', event.target.value)} rows={3} placeholder="What are we getting into?" /></label>
+                <details className="config-section media-section">
+                    <summary className="config-section-title"><span><FileText aria-hidden="true" /> Profile Media</span><small>Optional image defaults</small></summary>
+                    <div className="config-section-body">
+                        <div className="form-grid">
+                            <label className="field"><span>Announcement Image URL</span><input aria-label="Profile Announcement Image URL" value={profileForm.defaultAnnouncementImageURL} onChange={(event) => { updateProfileForm('defaultAnnouncementImageURL', event.target.value); if (event.target.value.trim() !== '') updateProfileForm('defaultAnnouncementImageDataURL', ''); }} placeholder="https://example.com/promo.png" /></label>
+                            <div className="field">
+                                <div className="field-label-row">
+                                    <label htmlFor="profile-announcement-image-upload">Announcement Image Upload</label>
+                                    <button type="button" className="info-tooltip" aria-label="Profile Announcement Image Upload information">
+                                        i<span role="tooltip">{profileForm.defaultAnnouncementImageDataURL ? 'Uploaded image selected.' : 'Used as the default attached announcement image.'}</span>
+                                    </button>
+                                </div>
+                                <input id="profile-announcement-image-upload" ref={announcementProfileImageInputRef} aria-label="Profile Announcement Image Upload" type="file" accept="image/*" onChange={(event) => void onProfileImageUpload(event.target.files?.[0], 'announcement')} />
+                                {profileForm.defaultAnnouncementImageDataURL ? <span className="upload-selection-indicator">Image upload selected</span> : null}
+                            </div>
+                            <label className="field"><span>Bluesky Link Card Thumbnail URL</span><input aria-label="Profile Bluesky Link Card Thumbnail URL" value={profileForm.defaultBlueskyCardThumbnailURL} onChange={(event) => { updateProfileForm('defaultBlueskyCardThumbnailURL', event.target.value); if (event.target.value.trim() !== '') updateProfileForm('defaultBlueskyCardThumbnailDataURL', ''); }} placeholder="https://example.com/card.png" /></label>
+                            <div className="field">
+                                <div className="field-label-row">
+                                    <label htmlFor="profile-bluesky-card-thumbnail-upload">Bluesky Link Card Thumbnail Upload</label>
+                                    <button type="button" className="info-tooltip" aria-label="Profile Bluesky Link Card Thumbnail Upload information">
+                                        i<span role="tooltip">{profileForm.defaultBlueskyCardThumbnailDataURL ? 'Uploaded thumbnail selected.' : 'Used only for Bluesky link cards.'}</span>
+                                    </button>
+                                </div>
+                                <input id="profile-bluesky-card-thumbnail-upload" ref={announcementProfileBlueskyThumbnailInputRef} aria-label="Profile Bluesky Link Card Thumbnail Upload" type="file" accept="image/*" onChange={(event) => void onProfileImageUpload(event.target.files?.[0], 'bluesky-card')} />
+                                {profileForm.defaultBlueskyCardThumbnailDataURL ? <span className="upload-selection-indicator">Thumbnail upload selected</span> : null}
+                            </div>
+                        </div>
+                    </div>
+                </details>
+                <div className="action-cluster-main">
+                    <button type="submit" className="primary-button gold-button">{profileForm.id ? 'Save Profile' : 'Create Profile'}</button>
+                </div>
+            </form>
+        </article>
+    );
+
     const renderLiveSessionPanel = () => (
         <article className="panel dashboard-panel session-editor">
             <div className="panel-header compact-header">
@@ -1742,7 +2182,16 @@ function App() {
                     onClick={() => {
                         streamURLTouched.current = false;
                         hashtagsTouched.current = false;
+                        setSelectedAnnouncementProfileID('');
+                        setProfileDirty(false);
+                        setPendingProfileID(null);
                         setAnnouncement(applyAnnouncementDefaults(initialAnnouncement, settings, true, true));
+                        if (announcementImageInputRef.current) {
+                            announcementImageInputRef.current.value = '';
+                        }
+                        if (homeBlueskyThumbnailInputRef.current) {
+                            homeBlueskyThumbnailInputRef.current.value = '';
+                        }
                         setPreviewError(null);
                         setPreviewItems([]);
                     }}
@@ -1751,6 +2200,7 @@ function App() {
                 </button>
             </div>
             <form className="announcement-form compact-form" onSubmit={onPreviewSubmit}>
+                {renderAnnouncementProfileSelector()}
                 <div className="form-grid">
                     <div className="field">
                         <div className="field-label-row">
@@ -1784,6 +2234,7 @@ function App() {
                     <span>Optional Message</span>
                     <textarea aria-label="Optional Message" value={announcement.message} onChange={(event) => updateAnnouncement('message', event.target.value)} placeholder="What are we getting into tonight?" rows={3} />
                 </label>
+                {renderHomeMediaPanel()}
                 <div className="workflow-actions command-actions">
                     <button type="submit" className="ghost-button" disabled={previewLoading}>
                         <ClipboardList aria-hidden="true" />
@@ -2011,7 +2462,8 @@ function App() {
             <div className="app-frame">
                 {selectedTab === 'home' ? renderHomeDashboard() : null}
                 {selectedTab === 'destinations' ? <section className="content-stack destinations-workspace"><div className="segmented-control" role="group" aria-label="Destination workspace"><button type="button" className={destinationWorkspaceTab === 'destinations' ? 'active' : ''} onClick={() => setDestinationWorkspaceTab('destinations')}>Destinations</button><button type="button" className={destinationWorkspaceTab === 'groups' ? 'active' : ''} onClick={() => setDestinationWorkspaceTab('groups')}>Groups</button></div>{destinationWorkspaceTab === 'groups' ? <article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Destination Groups</h2><p>Organize where a workflow posts.</p></div><button type="button" className="ghost-button" onClick={resetDestinationGroupForm}><Send aria-hidden="true" />New Group</button></div><div className="destination-card-grid">{destinationGroups.map((group) => <section key={group.id} className={destinationGroupForm.id === group.id ? 'destination-manage-card active' : 'destination-manage-card'}><div className="entity-row"><ListChecks aria-hidden="true" /><div><strong>{group.name}</strong><span>{group.description || 'No description'}</span></div></div><div className="quick-action-row"><button type="button" className="ghost-button small-button" onClick={() => void editDestinationGroup(group)}>Edit</button><button type="button" className="ghost-button icon-button" aria-label="Duplicate Group" onClick={() => void onDuplicateDestinationGroup(group)}><Copy aria-hidden="true" /></button><button type="button" className="danger-button icon-button" aria-label="Delete Group" onClick={() => void onDeleteDestinationGroup(group)} disabled={group.id === DEFAULT_DESTINATION_GROUP_ID}><Trash2 aria-hidden="true" /></button></div></section>)}</div><form className="announcement-form" onSubmit={onDestinationGroupSubmit}><div className="form-grid"><label className="field"><span>Group Name</span><input aria-label="Group Name" value={destinationGroupForm.name} onChange={(event) => updateDestinationGroupForm('name', event.target.value)} placeholder="Main Announcements" maxLength={80} /></label><label className="field"><span>Description</span><input aria-label="Group Description" value={destinationGroupForm.description} onChange={(event) => updateDestinationGroupForm('description', event.target.value)} placeholder="Primary live announcement targets" maxLength={250} /></label></div><section className="mini-panel template-helper-panel"><div className="template-helper-header"><h3>Members</h3><span>{destinationIDsForGroupForm.length} selected</span></div><div className="membership-checklist" role="group" aria-label="Group Destinations">{destinations.length === 0 ? <p>No destinations yet.</p> : destinations.map((destination) => <label key={destination.id} className="checkbox-field"><input type="checkbox" aria-label={destination.name} checked={destinationIDsForGroupForm.includes(destination.id)} onChange={() => toggleGroupFormDestination(destination.id)} /><span>{destination.name}</span></label>)}</div></section><div className="action-cluster-main"><button type="submit" className="primary-button gold-button">{destinationGroupForm.id ? 'Save Group' : 'Create Group'}</button></div></form></article> : null}<article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Saved Destinations</h2><p>Manage integrations quickly, or load one into the editor.</p></div><div className="form-actions"><span>{configuredDestinationCount} configured</span><button type="button" className="ghost-button" onClick={() => resetDestinationForm()}><Send aria-hidden="true" />New Destination</button></div></div>{destinationError ? <p className="error-banner">{destinationError}</p> : null}<div className="destination-card-grid">{destinations.length === 0 ? <div className="empty-state"><h3>No destinations yet</h3><p>Create a destination to start building platform-specific previews and go-live targets.</p></div> : destinations.map((item) => <section key={item.id} className={destinationForm.id === item.id ? 'destination-manage-card active' : 'destination-manage-card'}><div className="entity-row"><PlatformIcon platform={item.platform} /><div><strong>{item.name}</strong><span>{destinationManageMetadata(item)}</span></div></div><div className="quick-action-row"><button type="button" className="ghost-button small-button" onClick={() => editDestination(item)}>Edit</button><button type="button" className="ghost-button icon-button" aria-label="Duplicate" onClick={() => duplicateDestination(item)}><Copy aria-hidden="true" /></button><button type="button" className="ghost-button icon-button" aria-label="Test" onClick={() => void onTestSavedDestination(item)} disabled={destinationConnectionLoading}><Play aria-hidden="true" /></button><button type="button" className="danger-button icon-button" aria-label="Delete" onClick={() => void onDeleteSavedDestination(item)}><Trash2 aria-hidden="true" /></button></div></section>)}</div></article><div className="destination-editor-grid"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>{destinationForm.id ? 'Edit Destination' : 'New Destination'}</h2><p>{destinationForm.id ? 'Save changes to the selected integration.' : 'Create a new publishing integration.'}</p><div className="destination-mode-indicator">{destinationForm.id ? `Editing: ${destinationForm.name || 'Selected destination'}` : 'New destination'}</div></div><StatusBadge status={destinationConnectionResult?.state ?? 'pending'} label={destinationConnectionResult ? destinationConnectionResult.state : 'Not tested'} /></div><form className="announcement-form" onSubmit={onDestinationSubmit}><section className="config-section open-section"><div className="config-section-title"><span><ExternalLink aria-hidden="true" /> Connection</span><small>Platform and credential details</small></div><div className="config-section-body"><div className="form-grid"><label className="field"><span>Platform</span><select aria-label="Platform" value={destinationForm.platform} onChange={(event) => { setDestinationSecrets({ discordWebhookKey: '', blueskyCredentialKey: '', mastodonCredentialKey: '' }); setDestinationConnectionResult(null); setDestinationForm((current) => ({ ...createEmptyDestinationForm(event.target.value as DestinationInput['platform']), id: current.id, name: current.name, createdAt: current.createdAt, updatedAt: current.updatedAt })); }}><option value="discord">Discord</option><option value="bluesky">Bluesky</option><option value="mastodon">Mastodon</option></select></label><label className="field"><span>Friendly Name</span><input aria-label="Friendly Name" value={destinationForm.name} onChange={(event) => updateDestination('name', event.target.value)} placeholder="Main Discord" /></label><section className="mini-panel template-helper-panel"><div className="template-helper-header"><h3>Groups</h3><button type="button" className="ghost-button small-button" onClick={() => setDestinationWorkspaceTab('groups')}>Manage Groups</button></div><div className="membership-checklist" role="group" aria-label="Destination Groups">{destinationGroups.map((group) => <label key={group.id} className="checkbox-field"><input type="checkbox" aria-label={group.name} checked={destinationGroupMembershipIDs.includes(group.id)} onChange={() => toggleDestinationGroupMembership(group.id)} disabled={group.id === DEFAULT_DESTINATION_GROUP_ID && destinationGroupMembershipIDs.length === 1} /><span>{group.name}</span></label>)}</div></section></div>{renderPlatformConnectionFields()}</div></section><section className="config-section open-section"><div className="config-section-title"><span><FileText aria-hidden="true" /> Template</span><small>Message composition and token insertion</small></div><div className="config-section-body"><label className="field"><span>{destinationTemplateLabel(destinationForm.platform)}</span><textarea ref={templateInputRef} aria-label={destinationTemplateLabel(destinationForm.platform)} value={destinationForm.template} onFocus={() => { activeTemplateInputRef.current = templateInputRef.current; }} onChange={(event) => updateDestination('template', event.target.value)} placeholder="{{stream_title}}" rows={5} /></label><section className="mini-panel template-helper-panel"><div className="template-helper-header"><h3>How This Template Works</h3><button type="button" className="ghost-button" onClick={() => updateDestination('template', defaultTemplateForPlatform(destinationForm.platform))}>Reset to Starter Template</button></div><p>Only fields referenced in this template will appear in the published post.</p><p>Uses: {usedTemplateVariables(destinationForm.template).length > 0 ? usedTemplateVariables(destinationForm.template).join(', ') : 'no announcement fields yet'}</p>{destinationHelperStatus ? <p className="success-copy">{destinationHelperStatus}</p> : null}<div className="template-token-list" role="list" aria-label="Available template variables">{TEMPLATE_VARIABLES.map((variable) => <button key={variable} type="button" className="template-token" onClick={() => insertTemplateVariable(variable)}>{variable}</button>)}</div></section></div></section>{renderAdvancedFields()}<div className="action-cluster-main sticky-editor-actions"><button type="submit" className="primary-button gold-button">{destinationForm.id ? 'Save Changes' : 'Create Destination'}</button><button type="button" className="ghost-button" onClick={() => void onTestDestinationConnection()} disabled={destinationConnectionLoading}>{destinationConnectionLoading ? 'Testing Connection...' : `Test ${credentialSetupLabel(destinationForm.platform)}`}</button><button type="button" className="danger-button" onClick={() => void onDeleteDestination()} disabled={!destinationForm.id}>Delete</button></div>{destinationConnectionResult ? <p className={destinationConnectionResult.state === 'SUCCESS' ? 'success-banner' : 'error-banner'}>{destinationConnectionResult.message}</p> : null}</form></article><aside className="panel dashboard-panel setup-helper-panel" aria-label="Guided Credential Setup"><div className="panel-header compact-header"><div><h2>{platformLabel(destinationForm.platform)} Setup</h2><p>Use these steps, then test before saving.</p></div></div><div className="guided-setup-list">{guidedSetupSteps(destinationForm.platform).map((step) => <section className="guided-setup-step" key={step.title}><strong>{step.title}</strong><p>{step.detail}</p></section>)}</div></aside></div></section> : null}
-                {selectedTab === 'settings' ? <section className="content-stack"><article className="panel dashboard-panel settings-page-panel"><div className="panel-header compact-header"><div><h2>Settings</h2><p>Configure defaults and recovery behavior.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label={`${pendingLiveNowSessions.length} Pending Recovery`} /> : null}</div>{settingsError ? <p className="error-banner">{settingsError}</p> : null}<section className="two-column-layout"><article className="panel settings-panel"><div className="panel-header compact-header"><div><h2>Application Defaults</h2><p>Defaults prefill new sessions and protect against accidental duplicate publishes.</p></div></div><form className="announcement-form settings-grid" onSubmit={onSettingsSubmit}><label className="field checkbox-field"><input aria-label="Duplicate Protection Enabled" type="checkbox" checked={settings.duplicateProtectionEnabled} onChange={(event) => updateSettings('duplicateProtectionEnabled', event.target.checked)} /><span>Duplicate Protection Enabled<small>Warns when a similar Go Live action happens inside the duplicate window.</small></span></label><label className="field"><span>Default Stream URL</span><input aria-label="Default Stream URL" value={settings.defaultStreamURL} onChange={(event) => updateSettings('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /><small>Prefills new Home sessions until edited.</small></label><label className="field"><span>Default Hashtags</span><input aria-label="Default Hashtags" value={settings.defaultHashtags} onChange={(event) => updateSettings('defaultHashtags', event.target.value)} placeholder="#vtuber #music" /><small>Applied to new announcements until changed.</small></label><label className="field"><span>Duplicate Window (Minutes)</span><input aria-label="Duplicate Window (Minutes)" type="number" min={1} value={settings.duplicateWindowMinutes} onChange={(event) => updateSettings('duplicateWindowMinutes', Number(event.target.value))} /><small>How long StreamSignal watches for repeated publish attempts.</small></label><button type="submit" className="primary-button gold-button">Save Settings</button></form></article><article className={pendingLiveNowSessions.length > 0 ? 'panel recovery-center recovery-pending' : 'panel recovery-center'}><div className="panel-header compact-header"><div><h2>Recovery Center</h2><h3>Live Now Recovery</h3><p>Clear Bluesky Live Now states left active after interruptions.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label="Pending Recovery" /> : null}</div>{recoveryError ? <p className="error-banner">{recoveryError}</p> : null}{recoveryStatus ? <p className="success-banner">{recoveryStatus}</p> : null}{pendingLiveNowSessions.length === 0 ? <div className="empty-state compact-empty-state"><h3>No pending Live Now sessions.</h3><p>When recovery is needed, each session will appear here with a one-click clear action.</p></div> : <div className="compact-list">{pendingLiveNowSessions.map((session) => <section className="activity-card" key={session.destinationID}><PlatformIcon platform={session.platform} /><div><strong>{session.destinationName}</strong><p>{session.streamTitle || 'Untitled stream'} · {session.streamURL}</p><time dateTime={session.startedAt}>{session.startedAt}</time></div><button type="button" className="primary-button gold-button" onClick={() => void onClearPendingLiveNow(session.destinationID)} disabled={recoveryLoadingId !== null}>{recoveryLoadingId === session.destinationID ? 'Recovering Live Now...' : 'Recover and Clear Live Now'}</button></section>)}</div>}</article><article className="panel legal-notice-card"><div className="panel-header compact-header"><div><h2>Legal Notices</h2><p>{LEGAL_NOTICE}</p></div></div></article></section></article></section> : null}
+                {selectedTab === 'profiles' ? <section className="content-stack profiles-workspace">{renderAnnouncementProfilesPanel()}</section> : null}
+                {selectedTab === 'settings' ? <section className="content-stack"><article className="panel dashboard-panel settings-page-panel"><div className="panel-header compact-header"><div><h2>Settings</h2><p>Configure defaults and recovery behavior.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label={`${pendingLiveNowSessions.length} Pending Recovery`} /> : null}</div>{settingsError ? <p className="error-banner">{settingsError}</p> : null}<section className="two-column-layout"><article className="panel settings-panel"><div className="panel-header compact-header"><div><h2>Session Defaults</h2><p>Defaults prefill manual sessions and protect against accidental duplicate publishes.</p></div></div><form className="announcement-form settings-grid" onSubmit={onSettingsSubmit}><label className="field checkbox-field"><input aria-label="Duplicate Protection Enabled" type="checkbox" checked={settings.duplicateProtectionEnabled} onChange={(event) => updateSettings('duplicateProtectionEnabled', event.target.checked)} /><span>Duplicate Protection Enabled<small>Warns when a similar Go Live action happens inside the duplicate window.</small></span></label><label className="field"><span>Default Stream URL</span><input aria-label="Default Stream URL" value={settings.defaultStreamURL} onChange={(event) => updateSettings('defaultStreamURL', event.target.value)} placeholder="https://example.com/live" /><small>Prefills new Home sessions until edited.</small></label><label className="field"><span>Default Hashtags</span><input aria-label="Default Hashtags" value={settings.defaultHashtags} onChange={(event) => updateSettings('defaultHashtags', event.target.value)} placeholder="#vtuber #music" /><small>Applied to new announcements until changed.</small></label><label className="field"><span>Duplicate Window (Minutes)</span><input aria-label="Duplicate Window (Minutes)" type="number" min={1} value={settings.duplicateWindowMinutes} onChange={(event) => updateSettings('duplicateWindowMinutes', Number(event.target.value))} /><small>How long StreamSignal watches for repeated publish attempts.</small></label><button type="submit" className="primary-button gold-button">Save Settings</button></form></article><article className={pendingLiveNowSessions.length > 0 ? 'panel recovery-center recovery-pending' : 'panel recovery-center'}><div className="panel-header compact-header"><div><h2>Recovery Center</h2><h3>Live Now Recovery</h3><p>Clear Bluesky Live Now states left active after interruptions.</p></div>{pendingLiveNowSessions.length > 0 ? <StatusBadge status="pending" label="Pending Recovery" /> : null}</div>{recoveryError ? <p className="error-banner">{recoveryError}</p> : null}{recoveryStatus ? <p className="success-banner">{recoveryStatus}</p> : null}{pendingLiveNowSessions.length === 0 ? <div className="empty-state compact-empty-state"><h3>No pending Live Now sessions.</h3><p>When recovery is needed, each session will appear here with a one-click clear action.</p></div> : <div className="compact-list">{pendingLiveNowSessions.map((session) => <section className="activity-card" key={session.destinationID}><PlatformIcon platform={session.platform} /><div><strong>{session.destinationName}</strong><p>{session.streamTitle || 'Untitled stream'} · {session.streamURL}</p><time dateTime={session.startedAt}>{session.startedAt}</time></div><button type="button" className="primary-button gold-button" onClick={() => void onClearPendingLiveNow(session.destinationID)} disabled={recoveryLoadingId !== null}>{recoveryLoadingId === session.destinationID ? 'Recovering Live Now...' : 'Recover and Clear Live Now'}</button></section>)}</div>}</article><article className="panel legal-notice-card"><div className="panel-header compact-header"><div><h2>Legal Notices</h2><p>{LEGAL_NOTICE}</p></div></div></article></section></article></section> : null}
                 {SHOW_DEBUG_WORKFLOW_UI && selectedTab === 'logs' ? <section className="content-stack"><article className="panel dashboard-panel"><div className="panel-header compact-header"><div><h2>Logs</h2><p>Newest activity first, optimized for quick scanning.</p></div><span>{filteredLogs.length} of {logs.length} recent entries</span></div>{logsError ? <p className="error-banner">{logsError}</p> : null}<div className="log-toolbar"><button type="button" className="ghost-button" onClick={() => void refreshLogs()}><RefreshCw aria-hidden="true" />Refresh Logs</button><button type="button" className="primary-button gold-button" onClick={() => void onCopyDiagnostics()}><ListChecks aria-hidden="true" />Copy Diagnostics</button></div><div className="log-filter-panel" aria-label="Log filters"><div className="log-filter-group"><span>Category</span><div className="segmented-control" role="group" aria-label="Log category filter">{LOG_CATEGORY_FILTERS.map((filter) => <button key={filter.value} type="button" className={logCategoryFilter === filter.value ? 'active' : ''} onClick={() => setLogCategoryFilter(filter.value)}>{filter.label}</button>)}</div></div><div className="log-filter-group"><span>Status</span><div className="segmented-control" role="group" aria-label="Log status filter">{LOG_STATUS_FILTERS.map((filter) => <button key={filter.value} type="button" className={logStatusFilter === filter.value ? 'active' : ''} onClick={() => setLogStatusFilter(filter.value)}>{filter.label}</button>)}</div></div></div>{logs.length === 0 ? <div className="empty-state"><h3>No logs yet</h3><p>Workflow activity and validation outcomes will appear here as you use the app.</p></div> : filteredLogs.length === 0 ? <div className="empty-state"><h3>No matching logs</h3><p>Adjust the filters to see more recent activity.</p></div> : <div className="log-card-list">{filteredLogs.map((entry, index) => { const platform = inferLogPlatform(entry, destinations); return <section className="log-card" key={`${entry.timestamp}-${entry.action}-${index}`}><PlatformIcon platform={platform} /><div><strong>{logActionLabel(entry.action)}</strong><p>{entry.destination}</p><time dateTime={entry.timestamp}>{entry.timestamp}</time></div><p>{entry.message}</p><StatusBadge status={entry.status} /></section>; })}</div>}</article></section> : null}
             </div>
             {workflowToast ? <div className="toast-region" aria-live="polite" aria-atomic="true"><div className={`workflow-toast toast-${workflowToast.kind}`} key={workflowToast.id}>{workflowToast.message}</div></div> : null}

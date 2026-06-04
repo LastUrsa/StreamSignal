@@ -3,14 +3,18 @@ package domain
 import "time"
 
 type Announcement struct {
-	StreamTitle        string    `json:"streamTitle"`
-	StreamURL          string    `json:"streamURL"`
-	Category           string    `json:"category"`
-	Message            string    `json:"message"`
-	Hashtags           string    `json:"hashtags"`
-	DestinationGroupID string    `json:"destinationGroupID"`
-	DestinationIDs     []string  `json:"destinationIDs"`
-	CreatedAt          time.Time `json:"createdAt"`
+	StreamTitle                 string    `json:"streamTitle"`
+	StreamURL                   string    `json:"streamURL"`
+	Category                    string    `json:"category"`
+	Message                     string    `json:"message"`
+	Hashtags                    string    `json:"hashtags"`
+	AnnouncementImageURL        string    `json:"announcementImageURL"`
+	AnnouncementImageDataURL    string    `json:"announcementImageDataURL"`
+	BlueskyCardThumbnailURL     string    `json:"blueskyCardThumbnailURL"`
+	BlueskyCardThumbnailDataURL string    `json:"blueskyCardThumbnailDataURL"`
+	DestinationGroupID          string    `json:"destinationGroupID"`
+	DestinationIDs              []string  `json:"destinationIDs"`
+	CreatedAt                   time.Time `json:"createdAt"`
 }
 
 type DestinationPlatform string
@@ -48,6 +52,23 @@ type DestinationGroup struct {
 type DestinationGroupMembership struct {
 	GroupID       string `json:"groupID"`
 	DestinationID string `json:"destinationID"`
+}
+
+type AnnouncementProfile struct {
+	ID                                 string    `json:"id"`
+	Name                               string    `json:"name"`
+	Description                        string    `json:"description"`
+	DefaultStreamURL                   string    `json:"defaultStreamURL"`
+	DefaultCategory                    string    `json:"defaultCategory"`
+	DefaultMessage                     string    `json:"defaultMessage"`
+	DefaultHashtags                    string    `json:"defaultHashtags"`
+	DefaultAnnouncementImageURL        string    `json:"defaultAnnouncementImageURL"`
+	DefaultAnnouncementImageDataURL    string    `json:"defaultAnnouncementImageDataURL"`
+	DefaultBlueskyCardThumbnailURL     string    `json:"defaultBlueskyCardThumbnailURL"`
+	DefaultBlueskyCardThumbnailDataURL string    `json:"defaultBlueskyCardThumbnailDataURL"`
+	DefaultGroupID                     string    `json:"defaultGroupID"`
+	CreatedAt                          time.Time `json:"createdAt"`
+	UpdatedAt                          time.Time `json:"updatedAt"`
 }
 
 type AppSettings struct {

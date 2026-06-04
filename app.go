@@ -24,6 +24,7 @@ type App struct {
 	settingsService *appsvc.SettingsService
 	destinationSvc  *appsvc.DestinationService
 	groupSvc        *appsvc.DestinationGroupService
+	profileSvc      *appsvc.AnnouncementProfileService
 	credentialSvc   *appsvc.CredentialSetupService
 	previewService  *appsvc.PreviewService
 	logService      *appsvc.LogService
@@ -55,6 +56,7 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 	settingsRepo := secure.NewSettingsRepository(sqlite.NewSettingsRepository(db), secretStore)
 	destinationRepo := secure.NewDestinationRepository(sqlite.NewDestinationRepository(db), secretStore)
 	groupRepo := sqlite.NewDestinationGroupRepository(db)
+	profileRepo := sqlite.NewAnnouncementProfileRepository(db)
 	logRepo := sqlite.NewLogRepository(db)
 	historyRepo := sqlite.NewPostHistoryRepository(db)
 	liveNowSessionRepo := secure.NewLiveNowSessionRepository(sqlite.NewLiveNowSessionRepository(db), secretStore)
@@ -67,6 +69,7 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 		settingsService: appsvc.NewSettingsService(settingsRepo),
 		destinationSvc:  appsvc.NewDestinationService(destinationRepo),
 		groupSvc:        appsvc.NewDestinationGroupService(groupRepo),
+		profileSvc:      appsvc.NewAnnouncementProfileService(profileRepo, groupRepo),
 		credentialSvc:   appsvc.NewCredentialSetupService(discordPublisher, blueskyPublisher, mastodonPublisher),
 		previewService: func() *appsvc.PreviewService {
 			service := appsvc.NewPreviewService(destinationRepo, settingsRepo, liveNowSessionRepo)
@@ -191,6 +194,45 @@ func (a *App) AddDestinationToGroup(groupID string, destinationID string) error 
 
 func (a *App) RemoveDestinationFromGroup(groupID string, destinationID string) error {
 	return a.groupSvc.RemoveDestination(a.ctx, groupID, destinationID)
+}
+
+func (a *App) ListAnnouncementProfiles() ([]domain.AnnouncementProfile, error) {
+	return a.profileSvc.List(a.ctx)
+}
+
+func (a *App) GetAnnouncementProfile(id string) (domain.AnnouncementProfile, error) {
+	return a.profileSvc.Get(a.ctx, id)
+}
+
+func (a *App) SaveAnnouncementProfile(profile domain.AnnouncementProfile) (domain.AnnouncementProfile, error) {
+	wasNew := profile.ID == ""
+	saved, err := a.profileSvc.Save(a.ctx, profile)
+	if err == nil {
+		action := "update_announcement_profile"
+		message := fmt.Sprintf("Announcement profile updated: %s", saved.Name)
+		if wasNew {
+			action = "create_announcement_profile"
+			message = fmt.Sprintf("Announcement profile created: %s", saved.Name)
+		}
+		_ = a.logService.Append(a.ctx, saved.Name, action, "SUCCESS", message)
+	}
+	return saved, err
+}
+
+func (a *App) DuplicateAnnouncementProfile(id string) (domain.AnnouncementProfile, error) {
+	saved, err := a.profileSvc.Duplicate(a.ctx, id)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, saved.Name, "duplicate_announcement_profile", "SUCCESS", fmt.Sprintf("Announcement profile duplicated: %s", saved.Name))
+	}
+	return saved, err
+}
+
+func (a *App) DeleteAnnouncementProfile(id string) error {
+	err := a.profileSvc.Delete(a.ctx, id)
+	if err == nil {
+		_ = a.logService.Append(a.ctx, id, "delete_announcement_profile", "SUCCESS", "Deleted announcement profile.")
+	}
+	return err
 }
 
 func (a *App) TestDestinationConnection(destination domain.Destination) domain.CredentialCheckResult {

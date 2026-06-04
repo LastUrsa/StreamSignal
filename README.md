@@ -10,13 +10,15 @@ It is intended for creators who want a repeatable Go Live and End Stream workflo
 - generates destination-specific previews before anything is sent
 - supports optional End Stream messages per destination
 - can set and clear Bluesky `Live Now` status, including recovery after an interrupted app session
-- supports default stream URLs and hashtags for fresh sessions
+- supports reusable Announcement Profiles for repeated stream types
+- supports default stream URLs, hashtags, and optional announcement media for fresh sessions
 
 ## App Areas
 
 - **Home**: session details, destination selection, preview, Go Live, End Stream, and recovery awareness.
 - **Destinations**: Discord, Bluesky, and Mastodon setup, testing, and Destination Groups.
-- **Settings**: defaults, Bluesky Live Now recovery, and legal notices.
+- **Profiles**: reusable announcement presets for repeated stream types.
+- **Settings**: session defaults, Bluesky Live Now recovery, and legal notices.
 
 Debug builds also include **Logs** for development and workflow validation. Logs are not shown in production releases.
 
@@ -28,11 +30,13 @@ Debug builds also include **Logs** for development and workflow validation. Logs
    - **Bluesky**: create a Bluesky app password, enter the account identifier and app password, then choose whether StreamSignal should change Bluesky Live Status during Go Live.
    - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
 3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags.
-4. On Home, choose individual destinations or switch to a Destination Group for the current session. New destinations start in **All Destinations**.
-5. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
-6. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
-7. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
-8. Use **Settings > Live Now Recovery** if StreamSignal closed before it could clear a pending Bluesky Live Now status.
+4. Optionally create Announcement Profiles in **Profiles** for repeated stream types. Profiles can prefill Home fields, media, and a Destination Group.
+5. On Home, choose individual destinations or switch to a Destination Group for the current session. New destinations start in **All Destinations**.
+6. Add optional media on Home when the selected destinations support it. The announcement image is shared by providers that support attached images; Bluesky link card thumbnails have their own field.
+7. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
+8. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
+9. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
+10. Use **Settings > Live Now Recovery** if StreamSignal closed before it could clear a pending Bluesky Live Now status.
 
 ## Stack
 

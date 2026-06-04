@@ -557,8 +557,8 @@ func (s *ExecutionService) publish(ctx context.Context, destination domain.Desti
 			return nil, fmt.Errorf("missing Discord webhook key")
 		}
 		return nil, s.discord.Publish(ctx, config.WebhookKey, content, domain.DiscordPostMetadata{
-			ThumbnailURL:     config.CardThumbnailURL,
-			ThumbnailDataURL: config.CardThumbnailDataURL,
+			ThumbnailURL:     firstNonEmpty(announcement.AnnouncementImageURL, config.CardThumbnailURL),
+			ThumbnailDataURL: firstNonEmpty(announcement.AnnouncementImageDataURL, config.CardThumbnailDataURL),
 		})
 	case domain.PlatformBluesky:
 		var config blueskyDestinationConfig
@@ -572,10 +572,10 @@ func (s *ExecutionService) publish(ctx context.Context, destination domain.Desti
 			StreamURL:              announcement.StreamURL,
 			StreamTitle:            announcement.StreamTitle,
 			Description:            announcement.Message,
-			ThumbnailURL:           config.CardThumbnailURL,
-			ThumbnailDataURL:       config.CardThumbnailDataURL,
-			AdditionalImageURL:     config.AdditionalImageURL,
-			AdditionalImageDataURL: config.AdditionalImageDataURL,
+			ThumbnailURL:           firstNonEmpty(announcement.BlueskyCardThumbnailURL, config.CardThumbnailURL),
+			ThumbnailDataURL:       firstNonEmpty(announcement.BlueskyCardThumbnailDataURL, config.CardThumbnailDataURL),
+			AdditionalImageURL:     firstNonEmpty(announcement.AnnouncementImageURL, config.AdditionalImageURL),
+			AdditionalImageDataURL: firstNonEmpty(announcement.AnnouncementImageDataURL, config.AdditionalImageDataURL),
 		}
 		if publisher, ok := s.bluesky.(ports.BlueskyReceiptPublisher); ok {
 			receipt, err := publisher.PublishPostWithReceipt(ctx, config.AccountIdentifier, config.CredentialKey, content, metadata)
@@ -594,8 +594,8 @@ func (s *ExecutionService) publish(ctx context.Context, destination domain.Desti
 			return nil, fmt.Errorf("missing Mastodon connection details")
 		}
 		metadata := domain.MastodonPostMetadata{
-			AdditionalImageURL:     config.AdditionalImageURL,
-			AdditionalImageDataURL: config.AdditionalImageDataURL,
+			AdditionalImageURL:     firstNonEmpty(announcement.AnnouncementImageURL, config.AdditionalImageURL),
+			AdditionalImageDataURL: firstNonEmpty(announcement.AnnouncementImageDataURL, config.AdditionalImageDataURL),
 		}
 		if publisher, ok := s.mastodon.(ports.MastodonReceiptPublisher); ok {
 			receipt, err := publisher.PublishPostWithReceipt(ctx, config.CredentialKey, config.InstanceURL, content, metadata)
@@ -608,6 +608,15 @@ func (s *ExecutionService) publish(ctx context.Context, destination domain.Desti
 	default:
 		return nil, fmt.Errorf("unsupported destination platform")
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func blueskyLiveNowDuration(value int) int {

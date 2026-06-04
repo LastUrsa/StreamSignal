@@ -570,6 +570,66 @@ func TestExecutionServiceGoLiveUsesSelectedDestinationTargets(t *testing.T) {
 	}
 }
 
+func TestExecutionServiceGoLiveUsesAnnouncementMediaBeforeDestinationFallbacks(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	destRepo.listItems = []domain.Destination{
+		{
+			ID:         "discord-main",
+			Platform:   domain.PlatformDiscord,
+			Name:       "Main Discord",
+			Enabled:    true,
+			Template:   "{{stream_title}}",
+			ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main","cardThumbnailURL":"https://example.com/destination-discord.png"}`,
+		},
+		{
+			ID:         "bluesky-main",
+			Platform:   domain.PlatformBluesky,
+			Name:       "Main Bluesky",
+			Enabled:    true,
+			Template:   "{{stream_title}}",
+			ConfigJSON: `{"accountIdentifier":"streamer.main","credentialKey":"bluesky/main","cardThumbnailURL":"https://example.com/destination-card.png","additionalImageURL":"https://example.com/destination-attached.png","liveStatusEnabled":false}`,
+		},
+		{
+			ID:         "mastodon-main",
+			Platform:   domain.PlatformMastodon,
+			Name:       "Main Mastodon",
+			Enabled:    true,
+			Template:   "{{stream_title}}",
+			ConfigJSON: `{"credentialKey":"mastodon/main","instanceURL":"https://mastodon.social","additionalImageURL":"https://example.com/destination-mastodon.png"}`,
+		},
+	}
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	history := &postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}}
+	discord := &discordPublisherStub{}
+	bluesky := &blueskyPublisherStub{}
+	mastodon := &mastodonPublisherStub{}
+	service := NewExecutionService(destRepo, settingsRepo, history, &liveNowSessionRepositoryExecutionStub{}, discord, bluesky, mastodon)
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	_, err := service.GoLive(context.Background(), domain.Announcement{
+		StreamTitle:                 "Going Live",
+		StreamURL:                   "https://example.com/live",
+		AnnouncementImageURL:        "https://example.com/home-announcement.png",
+		BlueskyCardThumbnailDataURL: "data:image/png;base64,aG9tZS1jYXJk",
+	})
+	if err != nil {
+		t.Fatalf("go live: %v", err)
+	}
+
+	if discord.calls[0].metadata.ThumbnailURL != "https://example.com/home-announcement.png" {
+		t.Fatalf("expected home announcement image for discord, got %+v", discord.calls[0].metadata)
+	}
+	if bluesky.calls[0].metadata.AdditionalImageURL != "https://example.com/home-announcement.png" {
+		t.Fatalf("expected home announcement image for bluesky attachment, got %+v", bluesky.calls[0].metadata)
+	}
+	if bluesky.calls[0].metadata.ThumbnailDataURL != "data:image/png;base64,aG9tZS1jYXJk" {
+		t.Fatalf("expected home Bluesky card thumbnail, got %+v", bluesky.calls[0].metadata)
+	}
+	if mastodon.calls[0].metadata.AdditionalImageURL != "https://example.com/home-announcement.png" {
+		t.Fatalf("expected home announcement image for mastodon, got %+v", mastodon.calls[0].metadata)
+	}
+}
+
 func TestExecutionServiceGoLiveReturnsFailureWhenBlueskyLiveNowUpdateFailsAfterPost(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
 	destRepo.items["bluesky-main"] = domain.Destination{

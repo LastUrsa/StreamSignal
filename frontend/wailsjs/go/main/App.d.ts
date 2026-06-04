@@ -4,9 +4,13 @@ import {domain} from '../models';
 
 export function ClearPendingLiveNowSession(arg1:string):Promise<domain.ExecutionResult>;
 
+export function DeleteAnnouncementProfile(arg1:string):Promise<void>;
+
 export function DeleteDestination(arg1:string):Promise<void>;
 
 export function DeleteDestinationGroup(arg1:string):Promise<void>;
+
+export function DuplicateAnnouncementProfile(arg1:string):Promise<domain.AnnouncementProfile>;
 
 export function DuplicateDestinationGroup(arg1:string):Promise<domain.DestinationGroup>;
 
@@ -15,6 +19,8 @@ export function EndStream(arg1:domain.Announcement):Promise<domain.ExecutionSumm
 export function ForceGoLive(arg1:domain.Announcement):Promise<domain.ExecutionSummary>;
 
 export function GeneratePreview(arg1:domain.Announcement):Promise<Array<domain.PreviewItem>>;
+
+export function GetAnnouncementProfile(arg1:string):Promise<domain.AnnouncementProfile>;
 
 export function GetDestinationGroup(arg1:string):Promise<domain.DestinationGroup>;
 
@@ -30,6 +36,8 @@ export function GetSettings():Promise<domain.AppSettings>;
 
 export function GoLive(arg1:domain.Announcement):Promise<domain.ExecutionSummary>;
 
+export function ListAnnouncementProfiles():Promise<Array<domain.AnnouncementProfile>>;
+
 export function ListDestinationGroups():Promise<Array<domain.DestinationGroup>>;
 
 export function ListDestinations():Promise<Array<domain.Destination>>;
@@ -37,6 +45,8 @@ export function ListDestinations():Promise<Array<domain.Destination>>;
 export function ListPendingLiveNowSessions():Promise<Array<domain.ActiveLiveNowSession>>;
 
 export function SaveDestination(arg1:domain.Destination):Promise<domain.Destination>;
+
+export function SaveAnnouncementProfile(arg1:domain.AnnouncementProfile):Promise<domain.AnnouncementProfile>;
 
 export function SaveDestinationGroup(arg1:domain.DestinationGroup):Promise<domain.DestinationGroup>;
 

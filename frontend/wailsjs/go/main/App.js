@@ -6,12 +6,20 @@ export function ClearPendingLiveNowSession(arg1) {
   return window['go']['main']['App']['ClearPendingLiveNowSession'](arg1);
 }
 
+export function DeleteAnnouncementProfile(arg1) {
+  return window['go']['main']['App']['DeleteAnnouncementProfile'](arg1);
+}
+
 export function DeleteDestination(arg1) {
   return window['go']['main']['App']['DeleteDestination'](arg1);
 }
 
 export function DeleteDestinationGroup(arg1) {
   return window['go']['main']['App']['DeleteDestinationGroup'](arg1);
+}
+
+export function DuplicateAnnouncementProfile(arg1) {
+  return window['go']['main']['App']['DuplicateAnnouncementProfile'](arg1);
 }
 
 export function DuplicateDestinationGroup(arg1) {
@@ -28,6 +36,10 @@ export function ForceGoLive(arg1) {
 
 export function GeneratePreview(arg1) {
   return window['go']['main']['App']['GeneratePreview'](arg1);
+}
+
+export function GetAnnouncementProfile(arg1) {
+  return window['go']['main']['App']['GetAnnouncementProfile'](arg1);
 }
 
 export function GetDestinationGroup(arg1) {
@@ -58,6 +70,10 @@ export function GoLive(arg1) {
   return window['go']['main']['App']['GoLive'](arg1);
 }
 
+export function ListAnnouncementProfiles() {
+  return window['go']['main']['App']['ListAnnouncementProfiles']();
+}
+
 export function ListDestinationGroups() {
   return window['go']['main']['App']['ListDestinationGroups']();
 }
@@ -72,6 +88,10 @@ export function ListPendingLiveNowSessions() {
 
 export function SaveDestination(arg1) {
   return window['go']['main']['App']['SaveDestination'](arg1);
+}
+
+export function SaveAnnouncementProfile(arg1) {
+  return window['go']['main']['App']['SaveAnnouncementProfile'](arg1);
 }
 
 export function SaveDestinationGroup(arg1) {
