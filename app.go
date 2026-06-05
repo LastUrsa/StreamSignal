@@ -29,6 +29,8 @@ const fallbackAppVersion = "0.3.1"
 type App struct {
 	ctx             context.Context
 	db              *sql.DB
+	runtimeMode     string
+	windowActivator func(context.Context)
 	sipServer       *sip.Server
 	settingsService *appsvc.SettingsService
 	destinationSvc  *appsvc.DestinationService
@@ -44,12 +46,16 @@ type App struct {
 
 // NewApp creates a new application shell.
 func NewApp() *App {
+	return NewAppForMode(sip.StandaloneMode)
+}
+
+func NewAppForMode(runtimeMode string) *App {
 	dataDir, err := appsvc.EnsureDataDir()
 	if err != nil {
 		panic(err)
 	}
 
-	return newAppWithDependencies(filepath.Join(dataDir, "streamsignal.db"), wincred.NewStore())
+	return newAppWithDependenciesForMode(filepath.Join(dataDir, "streamsignal.db"), wincred.NewStore(), runtimeMode)
 }
 
 func newAppWithDatabasePath(databasePath string) *App {
@@ -57,6 +63,13 @@ func newAppWithDatabasePath(databasePath string) *App {
 }
 
 func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) *App {
+	return newAppWithDependenciesForMode(databasePath, secretStore, sip.StandaloneMode)
+}
+
+func newAppWithDependenciesForMode(databasePath string, secretStore ports.SecretStore, runtimeMode string) *App {
+	if runtimeMode == "" {
+		runtimeMode = sip.StandaloneMode
+	}
 	db, err := sqlite.Open(databasePath)
 	if err != nil {
 		panic(err)
@@ -82,12 +95,14 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 		AppID:    "streamsignal",
 		Name:     "StreamSignal",
 		Version:  appProductVersion(),
-		Mode:     sip.StandaloneMode,
+		Mode:     runtimeMode,
 		Protocol: sip.ProtocolVersion,
 	}, settingsService, profileSvc, recoverySvc)
 
 	return &App{
 		db:              db,
+		runtimeMode:     runtimeMode,
+		windowActivator: defaultWindowActivator,
 		sipServer:       sip.NewServer(sipService),
 		settingsService: settingsService,
 		destinationSvc:  destinationSvc,
@@ -121,11 +136,23 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	message := startupModeMessage(a.runtimeMode)
+	fmt.Println(message)
+	if a.logService != nil {
+		_ = a.logService.Append(ctx, "app", "startup", "SUCCESS", message+".")
+	}
 	if a.sipServer != nil {
 		if err := a.sipServer.Start(ctx); err != nil && a.logService != nil {
 			_ = a.logService.Append(ctx, "sip", "start_sip", "FAILED", fmt.Sprintf("SIP server unavailable: %s", err.Error()))
 		}
 	}
+}
+
+func (a *App) handleSecondInstanceLaunch(args []string) {
+	if a == nil || !shouldActivateExistingInstance(args) || a.windowActivator == nil {
+		return
+	}
+	a.windowActivator(a.ctx)
 }
 
 // shutdown closes open resources when the app exits.

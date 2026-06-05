@@ -53,3 +53,17 @@ Current SIP safeguards:
 - exposes no command execution, publish execution, or destructive endpoints
 
 SIP-v1 does not currently include authentication. Treat any future expansion beyond local read/status/profile behavior as requiring a fresh security review.
+
+## Service Mode Security Notes
+
+Service mode changes process startup behavior but does not add SIP endpoints or remote-control commands.
+
+Current service-mode safeguards:
+
+- `--service` starts the existing local backend and SIP server without showing the main window
+- `--show` is a process launch argument only, not a SIP command
+- duplicate process prevention uses Wails single-instance locking
+- the single-instance lock is scoped by `STREAMSIGNAL_ENV` so dev/test builds cannot activate or block the production instance
+- service mode continues to use the existing environment-separated app data and credential namespaces
+
+Any future support for remotely activating the UI, executing commands, or controlling publish behavior over SIP should receive a fresh security review before implementation.

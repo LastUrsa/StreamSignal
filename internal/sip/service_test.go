@@ -66,6 +66,17 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 	}
 }
 
+func TestAppReportsConfiguredRuntimeMode(t *testing.T) {
+	service := newTestServiceWithMode(ServiceMode)
+
+	var app AppResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/app", nil, http.StatusOK, &app)
+
+	if app.Mode != ServiceMode {
+		t.Fatalf("expected service mode, got %+v", app)
+	}
+}
+
 func TestHealthReportsReadyAndDegraded(t *testing.T) {
 	readyService := newTestService()
 	var ready HealthResponse
@@ -260,10 +271,15 @@ func TestActionsRemainOutOfScope(t *testing.T) {
 }
 
 func newTestService() *Service {
+	return newTestServiceWithMode("")
+}
+
+func newTestServiceWithMode(mode string) *Service {
 	return NewService(AppInfo{
 		AppID:    "streamsignal",
 		Name:     "StreamSignal",
 		Version:  "0.3.1",
+		Mode:     mode,
 		Protocol: ProtocolVersion,
 	}, fakeSettings{}, &fakeProfiles{profiles: []domain.AnnouncementProfile{{ID: "music", Name: "Music Stream"}}}, fakeRecovery{})
 }

@@ -58,9 +58,37 @@ Keep targeted coverage around:
 - Bluesky `Live Now` set, clear, duration, opt-out, and recovery behavior
 - credential persistence through secret references rather than raw values
 - non-production runtime data and credential namespace isolation
+- service-mode launch parsing, SIP mode reporting, single-instance behavior, and environment-scoped instance locks
 - Discord, Bluesky, and Mastodon publisher payloads
 - remote image and preview URL validation
 - settings and profile defaults that prefill Home sessions without overriding user edits unexpectedly
+
+## Service Mode Validation
+
+Service-mode changes should keep automated coverage around:
+
+- `StreamSignal.exe` resolving to standalone mode
+- `StreamSignal.exe --service` resolving to service mode and hidden startup
+- `StreamSignal.exe --show` resolving to standalone startup when no instance owns the lock
+- second-instance launch handling activating the existing window only when appropriate
+- `/api/v1/app` reporting the configured runtime mode
+- single-instance lock IDs staying separated by `STREAMSIGNAL_ENV`
+
+Before release, validate the OS/window-manager behavior manually on Windows:
+
+```bash
+./scripts/build-prod-windows.sh --service-smoke --env dev
+```
+
+The service-mode smoke test builds the Windows executable and checks:
+
+- `StreamSignal.exe --service` creates one process, starts SIP, reports mode `service`, and has no main window handle
+- `StreamSignal.exe --show` reuses the service process and creates/restores a main window handle
+- `StreamSignal.exe` reports mode `standalone`
+- `StreamSignal.exe --service` while standalone mode is running does not create a duplicate process
+- the test runs under an isolated `STREAMSIGNAL_ENV` so it does not use production app data or credentials
+
+If the smoke script fails because the host has no interactive desktop session, repeat the same launch sequence manually on Windows before release.
 
 ## PR Review Guidance
 
