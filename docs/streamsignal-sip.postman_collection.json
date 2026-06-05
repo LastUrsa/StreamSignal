@@ -1,0 +1,185 @@
+{
+  "info": {
+    "_postman_id": "d9da2ce2-8bb2-4d07-9ff7-58c2d55b48e8",
+    "name": "StreamSignal SIP Prototype",
+    "description": "Postman collection for the StreamSignal SIP-v1 prototype endpoints. The default baseUrl is http://127.0.0.1:47020; update it if StreamSignal selects another port in the 47020-47029 range.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:47020",
+      "type": "string"
+    },
+    {
+      "key": "profileName",
+      "value": "Music Stream",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "App Identity",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/app",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "app"
+          ]
+        },
+        "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, and protocol version."
+      },
+      "response": []
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "health"
+          ]
+        },
+        "description": "Returns StreamSignal's simple SIP health state: ready, degraded, or error."
+      },
+      "response": []
+    },
+    {
+      "name": "Capabilities",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/capabilities",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "capabilities"
+          ]
+        },
+        "description": "Returns StreamSignal's SIP capability flags. Command execution and action endpoints are out of scope for SIP-v1."
+      },
+      "response": []
+    },
+    {
+      "name": "Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/status",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "status"
+          ]
+        },
+        "description": "Returns StreamSignal's SIP-visible status. After profile activation, activeProfile and activeProfileId are included."
+      },
+      "response": []
+    },
+    {
+      "name": "List Profiles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/profiles",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "profiles"
+          ]
+        },
+        "description": "Lists existing StreamSignal announcement profile names."
+      },
+      "response": []
+    },
+    {
+      "name": "Activate Profile",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": \"{{profileName}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "profile"
+          ]
+        },
+        "description": "Activates an existing announcement profile by name. This marks usage and updates backend SIP active-profile state, but does not publish or live-sync the React Home form."
+      },
+      "response": []
+    }
+  ]
+}
