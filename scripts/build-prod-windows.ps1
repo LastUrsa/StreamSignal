@@ -8,7 +8,9 @@ param(
 
     [string]$LaunchEnvironment = "",
 
-    [switch]$Nsis
+    [switch]$Nsis,
+
+    [switch]$ServiceSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +39,14 @@ try {
     }
     & wails @buildArgs
     $exe = Join-Path $BuildRoot "build\bin\StreamSignal.exe"
+    if ($ServiceSmoke) {
+        $smokeScript = Join-Path $BuildRoot "scripts\test-service-mode-windows.ps1"
+        $smokeEnvironment = "service-smoke"
+        if (-not [string]::IsNullOrWhiteSpace($LaunchEnvironment)) {
+            $smokeEnvironment = $LaunchEnvironment
+        }
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $smokeScript -ExePath $exe -EnvironmentName $smokeEnvironment
+    }
     if ($Launch) {
         $previousEnvironment = $env:STREAMSIGNAL_ENV
         try {

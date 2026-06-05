@@ -54,7 +54,7 @@ Identifies StreamSignal as a SIP participant so another local Starsong applicati
 
 - `appId` is fixed as `streamsignal`.
 - `version` comes from `wails.json` product metadata.
-- `mode` is `standalone`. StreamSignal does not currently expose service-mode behavior.
+- `mode` is `standalone` for normal desktop launches and `service` for `--service` launches.
 - `protocolVersion` is fixed to SIP `1.0` for this prototype.
 
 ## GET /api/v1/health

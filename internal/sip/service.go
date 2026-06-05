@@ -12,7 +12,10 @@ import (
 )
 
 const ProtocolVersion = "1.0"
-const StandaloneMode = "standalone"
+const (
+	StandaloneMode = "standalone"
+	ServiceMode    = "service"
+)
 
 type ProfileService interface {
 	List(ctx context.Context) ([]domain.AnnouncementProfile, error)

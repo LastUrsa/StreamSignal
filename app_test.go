@@ -106,6 +106,29 @@ func TestExecutionResultLogMessageIncludesDestinationFailure(t *testing.T) {
 	}
 }
 
+func TestStartupLogsRuntimeMode(t *testing.T) {
+	app := newAppWithDependenciesForMode(t.TempDir()+"\\streamsignal-test.db", memory.NewStore(), "service")
+	app.sipServer = nil
+	t.Cleanup(func() {
+		if app.db != nil {
+			_ = app.db.Close()
+		}
+	})
+
+	app.startup(context.Background())
+
+	logs, err := app.GetLogs()
+	if err != nil {
+		t.Fatalf("get logs: %v", err)
+	}
+	for _, entry := range logs {
+		if entry.Action == "startup" && entry.Message == "Starting StreamSignal in Service Mode." {
+			return
+		}
+	}
+	t.Fatalf("expected service mode startup log, got %+v", logs)
+}
+
 func TestAppSaveSettingsPersistsAndLogs(t *testing.T) {
 	app := newTestApp(t)
 

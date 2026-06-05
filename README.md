@@ -60,6 +60,18 @@ Run the app in development mode:
 wails dev
 ```
 
+StreamSignal supports three launch forms:
+
+```bash
+StreamSignal.exe
+StreamSignal.exe --service
+StreamSignal.exe --show
+```
+
+The default launch opens the desktop UI and reports SIP mode `standalone`. `--service` starts the same backend services and SIP server in the background without showing the main window, reporting SIP mode `service`. `--show` asks an existing StreamSignal instance to restore and focus its window; if no instance is already running, it launches normally in standalone mode.
+
+Only one StreamSignal instance is allowed per runtime environment. Production uses the normal StreamSignal single-instance lock, while non-production `STREAMSIGNAL_ENV` values get separate locks so local review builds do not collide with the production app.
+
 Run a sandboxed local test instance with separate database and credential storage:
 
 ```bash
@@ -90,6 +102,12 @@ Build and launch it against a sandboxed test data store:
 
 ```bash
 ./scripts/build-prod-windows.sh --launch --env test
+```
+
+Build the Windows app and run the service-mode smoke test:
+
+```bash
+./scripts/build-prod-windows.sh --service-smoke --env dev
 ```
 
 Build a macOS app bundle on a Mac:

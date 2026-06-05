@@ -19,7 +19,7 @@ Action endpoints are intentionally not implemented in this phase.
 
 ## Hosting
 
-StreamSignal starts a localhost-only HTTP SIP server during Wails startup.
+StreamSignal starts a localhost-only HTTP SIP server during Wails startup in both standalone and service mode.
 
 The server binds to `127.0.0.1` and uses the StreamSignal SIP port range:
 
@@ -28,6 +28,20 @@ The server binds to `127.0.0.1` and uses the StreamSignal SIP port range:
 ```
 
 It tries `47020` first, then the next available port in the range. The server is stopped during Wails shutdown.
+
+## Runtime Modes
+
+StreamSignal can be launched as a normal desktop app or as a background service module:
+
+```text
+StreamSignal.exe
+StreamSignal.exe --service
+StreamSignal.exe --show
+```
+
+Normal launches open the main window and report SIP mode `standalone`. `--service` starts the same backend services without showing the main window and reports SIP mode `service`. `--show` restores and focuses an existing instance, or starts standalone mode when no instance is already running.
+
+Only one StreamSignal process runs per runtime environment. Non-production `STREAMSIGNAL_ENV` values use separate app data, credential namespaces, and single-instance locks from production.
 
 ## Security Posture
 

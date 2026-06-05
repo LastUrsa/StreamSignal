@@ -4,10 +4,15 @@ set -euo pipefail
 launch=false
 launch_env=""
 nsis=false
+service_smoke=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --launch)
             launch=true
+            shift
+            ;;
+        --service-smoke)
+            service_smoke=true
             shift
             ;;
         --nsis)
@@ -55,6 +60,9 @@ if [[ -n "$launch_env" ]]; then
 fi
 if [[ "$nsis" == true ]]; then
     args+=(-Nsis)
+fi
+if [[ "$service_smoke" == true ]]; then
+    args+=(-ServiceSmoke)
 fi
 
 powershell.exe "${args[@]}"
