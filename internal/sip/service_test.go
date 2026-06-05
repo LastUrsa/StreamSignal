@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,40 @@ import (
 
 	"StreamSignal/internal/domain"
 )
+
+func TestReadOnlySIPV1ContractForLivePanel(t *testing.T) {
+	service := newTestService()
+	handler := service.Handler()
+
+	appPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/app", nil, http.StatusOK)
+	assertJSONFields(t, appPayload, map[string]any{
+		"appId":           "streamsignal",
+		"name":            "StreamSignal",
+		"version":         "0.3.1",
+		"mode":            "standalone",
+		"protocolVersion": "1.0",
+	})
+
+	healthPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/health", nil, http.StatusOK)
+	assertJSONFields(t, healthPayload, map[string]any{
+		"status":  HealthReady,
+		"message": "StreamSignal is ready for local SIP participation.",
+	})
+
+	capabilitiesPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/capabilities", nil, http.StatusOK)
+	assertJSONFields(t, capabilitiesPayload, map[string]any{
+		"supportsProfiles":        true,
+		"supportsStatusReporting": true,
+		"supportsAnnouncements":   true,
+	})
+
+	statusPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/status", nil, http.StatusOK)
+	assertJSONFields(t, statusPayload, map[string]any{
+		"state":   StatusIdle,
+		"message": "Ready for announcement setup.",
+	})
+	assertAbsentJSONFields(t, statusPayload, "activeProfile", "activeProfileId")
+}
 
 func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 	service := newTestService()
@@ -47,6 +82,48 @@ func TestHealthReportsReadyAndDegraded(t *testing.T) {
 	requestJSON(t, degradedService.Handler(), http.MethodGet, "/api/v1/health", nil, http.StatusOK, &degraded)
 	if degraded.Status != HealthDegraded {
 		t.Fatalf("expected degraded health, got %+v", degraded)
+	}
+}
+
+func TestHealthReportsErrorForCoreDependencyFailures(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*Service)
+		message   string
+	}{
+		{
+			name: "settings unavailable",
+			configure: func(service *Service) {
+				service.settings = fakeSettings{err: errors.New("settings unavailable")}
+			},
+			message: "StreamSignal settings are unavailable.",
+		},
+		{
+			name: "profiles unavailable",
+			configure: func(service *Service) {
+				service.profiles = &fakeProfiles{listErr: errors.New("profiles unavailable")}
+			},
+			message: "Announcement profiles are unavailable.",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := newTestService()
+			test.configure(service)
+
+			var health HealthResponse
+			requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/health", nil, http.StatusOK, &health)
+			if health.Status != HealthError || health.Message != test.message {
+				t.Fatalf("unexpected health error response: %+v", health)
+			}
+
+			var status StatusResponse
+			requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK, &status)
+			if status.State != StatusError || status.Message != test.message {
+				t.Fatalf("expected status to mirror health error, got %+v", status)
+			}
+		})
 	}
 }
 
@@ -114,6 +191,22 @@ func TestProfileActivationRequiresJSONContentType(t *testing.T) {
 	}
 	if errorResponse.Error != "InvalidRequest" {
 		t.Fatalf("expected InvalidRequest, got %+v", errorResponse)
+	}
+}
+
+func TestReadOnlyEndpointsRejectNonGETMethods(t *testing.T) {
+	service := newTestService()
+	for _, path := range []string{"/api/v1/app", "/api/v1/health", "/api/v1/capabilities", "/api/v1/status", "/api/v1/profiles"} {
+		t.Run(path, func(t *testing.T) {
+			var errorResponse ErrorResponse
+			response := requestRawJSON(t, service.Handler(), http.MethodPost, path, map[string]string{"ignored": "true"}, http.StatusMethodNotAllowed)
+			if err := json.Unmarshal(response, &errorResponse); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if errorResponse.Error != "InvalidRequest" {
+				t.Fatalf("expected InvalidRequest, got %+v", errorResponse)
+			}
+		})
 	}
 }
 
@@ -242,6 +335,16 @@ func getJSON(t *testing.T, url string, target any) {
 
 func requestJSON(t *testing.T, handler http.Handler, method string, path string, body any, wantStatus int, target any) {
 	t.Helper()
+	responseBody := requestRawJSON(t, handler, method, path, body, wantStatus)
+	if target != nil {
+		if err := json.Unmarshal(responseBody, target); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+	}
+}
+
+func requestRawJSON(t *testing.T, handler http.Handler, method string, path string, body any, wantStatus int) []byte {
+	t.Helper()
 	var payload bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&payload).Encode(body); err != nil {
@@ -260,9 +363,38 @@ func requestJSON(t *testing.T, handler http.Handler, method string, path string,
 	if response.Code != wantStatus {
 		t.Fatalf("%s %s returned %d, want %d, body %s", method, path, response.Code, wantStatus, response.Body.String())
 	}
-	if target != nil {
-		if err := json.NewDecoder(response.Body).Decode(target); err != nil {
-			t.Fatalf("decode response: %v", err)
+	if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("expected JSON content type, got %q", got)
+	}
+	return response.Body.Bytes()
+}
+
+func assertJSONFields(t *testing.T, payload []byte, want map[string]any) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	for key, wantValue := range want {
+		gotValue, ok := got[key]
+		if !ok {
+			t.Fatalf("expected JSON field %q in %s", key, payload)
+		}
+		if fmt.Sprint(gotValue) != fmt.Sprint(wantValue) {
+			t.Fatalf("field %q = %v, want %v in %s", key, gotValue, wantValue, payload)
+		}
+	}
+}
+
+func assertAbsentJSONFields(t *testing.T, payload []byte, fields ...string) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	for _, field := range fields {
+		if _, ok := got[field]; ok {
+			t.Fatalf("field %q should be absent in %s", field, payload)
 		}
 	}
 }

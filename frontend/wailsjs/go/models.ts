@@ -1,5 +1,5 @@
 export namespace domain {
-
+	
 	export class ActiveLiveNowSession {
 	    destinationID: string;
 	    destinationName: string;
@@ -10,11 +10,11 @@ export namespace domain {
 	    streamTitle: string;
 	    // Go type: time
 	    startedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ActiveLiveNowSession(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.destinationID = source["destinationID"];
@@ -26,7 +26,7 @@ export namespace domain {
 	        this.streamTitle = source["streamTitle"];
 	        this.startedAt = this.convertValues(source["startedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -59,11 +59,11 @@ export namespace domain {
 	    destinationIDs: string[];
 	    // Go type: time
 	    createdAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Announcement(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.streamTitle = source["streamTitle"];
@@ -79,7 +79,7 @@ export namespace domain {
 	        this.destinationIDs = source["destinationIDs"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -119,11 +119,11 @@ export namespace domain {
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AnnouncementProfile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -144,7 +144,7 @@ export namespace domain {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -169,11 +169,11 @@ export namespace domain {
 	    duplicateProtectionEnabled: boolean;
 	    duplicateWindowMinutes: number;
 	    selectedDestinationGroupID: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.defaultStreamURL = source["defaultStreamURL"];
@@ -187,11 +187,11 @@ export namespace domain {
 	    platform: string;
 	    state: string;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CredentialCheckResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.platform = source["platform"];
@@ -210,11 +210,11 @@ export namespace domain {
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Destination(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -226,7 +226,7 @@ export namespace domain {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -253,11 +253,11 @@ export namespace domain {
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DestinationGroup(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -266,7 +266,7 @@ export namespace domain {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -285,6 +285,24 @@ export namespace domain {
 		    return a;
 		}
 	}
+	export class PublishReceipt {
+	    provider: string;
+	    id?: string;
+	    uri?: string;
+	    cid?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PublishReceipt(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.id = source["id"];
+	        this.uri = source["uri"];
+	        this.cid = source["cid"];
+	    }
+	}
 	export class ExecutionResult {
 	    destinationID: string;
 	    destinationName: string;
@@ -293,11 +311,11 @@ export namespace domain {
 	    message: string;
 	    content: string;
 	    receipt?: PublishReceipt;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.destinationID = source["destinationID"];
@@ -306,26 +324,26 @@ export namespace domain {
 	        this.state = source["state"];
 	        this.message = source["message"];
 	        this.content = source["content"];
-	        this.receipt = source["receipt"] ? new PublishReceipt(source["receipt"]) : undefined;
+	        this.receipt = this.convertValues(source["receipt"], PublishReceipt);
 	    }
-	}
-	export class PublishReceipt {
-	    provider: string;
-	    id?: string;
-	    uri?: string;
-	    cid?: string;
-
-	    static createFrom(source: any = {}) {
-	        return new PublishReceipt(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.provider = source["provider"];
-	        this.id = source["id"];
-	        this.uri = source["uri"];
-	        this.cid = source["cid"];
-	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ExecutionSummary {
 	    mode: string;
@@ -339,11 +357,11 @@ export namespace domain {
 	    validationErrorCount: number;
 	    requiresDuplicateConfirmation: boolean;
 	    duplicateWarningMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
@@ -358,7 +376,7 @@ export namespace domain {
 	        this.requiresDuplicateConfirmation = source["requiresDuplicateConfirmation"];
 	        this.duplicateWarningMessage = source["duplicateWarningMessage"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -377,6 +395,26 @@ export namespace domain {
 		    return a;
 		}
 	}
+	export class LinkPreview {
+	    url: string;
+	    title: string;
+	    description: string;
+	    imageURL: string;
+	    siteName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LinkPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.imageURL = source["imageURL"];
+	        this.siteName = source["siteName"];
+	    }
+	}
 	export class LogEntry {
 	    // Go type: time
 	    timestamp: any;
@@ -384,11 +422,11 @@ export namespace domain {
 	    action: string;
 	    status: string;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new LogEntry(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = this.convertValues(source["timestamp"], null);
@@ -397,7 +435,7 @@ export namespace domain {
 	        this.status = source["status"];
 	        this.message = source["message"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -426,11 +464,11 @@ export namespace domain {
 	    validationState: string;
 	    validationNotes: string[];
 	    linkPreview?: LinkPreview;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PreviewItem(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.destinationID = source["destinationID"];
@@ -443,7 +481,7 @@ export namespace domain {
 	        this.validationNotes = source["validationNotes"];
 	        this.linkPreview = this.convertValues(source["linkPreview"], LinkPreview);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -462,25 +500,6 @@ export namespace domain {
 		    return a;
 		}
 	}
-	export class LinkPreview {
-	    url: string;
-	    title: string;
-	    description: string;
-	    imageURL: string;
-	    siteName: string;
-
-	    static createFrom(source: any = {}) {
-	        return new LinkPreview(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.url = source["url"];
-	        this.title = source["title"];
-	        this.description = source["description"];
-	        this.imageURL = source["imageURL"];
-	        this.siteName = source["siteName"];
-	    }
-	}
 
 }
+
