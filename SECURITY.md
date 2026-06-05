@@ -37,3 +37,19 @@ The goal is responsible disclosure:
 ## Current Security Notes
 
 For the maintainer-facing security posture summary, see [SECURITY_AUDIT.md](./SECURITY_AUDIT.md).
+
+## SIP Prototype Security Notes
+
+The StreamSignal SIP prototype is a local module contract, not a public API.
+
+Current SIP safeguards:
+
+- binds only to `127.0.0.1`
+- rejects non-local `Host` headers
+- does not emit CORS headers
+- requires JSON content type for profile activation
+- limits request bodies to 1 MiB
+- applies HTTP server timeouts
+- exposes no command execution, publish execution, or destructive endpoints
+
+SIP-v1 does not currently include authentication. Treat any future expansion beyond local read/status/profile behavior as requiring a fresh security review.

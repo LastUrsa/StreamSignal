@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -13,14 +15,21 @@ import (
 	"StreamSignal/internal/platforms/mastodon"
 	"StreamSignal/internal/ports"
 	"StreamSignal/internal/secrets/wincred"
+	"StreamSignal/internal/sip"
 	"StreamSignal/internal/storage/secure"
 	"StreamSignal/internal/storage/sqlite"
 )
+
+//go:embed wails.json
+var wailsConfigJSON []byte
+
+const fallbackAppVersion = "0.3.1"
 
 // App exposes Wails bindings for the frontend.
 type App struct {
 	ctx             context.Context
 	db              *sql.DB
+	sipServer       *sip.Server
 	settingsService *appsvc.SettingsService
 	destinationSvc  *appsvc.DestinationService
 	groupSvc        *appsvc.DestinationGroupService
@@ -63,20 +72,33 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 	discordPublisher := discord.NewPublisher(nil)
 	blueskyPublisher := bluesky.NewPublisher("", nil)
 	mastodonPublisher := mastodon.NewPublisher(nil)
+	settingsService := appsvc.NewSettingsService(settingsRepo)
+	destinationSvc := appsvc.NewDestinationService(destinationRepo)
+	groupSvc := appsvc.NewDestinationGroupService(groupRepo)
+	profileSvc := appsvc.NewAnnouncementProfileService(profileRepo, groupRepo)
+	logService := appsvc.NewLogService(logRepo)
+	recoverySvc := appsvc.NewLiveNowRecoveryService(destinationRepo, liveNowSessionRepo, blueskyPublisher)
+	sipService := sip.NewService(sip.AppInfo{
+		AppID:    "streamsignal",
+		Name:     "StreamSignal",
+		Version:  appProductVersion(),
+		Mode:     sip.StandaloneMode,
+		Protocol: sip.ProtocolVersion,
+	}, settingsService, profileSvc, recoverySvc)
 
 	return &App{
 		db:              db,
-		settingsService: appsvc.NewSettingsService(settingsRepo),
-		destinationSvc:  appsvc.NewDestinationService(destinationRepo),
-		groupSvc:        appsvc.NewDestinationGroupService(groupRepo),
-		profileSvc:      appsvc.NewAnnouncementProfileService(profileRepo, groupRepo),
+		sipServer:       sip.NewServer(sipService),
+		settingsService: settingsService,
+		destinationSvc:  destinationSvc,
+		groupSvc:        groupSvc,
+		profileSvc:      profileSvc,
 		credentialSvc:   appsvc.NewCredentialSetupService(discordPublisher, blueskyPublisher, mastodonPublisher),
 		previewService: func() *appsvc.PreviewService {
 			service := appsvc.NewPreviewService(destinationRepo, settingsRepo, liveNowSessionRepo)
 			service.UseDestinationGroups(groupRepo)
 			return service
 		}(),
-		logService:     appsvc.NewLogService(logRepo),
 		diagnosticsSvc: appsvc.NewDiagnosticsService(settingsRepo, destinationRepo, logRepo, liveNowSessionRepo),
 		executionSvc: func() *appsvc.ExecutionService {
 			service := appsvc.NewExecutionService(
@@ -91,20 +113,44 @@ func newAppWithDependencies(databasePath string, secretStore ports.SecretStore) 
 			service.UseDestinationGroups(groupRepo)
 			return service
 		}(),
-		recoverySvc: appsvc.NewLiveNowRecoveryService(destinationRepo, liveNowSessionRepo, blueskyPublisher),
+		logService:  logService,
+		recoverySvc: recoverySvc,
 	}
 }
 
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if a.sipServer != nil {
+		if err := a.sipServer.Start(ctx); err != nil && a.logService != nil {
+			_ = a.logService.Append(ctx, "sip", "start_sip", "FAILED", fmt.Sprintf("SIP server unavailable: %s", err.Error()))
+		}
+	}
 }
 
 // shutdown closes open resources when the app exits.
 func (a *App) shutdown(context.Context) {
+	if a.sipServer != nil {
+		_ = a.sipServer.Stop(context.Background())
+	}
 	if a.db != nil {
 		_ = a.db.Close()
 	}
+}
+
+func appProductVersion() string {
+	var config struct {
+		Info struct {
+			ProductVersion string `json:"productVersion"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(wailsConfigJSON, &config); err != nil {
+		return fallbackAppVersion
+	}
+	if config.Info.ProductVersion == "" {
+		return fallbackAppVersion
+	}
+	return config.Info.ProductVersion
 }
 
 func (a *App) GetSettings() (domain.AppSettings, error) {
