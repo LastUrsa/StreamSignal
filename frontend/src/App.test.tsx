@@ -1305,6 +1305,8 @@ describe('App', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
 
         expect(await screen.findByLabelText('Default Stream URL')).toHaveValue('https://example.com/live');
+        expect(screen.getByRole('heading', { name: 'Live Now Recovery' })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Recovery Center' })).not.toBeInTheDocument();
         expect(screen.getByText('Legal Notices')).toBeInTheDocument();
         expect(screen.getByText(/StreamSignal is an independent tool and is not affiliated with, endorsed by, or sponsored by Discord, Bluesky, Mastodon/i)).toBeInTheDocument();
 
@@ -1323,6 +1325,46 @@ describe('App', () => {
         });
 
         expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
+    });
+
+    it('keeps the About panel organized around product identity and legal notices', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+
+        const settingsPanel = screen.getByRole('heading', { name: 'Settings' }).closest('article');
+        expect(settingsPanel).toBeInTheDocument();
+        expect(within(settingsPanel!).getByText('Starsong Tools')).toBeInTheDocument();
+        expect(within(settingsPanel!).getByRole('heading', { name: 'StreamSignal' })).toBeInTheDocument();
+        expect(within(settingsPanel!).getByText('Local-first multi-destination stream announcements for creators.')).toBeInTheDocument();
+
+        const version = within(settingsPanel!).getByText('Version 0.3.1');
+        expect(version).toHaveClass('about-version');
+        expect(version.closest('.about-product-row')).toBeInTheDocument();
+        expect(version).not.toHaveClass('status-badge');
+        expect(settingsPanel!.querySelector('.about-logo')).toBeInTheDocument();
+        expect(within(settingsPanel!).getByRole('heading', { name: 'Legal Notices' })).toBeInTheDocument();
+    });
+
+    it('keeps destination workspace tabs compact while switching to Groups', async () => {
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Destinations' }));
+
+        const workspaceTabs = screen.getByRole('group', { name: 'Destination workspace' });
+        expect(workspaceTabs).toHaveClass('workspace-segmented-control');
+
+        const destinationsTab = within(workspaceTabs).getByRole('button', { name: 'Destinations' });
+        const groupsTab = within(workspaceTabs).getByRole('button', { name: 'Groups' });
+
+        expect(destinationsTab).toHaveClass('active');
+        expect(groupsTab).not.toHaveClass('active');
+
+        fireEvent.click(groupsTab);
+
+        expect(groupsTab).toHaveClass('active');
+        expect(destinationsTab).not.toHaveClass('active');
+        expect(await screen.findByRole('heading', { name: 'Destination Groups' })).toBeInTheDocument();
     });
 
     it('preserves stored destination secrets when saving a masked destination', async () => {
