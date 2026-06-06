@@ -91,6 +91,16 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 	profileSvc := appsvc.NewAnnouncementProfileService(profileRepo, groupRepo)
 	logService := appsvc.NewLogService(logRepo)
 	recoverySvc := appsvc.NewLiveNowRecoveryService(destinationRepo, liveNowSessionRepo, blueskyPublisher)
+	executionSvc := appsvc.NewExecutionService(
+		destinationRepo,
+		settingsRepo,
+		historyRepo,
+		liveNowSessionRepo,
+		discordPublisher,
+		blueskyPublisher,
+		mastodonPublisher,
+	)
+	executionSvc.UseDestinationGroups(groupRepo)
 	sipService := sip.NewService(sip.AppInfo{
 		AppID:    "streamsignal",
 		Name:     "StreamSignal",
@@ -98,6 +108,8 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 		Mode:     runtimeMode,
 		Protocol: sip.ProtocolVersion,
 	}, settingsService, profileSvc, recoverySvc)
+	sipService.UseDestinations(destinationSvc)
+	sipService.UseExecution(executionSvc)
 
 	return &App{
 		db:              db,
@@ -115,21 +127,9 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 			return service
 		}(),
 		diagnosticsSvc: appsvc.NewDiagnosticsService(settingsRepo, destinationRepo, logRepo, liveNowSessionRepo),
-		executionSvc: func() *appsvc.ExecutionService {
-			service := appsvc.NewExecutionService(
-				destinationRepo,
-				settingsRepo,
-				historyRepo,
-				liveNowSessionRepo,
-				discordPublisher,
-				blueskyPublisher,
-				mastodonPublisher,
-			)
-			service.UseDestinationGroups(groupRepo)
-			return service
-		}(),
-		logService:  logService,
-		recoverySvc: recoverySvc,
+		executionSvc:   executionSvc,
+		logService:     logService,
+		recoverySvc:    recoverySvc,
 	}
 }
 

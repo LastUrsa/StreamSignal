@@ -50,13 +50,15 @@ Current SIP safeguards:
 - requires JSON content type for profile activation
 - limits request bodies to 1 MiB
 - applies HTTP server timeouts
-- exposes no command execution, publish execution, or destructive endpoints
+- exposes no generic command execution or destructive endpoints
+- exposes announcement and end-stream execution only through explicit active-profile lifecycle endpoints
+- exposes duplicate-guard continuation only through a single-use announcement confirmation endpoint
 
-SIP-v1 does not currently include authentication. Treat any future expansion beyond local read/status/profile behavior as requiring a fresh security review.
+SIP-v1.1 does not currently include authentication. Treat any future expansion beyond explicit local profile/status/announcement/end-stream behavior as requiring a fresh security review.
 
 ## Service Mode Security Notes
 
-Service mode changes process startup behavior but does not add SIP endpoints or remote-control commands.
+Service mode changes process startup behavior but does not add separate service-only SIP endpoints or generic remote-control commands.
 
 Current service-mode safeguards:
 
@@ -66,4 +68,4 @@ Current service-mode safeguards:
 - the single-instance lock is scoped by `STREAMSIGNAL_ENV` so dev/test builds cannot activate or block the production instance
 - service mode continues to use the existing environment-separated app data and credential namespaces
 
-Any future support for remotely activating the UI, executing commands, or controlling publish behavior over SIP should receive a fresh security review before implementation.
+Any future support for remotely activating the UI, executing generic commands, or adding publish controls beyond the explicit active-profile SIP lifecycle endpoints should receive a fresh security review before implementation.

@@ -7,15 +7,19 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"StreamSignal/internal/domain"
+	"github.com/google/uuid"
 )
 
-const ProtocolVersion = "1.0"
+const ProtocolVersion = "1.1"
 const (
 	StandaloneMode = "standalone"
 	ServiceMode    = "service"
 )
+
+const announcementConfirmationTTL = 5 * time.Minute
 
 type ProfileService interface {
 	List(ctx context.Context) ([]domain.AnnouncementProfile, error)
@@ -30,6 +34,22 @@ type RecoveryService interface {
 	ListPending(ctx context.Context) ([]domain.ActiveLiveNowSession, error)
 }
 
+type DestinationService interface {
+	List(ctx context.Context) ([]domain.Destination, error)
+}
+
+type ExecutionService interface {
+	GoLive(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
+	ForceGoLive(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
+	EndStream(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
+}
+
+type pendingAnnouncementConfirmation struct {
+	id           string
+	announcement domain.Announcement
+	expiresAt    time.Time
+}
+
 type AppInfo struct {
 	AppID    string
 	Name     string
@@ -39,13 +59,18 @@ type AppInfo struct {
 }
 
 type Service struct {
-	info     AppInfo
-	settings SettingsService
-	profiles ProfileService
-	recovery RecoveryService
+	info         AppInfo
+	settings     SettingsService
+	profiles     ProfileService
+	recovery     RecoveryService
+	destinations DestinationService
+	execution    ExecutionService
 
-	mu            sync.RWMutex
-	activeProfile *domain.AnnouncementProfile
+	mu                              sync.RWMutex
+	activeProfile                   *domain.AnnouncementProfile
+	lastAnnouncement                AnnounceStatusResponse
+	lastEndStream                   EndStreamStatusResponse
+	pendingAnnouncementConfirmation *pendingAnnouncementConfirmation
 }
 
 func NewService(info AppInfo, settings SettingsService, profiles ProfileService, recovery RecoveryService) *Service {
@@ -61,6 +86,20 @@ func NewService(info AppInfo, settings SettingsService, profiles ProfileService,
 		profiles: profiles,
 		recovery: recovery,
 	}
+}
+
+func (s *Service) UseDestinations(destinations DestinationService) {
+	if s == nil {
+		return
+	}
+	s.destinations = destinations
+}
+
+func (s *Service) UseExecution(execution ExecutionService) {
+	if s == nil {
+		return
+	}
+	s.execution = execution
 }
 
 func (s *Service) App(ctx context.Context) (AppResponse, error) {
@@ -114,19 +153,28 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	response := StatusResponse{
 		State:   StatusIdle,
 		Message: "Ready for announcement setup.",
+		Healthy: health.Status == HealthReady,
 	}
 	switch health.Status {
 	case HealthDegraded:
 		response.State = StatusWarning
 		response.Message = health.Message
+		response.Healthy = true
 	case HealthError:
 		response.State = StatusError
 		response.Message = health.Message
+		response.Healthy = false
 	}
 
 	if active := s.ActiveProfile(); active != nil {
 		response.ActiveProfile = active.Name
 		response.ActiveProfileID = active.ID
+	}
+	if s != nil && s.destinations != nil {
+		destinations, err := s.destinations.List(ctx)
+		if err == nil {
+			response.DestinationCount = len(destinations)
+		}
 	}
 	return response, nil
 }
@@ -180,7 +228,128 @@ func (s *Service) ActivateProfile(ctx context.Context, name string) (ProfileActi
 	return ProfileActivationResponse{}, ErrProfileNotFound
 }
 
+func (s *Service) CurrentProfile(ctx context.Context) (CurrentProfileResponse, error) {
+	if s == nil {
+		return CurrentProfileResponse{}, nil
+	}
+	active := s.ActiveProfile()
+	if active == nil {
+		return CurrentProfileResponse{}, nil
+	}
+	return CurrentProfileResponse{ID: active.ID, Name: active.Name}, nil
+}
+
+func (s *Service) Announce(ctx context.Context) (AnnounceResponse, error) {
+	if s == nil {
+		return AnnounceResponse{Success: false, Error: "SIP service is unavailable"}, nil
+	}
+	active := s.ActiveProfile()
+	if active == nil {
+		response := AnnounceResponse{Success: false, Error: "No active profile"}
+		s.setLastAnnouncement(response, time.Now().UTC())
+		s.clearPendingAnnouncementConfirmation()
+		return response, nil
+	}
+	if s == nil || s.execution == nil {
+		response := AnnounceResponse{Success: false, Error: "Announcement execution is unavailable"}
+		s.setLastAnnouncement(response, time.Now().UTC())
+		s.clearPendingAnnouncementConfirmation()
+		return response, nil
+	}
+
+	announcement := announcementFromProfile(*active)
+	summary, err := s.execution.GoLive(ctx, announcement)
+	if err != nil {
+		response := AnnounceResponse{Success: false, Error: err.Error()}
+		s.setLastAnnouncement(response, time.Now().UTC())
+		s.clearPendingAnnouncementConfirmation()
+		return response, nil
+	}
+	response := s.announceResponseFromSummary(summary, announcement)
+	s.setLastAnnouncement(response, time.Now().UTC())
+	if !response.RequiresConfirmation {
+		s.clearPendingAnnouncementConfirmation()
+	}
+	return response, nil
+}
+
+func (s *Service) AnnounceStatus(ctx context.Context) (AnnounceStatusResponse, error) {
+	if s == nil {
+		return AnnounceStatusResponse{}, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastAnnouncement, nil
+}
+
+func (s *Service) ConfirmAnnouncement(ctx context.Context, confirmationID string) (AnnounceResponse, error) {
+	if s == nil {
+		return AnnounceResponse{Success: false, Error: "SIP service is unavailable"}, nil
+	}
+	if s.execution == nil {
+		response := AnnounceResponse{Success: false, Error: "Announcement execution is unavailable"}
+		s.setLastAnnouncement(response, time.Now().UTC())
+		s.clearPendingAnnouncementConfirmation()
+		return response, nil
+	}
+
+	pending, ok := s.consumePendingAnnouncementConfirmation(strings.TrimSpace(confirmationID), time.Now().UTC())
+	if !ok {
+		return AnnounceResponse{}, ErrInvalidRequest
+	}
+
+	summary, err := s.execution.ForceGoLive(ctx, pending.announcement)
+	if err != nil {
+		response := AnnounceResponse{Success: false, Error: err.Error()}
+		s.setLastAnnouncement(response, time.Now().UTC())
+		return response, nil
+	}
+	response := announceResponseFromSummary(summary)
+	s.setLastAnnouncement(response, time.Now().UTC())
+	return response, nil
+}
+
+func (s *Service) EndStream(ctx context.Context) (EndStreamResponse, error) {
+	if s == nil {
+		return EndStreamResponse{Success: false, Error: "SIP service is unavailable"}, nil
+	}
+	active := s.ActiveProfile()
+	if active == nil {
+		response := EndStreamResponse{Success: false, Error: "No active profile"}
+		s.setLastEndStream(response, time.Now().UTC())
+		return response, nil
+	}
+	if s.execution == nil {
+		response := EndStreamResponse{Success: false, Error: "End stream execution is unavailable"}
+		s.setLastEndStream(response, time.Now().UTC())
+		return response, nil
+	}
+
+	summary, err := s.execution.EndStream(ctx, announcementFromProfile(*active))
+	if err != nil {
+		response := EndStreamResponse{Success: false, Error: err.Error()}
+		s.setLastEndStream(response, time.Now().UTC())
+		return response, nil
+	}
+	announcementResponse := announceResponseFromSummary(summary)
+	response := EndStreamResponse{Success: announcementResponse.Success, Error: announcementResponse.Error}
+	s.setLastEndStream(response, time.Now().UTC())
+	return response, nil
+}
+
+func (s *Service) EndStreamStatus(ctx context.Context) (EndStreamStatusResponse, error) {
+	if s == nil {
+		return EndStreamStatusResponse{}, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastEndStream, nil
+}
+
 func (s *Service) ActiveProfile() *domain.AnnouncementProfile {
+	if s == nil {
+		return nil
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.activeProfile == nil {
@@ -195,4 +364,108 @@ func (s *Service) setActiveProfile(profile domain.AnnouncementProfile) {
 	defer s.mu.Unlock()
 	copy := profile
 	s.activeProfile = &copy
+}
+
+func (s *Service) setLastAnnouncement(response AnnounceResponse, ranAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastAnnouncement = AnnounceStatusResponse{
+		LastRun:              ranAt.Format(time.RFC3339),
+		Success:              response.Success,
+		RequiresConfirmation: response.RequiresConfirmation,
+		ConfirmationID:       response.ConfirmationID,
+		Error:                response.Error,
+	}
+}
+
+func (s *Service) setLastEndStream(response EndStreamResponse, ranAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastEndStream = EndStreamStatusResponse{
+		LastRun: ranAt.Format(time.RFC3339),
+		Success: response.Success,
+		Error:   response.Error,
+	}
+}
+
+func announcementFromProfile(profile domain.AnnouncementProfile) domain.Announcement {
+	return domain.Announcement{
+		StreamTitle:                 profile.DefaultStreamTitle,
+		StreamURL:                   profile.DefaultStreamURL,
+		Category:                    profile.DefaultCategory,
+		Message:                     profile.DefaultMessage,
+		Hashtags:                    profile.DefaultHashtags,
+		AnnouncementImageURL:        profile.DefaultAnnouncementImageURL,
+		AnnouncementImageDataURL:    profile.DefaultAnnouncementImageDataURL,
+		BlueskyCardThumbnailURL:     profile.DefaultBlueskyCardThumbnailURL,
+		BlueskyCardThumbnailDataURL: profile.DefaultBlueskyCardThumbnailDataURL,
+		DestinationGroupID:          profile.DefaultGroupID,
+	}
+}
+
+func (s *Service) announceResponseFromSummary(summary domain.ExecutionSummary, announcement domain.Announcement) AnnounceResponse {
+	if summary.RequiresDuplicateConfirmation {
+		confirmationID := uuid.NewString()
+		s.setPendingAnnouncementConfirmation(confirmationID, announcement, time.Now().UTC().Add(announcementConfirmationTTL))
+		message := summary.DuplicateWarningMessage
+		if strings.TrimSpace(message) == "" {
+			message = "Announcement requires confirmation."
+		}
+		return AnnounceResponse{
+			Success:              false,
+			RequiresConfirmation: true,
+			ConfirmationID:       confirmationID,
+			Error:                message,
+		}
+	}
+	return announceResponseFromSummary(summary)
+}
+
+func announceResponseFromSummary(summary domain.ExecutionSummary) AnnounceResponse {
+	if summary.Status == domain.ExecutionSummaryStatusSuccess && !summary.RequiresDuplicateConfirmation {
+		return AnnounceResponse{Success: true}
+	}
+	if summary.DuplicateWarningMessage != "" {
+		return AnnounceResponse{Success: false, Error: summary.DuplicateWarningMessage}
+	}
+	for _, result := range summary.Results {
+		if result.State != domain.ExecutionStateSuccess && strings.TrimSpace(result.Message) != "" {
+			return AnnounceResponse{Success: false, Error: result.Message}
+		}
+	}
+	return AnnounceResponse{Success: false, Error: "Announcement did not complete successfully"}
+}
+
+func (s *Service) setPendingAnnouncementConfirmation(id string, announcement domain.Announcement, expiresAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pendingAnnouncementConfirmation = &pendingAnnouncementConfirmation{
+		id:           id,
+		announcement: announcement,
+		expiresAt:    expiresAt,
+	}
+}
+
+func (s *Service) clearPendingAnnouncementConfirmation() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pendingAnnouncementConfirmation = nil
+}
+
+func (s *Service) consumePendingAnnouncementConfirmation(id string, now time.Time) (pendingAnnouncementConfirmation, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pendingAnnouncementConfirmation == nil {
+		return pendingAnnouncementConfirmation{}, false
+	}
+	pending := *s.pendingAnnouncementConfirmation
+	if id == "" || pending.id != id || !now.Before(pending.expiresAt) {
+		s.pendingAnnouncementConfirmation = nil
+		return pendingAnnouncementConfirmation{}, false
+	}
+	s.pendingAnnouncementConfirmation = nil
+	return pending, true
 }

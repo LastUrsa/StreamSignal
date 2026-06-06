@@ -38,10 +38,12 @@ type CapabilitiesResponse struct {
 }
 
 type StatusResponse struct {
-	State           string `json:"state"`
-	Message         string `json:"message"`
-	ActiveProfile   string `json:"activeProfile,omitempty"`
-	ActiveProfileID string `json:"activeProfileId,omitempty"`
+	State            string `json:"state"`
+	Message          string `json:"message"`
+	ActiveProfile    string `json:"activeProfile,omitempty"`
+	ActiveProfileID  string `json:"activeProfileId,omitempty"`
+	Healthy          bool   `json:"healthy"`
+	DestinationCount int    `json:"destinationCount,omitempty"`
 }
 
 type ProfilesResponse struct {
@@ -56,6 +58,41 @@ type ProfileActivationResponse struct {
 	Success   bool   `json:"success"`
 	Profile   string `json:"profile,omitempty"`
 	ProfileID string `json:"profileId,omitempty"`
+}
+
+type CurrentProfileResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type AnnounceResponse struct {
+	Success              bool   `json:"success"`
+	RequiresConfirmation bool   `json:"requiresConfirmation,omitempty"`
+	ConfirmationID       string `json:"confirmationId,omitempty"`
+	Error                string `json:"error,omitempty"`
+}
+
+type AnnounceStatusResponse struct {
+	LastRun              string `json:"lastRun"`
+	Success              bool   `json:"success"`
+	RequiresConfirmation bool   `json:"requiresConfirmation,omitempty"`
+	ConfirmationID       string `json:"confirmationId,omitempty"`
+	Error                string `json:"error,omitempty"`
+}
+
+type AnnounceConfirmRequest struct {
+	ConfirmationID string `json:"confirmationId"`
+}
+
+type EndStreamResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type EndStreamStatusResponse struct {
+	LastRun string `json:"lastRun"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
 }
 
 type ErrorResponse struct {

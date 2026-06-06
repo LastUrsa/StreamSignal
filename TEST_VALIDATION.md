@@ -59,6 +59,7 @@ Keep targeted coverage around:
 - credential persistence through secret references rather than raw values
 - non-production runtime data and credential namespace isolation
 - service-mode launch parsing, SIP mode reporting, single-instance behavior, and environment-scoped instance locks
+- SIP v1.1 current-profile, active-profile announcement/end-stream execution, duplicate-guard confirmation, last-run operation status, method/content-type rejection, local-host enforcement, and absent generic command/action endpoints
 - Discord, Bluesky, and Mastodon publisher payloads
 - remote image and preview URL validation
 - settings and profile defaults that prefill Home sessions without overriding user edits unexpectedly
@@ -72,6 +73,7 @@ Service-mode changes should keep automated coverage around:
 - `StreamSignal.exe --show` resolving to standalone startup when no instance owns the lock
 - second-instance launch handling activating the existing window only when appropriate
 - `/api/v1/app` reporting the configured runtime mode
+- `/api/v1/profile/current`, `/api/v1/announce`, `/api/v1/announce/confirm`, `/api/v1/announce/status`, `/api/v1/end-stream`, and `/api/v1/end-stream/status` preserving the active-profile LivePanel workflow
 - single-instance lock IDs staying separated by `STREAMSIGNAL_ENV`
 
 Before release, validate the OS/window-manager behavior manually on Windows:
