@@ -3,6 +3,7 @@ package sip
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -14,7 +15,13 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/v1/status", s.handleStatus)
 	mux.HandleFunc("/api/v1/profiles", s.handleProfiles)
+	mux.HandleFunc("/api/v1/profile/current", s.handleCurrentProfile)
 	mux.HandleFunc("/api/v1/profile", s.handleProfile)
+	mux.HandleFunc("/api/v1/announce/status", s.handleAnnounceStatus)
+	mux.HandleFunc("/api/v1/announce/confirm", s.handleAnnounceConfirm)
+	mux.HandleFunc("/api/v1/announce", s.handleAnnounce)
+	mux.HandleFunc("/api/v1/end-stream/status", s.handleEndStreamStatus)
+	mux.HandleFunc("/api/v1/end-stream", s.handleEndStream)
 	return securityHeaders(requireLocalHost(mux))
 }
 
@@ -75,6 +82,99 @@ func (s *Service) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := s.ActivateProfile(r.Context(), request.Profile)
 	writeResult(w, response, err)
+}
+
+func (s *Service) handleCurrentProfile(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	response, err := s.CurrentProfile(r.Context())
+	writeResult(w, response, err)
+}
+
+func (s *Service) handleAnnounce(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if !readEmptyJSONBody(w, r) {
+		return
+	}
+	response, err := s.Announce(r.Context())
+	writeResult(w, response, err)
+}
+
+func (s *Service) handleAnnounceStatus(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	response, err := s.AnnounceStatus(r.Context())
+	writeResult(w, response, err)
+}
+
+func (s *Service) handleAnnounceConfirm(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if !requireJSON(w, r) {
+		return
+	}
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	var request AnnounceConfirmRequest
+	if err := decoder.Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return
+	}
+	response, err := s.ConfirmAnnouncement(r.Context(), request.ConfirmationID)
+	writeResult(w, response, err)
+}
+
+func (s *Service) handleEndStream(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if !readEmptyJSONBody(w, r) {
+		return
+	}
+	response, err := s.EndStream(r.Context())
+	writeResult(w, response, err)
+}
+
+func (s *Service) handleEndStreamStatus(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	response, err := s.EndStreamStatus(r.Context())
+	writeResult(w, response, err)
+}
+
+func readEmptyJSONBody(w http.ResponseWriter, r *http.Request) bool {
+	if (r.Header.Get("Content-Type") != "" || r.ContentLength != 0) && !requireJSON(w, r) {
+		return false
+	}
+	defer r.Body.Close()
+	if r.Body == nil {
+		return true
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	var request struct{}
+	if err := decoder.Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return false
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return false
+	}
+	return true
 }
 
 func requireLocalHost(next http.Handler) http.Handler {

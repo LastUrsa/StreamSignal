@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"StreamSignal/internal/domain"
 )
@@ -24,7 +25,7 @@ func TestReadOnlySIPV1ContractForLivePanel(t *testing.T) {
 		"name":            "StreamSignal",
 		"version":         "0.3.1",
 		"mode":            "standalone",
-		"protocolVersion": "1.0",
+		"protocolVersion": "1.1",
 	})
 
 	healthPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/health", nil, http.StatusOK)
@@ -55,7 +56,7 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 
 	var app AppResponse
 	getJSON(t, server.URL+"/api/v1/app", &app)
-	if app.AppID != "streamsignal" || app.Name != "StreamSignal" || app.Version != "0.3.1" || app.Mode != "standalone" || app.ProtocolVersion != "1.0" {
+	if app.AppID != "streamsignal" || app.Name != "StreamSignal" || app.Version != "0.3.1" || app.Mode != "standalone" || app.ProtocolVersion != "1.1" {
 		t.Fatalf("unexpected app response: %+v", app)
 	}
 
@@ -168,6 +169,24 @@ func TestProfilesAndActivationUseExistingAnnouncementProfiles(t *testing.T) {
 	}
 }
 
+func TestCurrentProfileReturnsActiveAndEmptyState(t *testing.T) {
+	service := newTestService()
+
+	var empty CurrentProfileResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/profile/current", nil, http.StatusOK, &empty)
+	if empty.ID != "" || empty.Name != "" {
+		t.Fatalf("expected empty current profile, got %+v", empty)
+	}
+
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+	var current CurrentProfileResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/profile/current", nil, http.StatusOK, &current)
+	if current.ID != "music" || current.Name != "Music Stream" {
+		t.Fatalf("expected active current profile, got %+v", current)
+	}
+}
+
 func TestActivateProfileErrors(t *testing.T) {
 	service := newTestService()
 
@@ -181,6 +200,429 @@ func TestActivateProfileErrors(t *testing.T) {
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": ""}, http.StatusBadRequest, &invalid)
 	if invalid.Error != "InvalidRequest" {
 		t.Fatalf("expected InvalidRequest, got %+v", invalid)
+	}
+}
+
+func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
+	execution := &fakeExecution{
+		summary: domain.ExecutionSummary{
+			Status:       domain.ExecutionSummaryStatusSuccess,
+			TotalCount:   1,
+			SuccessCount: 1,
+			Results: []domain.ExecutionResult{{
+				DestinationID:   "discord-main",
+				DestinationName: "Discord",
+				Platform:        domain.PlatformDiscord,
+				State:           domain.ExecutionStateSuccess,
+				Message:         "Published successfully.",
+			}},
+		},
+	}
+	profiles := &fakeProfiles{profiles: []domain.AnnouncementProfile{{
+		ID:                          "gaming",
+		Name:                        "Gaming Stream",
+		DefaultStreamTitle:          "Boss Night",
+		DefaultStreamURL:            "https://example.com/live",
+		DefaultCategory:             "Games",
+		DefaultMessage:              "Going live now",
+		DefaultHashtags:             "#gaming",
+		DefaultAnnouncementImageURL: "https://example.com/card.png",
+		DefaultGroupID:              "main-group",
+	}}}
+	service := newTestService()
+	service.profiles = profiles
+	service.UseExecution(execution)
+
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
+
+	var announced AnnounceResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", nil, http.StatusOK, &announced)
+	if !announced.Success || announced.Error != "" {
+		t.Fatalf("expected announcement success, got %+v", announced)
+	}
+	if len(execution.announcements) != 1 {
+		t.Fatalf("expected one announcement execution, got %d", len(execution.announcements))
+	}
+	got := execution.announcements[0]
+	if got.StreamTitle != "Boss Night" || got.StreamURL != "https://example.com/live" || got.DestinationGroupID != "main-group" || got.AnnouncementImageURL != "https://example.com/card.png" {
+		t.Fatalf("expected profile defaults to become announcement, got %+v", got)
+	}
+
+	var status AnnounceStatusResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announce/status", nil, http.StatusOK, &status)
+	if !status.Success || status.LastRun == "" || status.Error != "" {
+		t.Fatalf("expected successful announce status, got %+v", status)
+	}
+}
+
+func TestAnnounceReportsMissingProfileAndValidationFailures(t *testing.T) {
+	t.Run("missing profile", func(t *testing.T) {
+		service := newTestService()
+		service.UseExecution(&fakeExecution{})
+
+		var announced AnnounceResponse
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", nil, http.StatusOK, &announced)
+		if announced.Success || announced.Error != "No active profile" {
+			t.Fatalf("expected missing profile failure, got %+v", announced)
+		}
+
+		var status AnnounceStatusResponse
+		requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announce/status", nil, http.StatusOK, &status)
+		if status.Success || status.Error != "No active profile" || status.LastRun == "" {
+			t.Fatalf("expected missing profile announce status, got %+v", status)
+		}
+	})
+
+	t.Run("validation failure", func(t *testing.T) {
+		service := newTestService()
+		service.UseExecution(&fakeExecution{
+			summary: domain.ExecutionSummary{
+				Status:               domain.ExecutionSummaryStatusPartial,
+				ValidationErrorCount: 1,
+				TotalCount:           1,
+				Results: []domain.ExecutionResult{{
+					DestinationID:   "discord-main",
+					DestinationName: "Discord",
+					Platform:        domain.PlatformDiscord,
+					State:           domain.ExecutionStateValidationError,
+					Message:         "Stream title is required.",
+				}},
+			},
+		})
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+		var announced AnnounceResponse
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", map[string]string{}, http.StatusOK, &announced)
+		if announced.Success || announced.Error != "Stream title is required." {
+			t.Fatalf("expected validation failure, got %+v", announced)
+		}
+	})
+}
+
+func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
+	execution := &fakeExecution{
+		summary: domain.ExecutionSummary{
+			Status:                        domain.ExecutionSummaryStatusWarning,
+			RequiresDuplicateConfirmation: true,
+			DuplicateWarningMessage:       "A similar announcement was recently posted within the last 10 minutes. Continue?",
+		},
+		forceSummary: domain.ExecutionSummary{
+			Status:       domain.ExecutionSummaryStatusSuccess,
+			TotalCount:   1,
+			SuccessCount: 1,
+			Results: []domain.ExecutionResult{{
+				DestinationID:   "discord-main",
+				DestinationName: "Discord",
+				Platform:        domain.PlatformDiscord,
+				State:           domain.ExecutionStateSuccess,
+				Message:         "Published successfully.",
+			}},
+		},
+	}
+	profiles := &fakeProfiles{profiles: []domain.AnnouncementProfile{{
+		ID:                 "gaming",
+		Name:               "Gaming Stream",
+		DefaultStreamTitle: "Boss Night",
+		DefaultStreamURL:   "https://example.com/live",
+		DefaultGroupID:     "main-group",
+	}}}
+	service := newTestService()
+	service.profiles = profiles
+	service.UseExecution(execution)
+
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
+
+	var guarded AnnounceResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", nil, http.StatusOK, &guarded)
+	if guarded.Success || !guarded.RequiresConfirmation || guarded.ConfirmationID == "" || !strings.Contains(guarded.Error, "Continue?") {
+		t.Fatalf("expected duplicate guard response, got %+v", guarded)
+	}
+
+	var guardedStatus AnnounceStatusResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announce/status", nil, http.StatusOK, &guardedStatus)
+	if guardedStatus.Success || !guardedStatus.RequiresConfirmation || guardedStatus.ConfirmationID != guarded.ConfirmationID || guardedStatus.Error != guarded.Error {
+		t.Fatalf("expected status to expose duplicate guard, got %+v", guardedStatus)
+	}
+
+	var confirmed AnnounceResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce/confirm", map[string]string{"confirmationId": guarded.ConfirmationID}, http.StatusOK, &confirmed)
+	if !confirmed.Success || confirmed.RequiresConfirmation || confirmed.ConfirmationID != "" || confirmed.Error != "" {
+		t.Fatalf("expected confirmed announcement success, got %+v", confirmed)
+	}
+	if len(execution.forceAnnouncements) != 1 {
+		t.Fatalf("expected one force execution, got %d", len(execution.forceAnnouncements))
+	}
+	forced := execution.forceAnnouncements[0]
+	if forced.StreamTitle != "Boss Night" || forced.StreamURL != "https://example.com/live" || forced.DestinationGroupID != "main-group" {
+		t.Fatalf("expected force execution to use guarded snapshot, got %+v", forced)
+	}
+
+	var confirmedStatus AnnounceStatusResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announce/status", nil, http.StatusOK, &confirmedStatus)
+	if !confirmedStatus.Success || confirmedStatus.RequiresConfirmation || confirmedStatus.ConfirmationID != "" || confirmedStatus.Error != "" {
+		t.Fatalf("expected status to clear duplicate guard after confirm, got %+v", confirmedStatus)
+	}
+
+	var reused ErrorResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce/confirm", map[string]string{"confirmationId": guarded.ConfirmationID}, http.StatusBadRequest, &reused)
+	if reused.Error != "InvalidRequest" {
+		t.Fatalf("expected reused confirmation to be invalid, got %+v", reused)
+	}
+}
+
+func TestAnnounceDuplicateGuardConfirmationExpires(t *testing.T) {
+	service := newTestService()
+	service.UseExecution(&fakeExecution{})
+	service.setPendingAnnouncementConfirmation("expired-confirmation", domain.Announcement{StreamTitle: "Old"}, time.Now().UTC().Add(-time.Minute))
+
+	var response ErrorResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce/confirm", map[string]string{"confirmationId": "expired-confirmation"}, http.StatusBadRequest, &response)
+	if response.Error != "InvalidRequest" {
+		t.Fatalf("expected expired confirmation to be invalid, got %+v", response)
+	}
+}
+
+func TestAnnounceConfirmRequestValidation(t *testing.T) {
+	service := newTestService()
+	service.UseExecution(&fakeExecution{})
+
+	tests := []struct {
+		name        string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "valid shape but missing pending confirmation is invalid",
+			body:        `{"confirmationId":"missing"}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:       "missing content type is rejected",
+			body:       `{"confirmationId":"missing"}`,
+			wantStatus: http.StatusUnsupportedMediaType,
+		},
+		{
+			name:        "non json content type is rejected",
+			body:        `{"confirmationId":"missing"}`,
+			contentType: "text/plain",
+			wantStatus:  http.StatusUnsupportedMediaType,
+		},
+		{
+			name:        "malformed json is rejected",
+			body:        `{`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "unknown fields are rejected",
+			body:        `{"confirmationId":"missing","command":"force"}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "trailing json is rejected",
+			body:        `{"confirmationId":"missing"} {}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/announce/confirm", strings.NewReader(test.body))
+			request.Host = "127.0.0.1"
+			if test.contentType != "" {
+				request.Header.Set("Content-Type", test.contentType)
+			}
+			response := httptest.NewRecorder()
+
+			service.Handler().ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("expected status %d, got %d body %s", test.wantStatus, response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+				t.Fatalf("expected JSON content type, got %q", got)
+			}
+		})
+	}
+}
+
+func TestEndStreamWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
+	execution := &fakeExecution{
+		endStreamSummary: domain.ExecutionSummary{
+			Status:       domain.ExecutionSummaryStatusSuccess,
+			TotalCount:   1,
+			SuccessCount: 1,
+			Results: []domain.ExecutionResult{{
+				DestinationID:   "bluesky-main",
+				DestinationName: "Bluesky",
+				Platform:        domain.PlatformBluesky,
+				State:           domain.ExecutionStateSuccess,
+				Message:         "End stream post published successfully.",
+			}},
+		},
+	}
+	profiles := &fakeProfiles{profiles: []domain.AnnouncementProfile{{
+		ID:                 "gaming",
+		Name:               "Gaming Stream",
+		DefaultStreamTitle: "Boss Night",
+		DefaultStreamURL:   "https://example.com/live",
+		DefaultGroupID:     "main-group",
+	}}}
+	service := newTestService()
+	service.profiles = profiles
+	service.UseExecution(execution)
+
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
+
+	var ended EndStreamResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/end-stream", nil, http.StatusOK, &ended)
+	if !ended.Success || ended.Error != "" {
+		t.Fatalf("expected end stream success, got %+v", ended)
+	}
+	if len(execution.endStreamAnnouncements) != 1 {
+		t.Fatalf("expected one end stream execution, got %d", len(execution.endStreamAnnouncements))
+	}
+	got := execution.endStreamAnnouncements[0]
+	if got.StreamTitle != "Boss Night" || got.StreamURL != "https://example.com/live" || got.DestinationGroupID != "main-group" {
+		t.Fatalf("expected profile defaults to become end stream announcement, got %+v", got)
+	}
+
+	var status EndStreamStatusResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/end-stream/status", nil, http.StatusOK, &status)
+	if !status.Success || status.LastRun == "" || status.Error != "" {
+		t.Fatalf("expected successful end stream status, got %+v", status)
+	}
+}
+
+func TestEndStreamReportsMissingProfileAndValidationFailures(t *testing.T) {
+	t.Run("missing profile", func(t *testing.T) {
+		service := newTestService()
+		service.UseExecution(&fakeExecution{})
+
+		var ended EndStreamResponse
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/end-stream", nil, http.StatusOK, &ended)
+		if ended.Success || ended.Error != "No active profile" {
+			t.Fatalf("expected missing profile failure, got %+v", ended)
+		}
+
+		var status EndStreamStatusResponse
+		requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/end-stream/status", nil, http.StatusOK, &status)
+		if status.Success || status.Error != "No active profile" || status.LastRun == "" {
+			t.Fatalf("expected missing profile end stream status, got %+v", status)
+		}
+	})
+
+	t.Run("validation failure", func(t *testing.T) {
+		service := newTestService()
+		service.UseExecution(&fakeExecution{
+			endStreamSummary: domain.ExecutionSummary{
+				Status:               domain.ExecutionSummaryStatusPartial,
+				ValidationErrorCount: 1,
+				TotalCount:           1,
+				Results: []domain.ExecutionResult{{
+					DestinationID:   "discord-main",
+					DestinationName: "Discord",
+					Platform:        domain.PlatformDiscord,
+					State:           domain.ExecutionStateValidationError,
+					Message:         "Stream URL is required.",
+				}},
+			},
+		})
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+		var ended EndStreamResponse
+		requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/end-stream", map[string]string{}, http.StatusOK, &ended)
+		if ended.Success || ended.Error != "Stream URL is required." {
+			t.Fatalf("expected validation failure, got %+v", ended)
+		}
+	})
+}
+
+func TestAnnounceRequestValidation(t *testing.T) {
+	service := newTestService()
+	service.UseExecution(&fakeExecution{})
+
+	assertEmptyOperationRequestValidation(t, service.Handler(), "/api/v1/announce")
+}
+
+func TestEndStreamRequestValidation(t *testing.T) {
+	service := newTestService()
+	service.UseExecution(&fakeExecution{})
+
+	assertEmptyOperationRequestValidation(t, service.Handler(), "/api/v1/end-stream")
+}
+
+func assertEmptyOperationRequestValidation(t *testing.T, handler http.Handler, path string) {
+	t.Helper()
+	tests := []struct {
+		name        string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:       "empty body is accepted",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:        "empty json object is accepted",
+			body:        `{}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusOK,
+		},
+		{
+			name:        "non json content type is rejected",
+			body:        `{}`,
+			contentType: "text/plain",
+			wantStatus:  http.StatusUnsupportedMediaType,
+		},
+		{
+			name:       "body without content type is rejected",
+			body:       `{}`,
+			wantStatus: http.StatusUnsupportedMediaType,
+		},
+		{
+			name:        "malformed json is rejected",
+			body:        `{`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "unknown fields are rejected",
+			body:        `{"command":"go_live"}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "trailing json is rejected",
+			body:        `{} {}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(test.body))
+			request.Host = "127.0.0.1"
+			if test.contentType != "" {
+				request.Header.Set("Content-Type", test.contentType)
+			}
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("expected status %d, got %d body %s", test.wantStatus, response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+				t.Fatalf("expected JSON content type, got %q", got)
+			}
+		})
 	}
 }
 
@@ -207,7 +649,7 @@ func TestProfileActivationRequiresJSONContentType(t *testing.T) {
 
 func TestReadOnlyEndpointsRejectNonGETMethods(t *testing.T) {
 	service := newTestService()
-	for _, path := range []string{"/api/v1/app", "/api/v1/health", "/api/v1/capabilities", "/api/v1/status", "/api/v1/profiles"} {
+	for _, path := range []string{"/api/v1/app", "/api/v1/health", "/api/v1/capabilities", "/api/v1/status", "/api/v1/profiles", "/api/v1/profile/current", "/api/v1/announce/status", "/api/v1/end-stream/status"} {
 		t.Run(path, func(t *testing.T) {
 			var errorResponse ErrorResponse
 			response := requestRawJSON(t, service.Handler(), http.MethodPost, path, map[string]string{"ignored": "true"}, http.StatusMethodNotAllowed)
@@ -221,52 +663,155 @@ func TestReadOnlyEndpointsRejectNonGETMethods(t *testing.T) {
 	}
 }
 
+func TestAnnounceRejectsNonPOSTMethods(t *testing.T) {
+	service := newTestService()
+
+	assertOperationRejectsNonPOSTMethods(t, service.Handler(), "/api/v1/announce")
+}
+
+func TestAnnounceConfirmRejectsNonPOSTMethods(t *testing.T) {
+	service := newTestService()
+
+	assertOperationRejectsNonPOSTMethods(t, service.Handler(), "/api/v1/announce/confirm")
+}
+
+func TestEndStreamRejectsNonPOSTMethods(t *testing.T) {
+	service := newTestService()
+
+	assertOperationRejectsNonPOSTMethods(t, service.Handler(), "/api/v1/end-stream")
+}
+
+func assertOperationRejectsNonPOSTMethods(t *testing.T, handler http.Handler, path string) {
+	t.Helper()
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var errorResponse ErrorResponse
+			response := requestRawJSON(t, handler, method, path, nil, http.StatusMethodNotAllowed)
+			if err := json.Unmarshal(response, &errorResponse); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if errorResponse.Error != "InvalidRequest" {
+				t.Fatalf("expected InvalidRequest, got %+v", errorResponse)
+			}
+		})
+	}
+}
+
 func TestHandlerRejectsNonLocalHost(t *testing.T) {
 	service := newTestService()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/app", nil)
-	request.Host = "example.com"
-	response := httptest.NewRecorder()
+	for _, endpoint := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/app"},
+		{method: http.MethodGet, path: "/api/v1/profile/current"},
+		{method: http.MethodPost, path: "/api/v1/profile", body: `{"profile":"Music Stream"}`},
+		{method: http.MethodPost, path: "/api/v1/announce", body: `{}`},
+		{method: http.MethodPost, path: "/api/v1/announce/confirm", body: `{"confirmationId":"missing"}`},
+		{method: http.MethodGet, path: "/api/v1/announce/status"},
+		{method: http.MethodPost, path: "/api/v1/end-stream", body: `{}`},
+		{method: http.MethodGet, path: "/api/v1/end-stream/status"},
+	} {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(endpoint.body))
+			request.Host = "example.com"
+			if endpoint.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			response := httptest.NewRecorder()
 
-	service.Handler().ServeHTTP(response, request)
+			service.Handler().ServeHTTP(response, request)
 
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("expected forbidden for non-local host, got %d", response.Code)
-	}
-	var errorResponse ErrorResponse
-	if err := json.NewDecoder(response.Body).Decode(&errorResponse); err != nil {
-		t.Fatalf("decode error response: %v", err)
-	}
-	if errorResponse.Error != "Forbidden" {
-		t.Fatalf("expected Forbidden, got %+v", errorResponse)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("expected forbidden for non-local host, got %d", response.Code)
+			}
+			var errorResponse ErrorResponse
+			if err := json.NewDecoder(response.Body).Decode(&errorResponse); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if errorResponse.Error != "Forbidden" {
+				t.Fatalf("expected Forbidden, got %+v", errorResponse)
+			}
+		})
 	}
 }
 
 func TestHandlerSetsSecurityHeaders(t *testing.T) {
 	service := newTestService()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/app", nil)
-	request.Host = "127.0.0.1"
-	response := httptest.NewRecorder()
+	for _, endpoint := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/app"},
+		{method: http.MethodGet, path: "/api/v1/profile/current"},
+		{method: http.MethodPost, path: "/api/v1/announce", body: `{}`},
+		{method: http.MethodPost, path: "/api/v1/announce/confirm", body: `{"confirmationId":"missing"}`},
+		{method: http.MethodGet, path: "/api/v1/announce/status"},
+		{method: http.MethodPost, path: "/api/v1/end-stream", body: `{}`},
+		{method: http.MethodGet, path: "/api/v1/end-stream/status"},
+	} {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(endpoint.body))
+			request.Host = "127.0.0.1"
+			if endpoint.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			response := httptest.NewRecorder()
 
-	service.Handler().ServeHTTP(response, request)
+			service.Handler().ServeHTTP(response, request)
 
-	if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {
-		t.Fatalf("expected nosniff header, got %q", got)
-	}
-	if got := response.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("expected no-store cache header, got %q", got)
+			if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Fatalf("expected nosniff header, got %q", got)
+			}
+			if got := response.Header().Get("Cache-Control"); got != "no-store" {
+				t.Fatalf("expected no-store cache header, got %q", got)
+			}
+		})
 	}
 }
 
 func TestActionsRemainOutOfScope(t *testing.T) {
 	service := newTestService()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/actions", nil)
-	request.Host = "127.0.0.1"
-	response := httptest.NewRecorder()
+	for _, endpoint := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/actions"},
+		{method: http.MethodPost, path: "/api/v1/actions"},
+		{method: http.MethodPost, path: "/api/v1/action"},
+		{method: http.MethodPost, path: "/api/v1/execute"},
+		{method: http.MethodPost, path: "/api/v1/command"},
+	} {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(`{}`))
+			request.Host = "127.0.0.1"
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
 
-	service.Handler().ServeHTTP(response, request)
+			service.Handler().ServeHTTP(response, request)
 
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("expected actions endpoint to remain absent, got %d", response.Code)
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("expected generic action endpoint to remain absent, got %d", response.Code)
+			}
+		})
+	}
+}
+
+func TestStatusIncludesDashboardEnhancements(t *testing.T) {
+	service := newTestService()
+	service.UseDestinations(fakeDestinations{destinations: []domain.Destination{
+		{ID: "discord-main", Name: "Discord"},
+		{ID: "bluesky-main", Name: "Bluesky"},
+	}})
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+	var status StatusResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK, &status)
+
+	if !status.Healthy || status.ActiveProfile != "Music Stream" || status.DestinationCount != 2 {
+		t.Fatalf("expected dashboard status fields, got %+v", status)
 	}
 }
 
@@ -332,6 +877,54 @@ func (f fakeRecovery) ListPending(context.Context) ([]domain.ActiveLiveNowSessio
 		return nil, f.err
 	}
 	return f.sessions, nil
+}
+
+type fakeDestinations struct {
+	destinations []domain.Destination
+	err          error
+}
+
+func (f fakeDestinations) List(context.Context) ([]domain.Destination, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.destinations, nil
+}
+
+type fakeExecution struct {
+	summary                domain.ExecutionSummary
+	forceSummary           domain.ExecutionSummary
+	endStreamSummary       domain.ExecutionSummary
+	err                    error
+	forceErr               error
+	endStreamErr           error
+	announcements          []domain.Announcement
+	forceAnnouncements     []domain.Announcement
+	endStreamAnnouncements []domain.Announcement
+}
+
+func (f *fakeExecution) GoLive(_ context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error) {
+	f.announcements = append(f.announcements, announcement)
+	if f.err != nil {
+		return domain.ExecutionSummary{}, f.err
+	}
+	return f.summary, nil
+}
+
+func (f *fakeExecution) ForceGoLive(_ context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error) {
+	f.forceAnnouncements = append(f.forceAnnouncements, announcement)
+	if f.forceErr != nil {
+		return domain.ExecutionSummary{}, f.forceErr
+	}
+	return f.forceSummary, nil
+}
+
+func (f *fakeExecution) EndStream(_ context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error) {
+	f.endStreamAnnouncements = append(f.endStreamAnnouncements, announcement)
+	if f.endStreamErr != nil {
+		return domain.ExecutionSummary{}, f.endStreamErr
+	}
+	return f.endStreamSummary, nil
 }
 
 func getJSON(t *testing.T, url string, target any) {

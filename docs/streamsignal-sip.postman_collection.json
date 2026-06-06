@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "d9da2ce2-8bb2-4d07-9ff7-58c2d55b48e8",
-    "name": "StreamSignal SIP Prototype",
-    "description": "Postman collection for the StreamSignal SIP-v1 prototype endpoints. The default baseUrl is http://127.0.0.1:47020; update it if StreamSignal selects another port in the 47020-47029 range.",
+    "name": "StreamSignal SIP v1.1",
+    "description": "Postman collection for the StreamSignal SIP-v1.1 localhost endpoints. The default baseUrl is http://127.0.0.1:47020; update it if StreamSignal selects another port in the 47020-47029 range.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,171 +15,570 @@
       "key": "profileName",
       "value": "Music Stream",
       "type": "string"
+    },
+    {
+      "key": "confirmationId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "App Identity",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/app",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "app"
-          ]
-        },
-        "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, and protocol version."
-      },
-      "response": []
-    },
-    {
-      "name": "Health",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/health",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "health"
-          ]
-        },
-        "description": "Returns StreamSignal's simple SIP health state: ready, degraded, or error."
-      },
-      "response": []
-    },
-    {
-      "name": "Capabilities",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/capabilities",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "capabilities"
-          ]
-        },
-        "description": "Returns StreamSignal's SIP capability flags. Command execution and action endpoints are out of scope for SIP-v1."
-      },
-      "response": []
-    },
-    {
-      "name": "Status",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/status",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "status"
-          ]
-        },
-        "description": "Returns StreamSignal's SIP-visible status. After profile activation, activeProfile and activeProfileId are included."
-      },
-      "response": []
-    },
-    {
-      "name": "List Profiles",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/profiles",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "profiles"
-          ]
-        },
-        "description": "Lists existing StreamSignal announcement profile names."
-      },
-      "response": []
-    },
-    {
-      "name": "Activate Profile",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Accept",
-            "value": "application/json"
+      "name": "Discovery",
+      "item": [
+        {
+          "name": "App Identity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app"
+              ]
+            },
+            "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, and SIP protocol version. Expect protocolVersion 1.1."
           },
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"profile\": \"{{profileName}}\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+          "response": []
         },
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/profile",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "profile"
-          ]
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Returns StreamSignal's SIP health state: ready, degraded, or error."
+          },
+          "response": []
         },
-        "description": "Activates an existing announcement profile by name. This marks usage and updates backend SIP active-profile state, but does not publish or live-sync the React Home form."
-      },
-      "response": []
+        {
+          "name": "Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capabilities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capabilities"
+              ]
+            },
+            "description": "Returns SIP capability flags. Command/action endpoints remain out of scope; lifecycle publishing is exposed only through POST /api/v1/announce and POST /api/v1/end-stream."
+          },
+          "response": []
+        },
+        {
+          "name": "Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "status"
+              ]
+            },
+            "description": "Returns SIP-visible status, including healthy, activeProfile/activeProfileId after activation, and destinationCount when available."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "LivePanel Workflow",
+      "item": [
+        {
+          "name": "List Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "profiles"
+              ]
+            },
+            "description": "Lists existing StreamSignal announcement profile names. Set the collection profileName variable to one of these names before activating."
+          },
+          "response": []
+        },
+        {
+          "name": "Current Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profile/current",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "profile",
+                "current"
+              ]
+            },
+            "description": "Returns the currently active SIP profile, or empty id/name when no profile is active."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile\": \"{{profileName}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "profile"
+              ]
+            },
+            "description": "Activates an existing announcement profile by name. This marks usage and updates backend SIP active-profile state, but does not publish by itself."
+          },
+          "response": []
+        },
+        {
+          "name": "Announce Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce",
+                "status"
+              ]
+            },
+            "description": "Returns the most recent SIP announcement operation. Before the first attempt, lastRun is empty and success is false."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Announcement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce"
+              ]
+            },
+            "description": "Triggers the existing Go Live announcement workflow using the active SIP profile defaults. This can publish to configured destinations."
+          },
+          "response": []
+        },
+        {
+          "name": "Announce Confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmationId\": \"{{confirmationId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce",
+                "confirm"
+              ]
+            },
+            "description": "Confirms a pending duplicate guard from Send Announcement. Copy confirmationId from the guarded announce response or announce status. This calls the existing Force Go Live path for the guarded announcement snapshot."
+          },
+          "response": []
+        },
+        {
+          "name": "End Stream Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/end-stream/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "end-stream",
+                "status"
+              ]
+            },
+            "description": "Returns the most recent SIP end-stream operation. Before the first attempt, lastRun is empty and success is false."
+          },
+          "response": []
+        },
+        {
+          "name": "End Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/end-stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "end-stream"
+              ]
+            },
+            "description": "Triggers the existing End Stream workflow using the active SIP profile defaults. This can publish end-stream messages and clear Live Now state for configured destinations."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negative and Security Checks",
+      "item": [
+        {
+          "name": "Announce Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce"
+              ]
+            },
+            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object. Expect 400 InvalidRequest."
+          },
+          "response": []
+        },
+        {
+          "name": "End Stream Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"end_stream\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/end-stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "end-stream"
+              ]
+            },
+            "description": "Security check: POST /api/v1/end-stream accepts only an empty JSON object. Expect 400 InvalidRequest."
+          },
+          "response": []
+        },
+        {
+          "name": "Announce Confirm Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmationId\": \"{{confirmationId}}\",\n  \"command\": \"force_go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce",
+                "confirm"
+              ]
+            },
+            "description": "Security check: POST /api/v1/announce/confirm accepts only confirmationId. Expect 400 InvalidRequest."
+          },
+          "response": []
+        },
+        {
+          "name": "Profile Rejects Text Plain",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"profile\":\"{{profileName}}\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "profile"
+              ]
+            },
+            "description": "Security check: profile activation requires application/json. Expect 415 InvalidRequest."
+          },
+          "response": []
+        },
+        {
+          "name": "Generic Command Endpoint Missing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/command",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "command"
+              ]
+            },
+            "description": "Security/design check: generic command endpoints are intentionally absent. Expect 404."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }
