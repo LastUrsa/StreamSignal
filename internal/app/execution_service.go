@@ -234,13 +234,13 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 		content := templates.Render(endConfig.Template, announcementForDestination, destination.Platform, s.clock.Now())
 		notes := domain.ValidateAnnouncementForTemplate(announcementForDestination, endConfig.Template)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
-		if len(notes) > 0 {
+		if message, ok := domain.FirstValidationError(notes); ok {
 			results = append(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
-				Message:         notes[0],
+				Message:         message,
 				Content:         content,
 			})
 			continue
@@ -301,13 +301,13 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 		renderedTargets = append(renderedTargets, renderedExecutionTarget{destination: destination, content: content})
 		notes := domain.ValidateAnnouncementForTemplate(normalized, destination.Template)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
-		if len(notes) > 0 {
+		if message, ok := domain.FirstValidationError(notes); ok {
 			results = append(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
-				Message:         notes[0],
+				Message:         message,
 				Content:         content,
 			})
 			continue

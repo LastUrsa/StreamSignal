@@ -2,6 +2,12 @@
 
 User-facing release notes and planned artifact names. Keep this focused on changes that matter to users, testers, and release packaging.
 
+## Unreleased
+
+### Fixes
+
+- Allowed Home fields referenced by destination templates to be left blank for a specific announcement. Preview now warns about the empty template field without blocking publish when the rendered message remains valid.
+
 ## 0.3.1 Profile And Destination Workflow Polish
 
 StreamSignal 0.3.1 is a patch release focused on profile editing polish, destination workflow cleanup, safer credential handling, and release-prep validation.

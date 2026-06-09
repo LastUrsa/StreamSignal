@@ -50,10 +50,12 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 	for _, destination := range destinations {
 		content := templates.Render(destination.Template, normalized, destination.Platform, now)
 		notes := domain.ValidateAnnouncementForTemplate(normalized, destination.Template)
-		notes = append(notes, validateLiveStatusPreview(destination, normalized)...)
+		for _, note := range validateLiveStatusPreview(destination, normalized) {
+			notes = append(notes, domain.ValidationError(note))
+		}
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
 		if err := validateDestinationConfig(destination); err != nil {
-			notes = append(notes, err.Error())
+			notes = append(notes, domain.ValidationError(err.Error()))
 		}
 
 		items = append(items, domain.PreviewItem{
@@ -64,7 +66,7 @@ func (s *PreviewService) Generate(ctx context.Context, announcement domain.Annou
 			Content:         content,
 			CharacterCount:  len(content),
 			ValidationState: domain.PreviewValidationState(notes),
-			ValidationNotes: notes,
+			ValidationNotes: domain.ValidationMessages(notes),
 			LinkPreview:     s.linkPreviewFor(ctx, normalized.StreamURL, destination.Platform, linkPreviewCache),
 		})
 	}
@@ -168,7 +170,7 @@ func (s *PreviewService) generateEndStream(ctx context.Context, destinations []d
 		notes := domain.ValidateAnnouncementForTemplate(announcementForDestination, endConfig.Template)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
 		if err := validateDestinationConfig(destination); err != nil {
-			notes = append(notes, err.Error())
+			notes = append(notes, domain.ValidationError(err.Error()))
 		}
 
 		items = append(items, domain.PreviewItem{
@@ -179,7 +181,7 @@ func (s *PreviewService) generateEndStream(ctx context.Context, destinations []d
 			Content:         content,
 			CharacterCount:  len(content),
 			ValidationState: domain.PreviewValidationState(notes),
-			ValidationNotes: notes,
+			ValidationNotes: domain.ValidationMessages(notes),
 			LinkPreview:     s.linkPreviewFor(ctx, announcementForDestination.StreamURL, destination.Platform, linkPreviewCache),
 		})
 	}

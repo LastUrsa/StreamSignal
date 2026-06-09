@@ -275,13 +275,49 @@ func TestPreviewServiceCarriesValidationNotesIntoPreviewItems(t *testing.T) {
 
 	item := items[0]
 	if item.ValidationState != domain.PreviewValidationInvalid {
-		t.Fatalf("expected invalid preview state, got %q", item.ValidationState)
+		t.Fatalf("expected invalid preview state because rendered content is empty, got %q", item.ValidationState)
 	}
-	if !slices.Contains(item.ValidationNotes, "Message is required.") {
+	if !slices.Contains(item.ValidationNotes, "Message is empty but used by this template.") {
 		t.Fatalf("expected message validation note, got %v", item.ValidationNotes)
 	}
-	if slices.Contains(item.ValidationNotes, "Stream title is required.") || slices.Contains(item.ValidationNotes, "Stream URL is required.") {
+	if slices.Contains(item.ValidationNotes, "Stream title is empty but used by this template.") || slices.Contains(item.ValidationNotes, "Stream URL is empty but used by this template.") {
 		t.Fatalf("expected unused title and url fields to be ignored, got %v", item.ValidationNotes)
+	}
+}
+
+func TestPreviewServiceWarnsForBlankReferencedFieldWithoutBlockingPreview(t *testing.T) {
+	destinations := &destinationListStub{
+		items: []domain.Destination{
+			{
+				ID:         "discord-main",
+				Platform:   domain.PlatformDiscord,
+				Name:       "Main Discord",
+				Template:   "Going live {{message}}",
+				ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+			},
+		},
+	}
+	settings := &settingsLoadStub{}
+	service := newPreviewServiceForTest(destinations, settings, &previewSessionRepositoryStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	items, err := service.Generate(context.Background(), domain.Announcement{})
+	if err != nil {
+		t.Fatalf("generate preview: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 preview item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.Content != "Going live " {
+		t.Fatalf("unexpected preview content %q", item.Content)
+	}
+	if item.ValidationState != domain.PreviewValidationWarning {
+		t.Fatalf("expected warning preview state, got %q with notes %v", item.ValidationState, item.ValidationNotes)
+	}
+	if !slices.Contains(item.ValidationNotes, "Message is empty but used by this template.") {
+		t.Fatalf("expected message warning note, got %v", item.ValidationNotes)
 	}
 }
 

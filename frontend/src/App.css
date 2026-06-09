@@ -830,6 +830,13 @@ button:focus-visible {
     white-space: nowrap;
 }
 
+.preview-warning-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    color: var(--warning);
+}
+
 .preview-body {
     display: grid;
     gap: 12px;
@@ -1613,6 +1620,10 @@ button:focus-visible {
 .note-list {
     margin: 0;
     padding-left: 18px;
+}
+
+.warning-note-list {
+    color: var(--warning);
 }
 
 .toast-region {

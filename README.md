@@ -29,11 +29,11 @@ Debug builds also include **Logs** for development and workflow validation. Logs
    - **Discord**: create a channel webhook in Discord, name the webhook app/bot that should appear as the messenger, copy its webhook URL, paste it into StreamSignal, and test the connection.
    - **Bluesky**: create a Bluesky app password, enter the account identifier and app password, then choose whether StreamSignal should change Bluesky Live Status during Go Live.
    - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
-3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags.
+3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags. Fields can be left blank when a template token is optional for the current announcement.
 4. Optionally create Announcement Profiles in **Profiles** as prefill presets for repeated stream types. Profiles can fill Home fields, media, and a Destination Group.
 5. On Home, choose individual destinations or switch to a Destination Group for the current session. New destinations start in **All Destinations**.
 6. Add optional media on Home when the selected destinations support it. The announcement image is shared by providers that support attached images; Bluesky link card thumbnails have their own field.
-7. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination.
+7. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination. If a selected template uses a blank field, StreamSignal shows a warning note without blocking the post unless the rendered message itself is invalid.
 8. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
 9. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
 10. Use **Settings > Live Now Recovery** if StreamSignal closed before it could clear a pending Bluesky Live Now status.
