@@ -53,6 +53,7 @@ Keep targeted coverage around:
 
 - Preview remaining network-safe except for explicit link-preview metadata paths
 - Go Live and End Stream destination selection
+- blank Home fields referenced by templates surfacing as preview warnings without blocking publish when rendered content remains valid
 - Announcement Profiles applying Home fields, media defaults, and destination groups
 - duplicate-publish warning and confirmation behavior
 - Bluesky `Live Now` set, clear, duration, opt-out, and recovery behavior

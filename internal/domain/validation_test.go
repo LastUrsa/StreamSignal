@@ -64,16 +64,23 @@ func TestValidateAnnouncementForTemplateOnlyRequiresUsedFields(t *testing.T) {
 	}
 }
 
-func TestValidateAnnouncementForTemplateRequiresReferencedOptionalFields(t *testing.T) {
+func TestValidateAnnouncementForTemplateWarnsForReferencedBlankFields(t *testing.T) {
 	notes := ValidateAnnouncementForTemplate(Announcement{}, "{{category}} {{message}} {{hashtags}}")
 
-	expected := []string{"Category is required.", "Message is required.", "Hashtags are required."}
+	expected := []string{
+		"Category is empty but used by this template.",
+		"Message is empty but used by this template.",
+		"Hashtags are empty but used by this template.",
+	}
 	if len(notes) != len(expected) {
 		t.Fatalf("expected %d notes, got %d: %v", len(expected), len(notes), notes)
 	}
 	for i, note := range expected {
-		if notes[i] != note {
-			t.Fatalf("expected note %d to be %q, got %q", i, note, notes[i])
+		if notes[i].Message != note {
+			t.Fatalf("expected note %d to be %q, got %q", i, note, notes[i].Message)
+		}
+		if notes[i].Severity != ValidationSeverityWarning {
+			t.Fatalf("expected note %d to be a warning, got %q", i, notes[i].Severity)
 		}
 	}
 }
@@ -95,7 +102,7 @@ func TestValidateAnnouncementForTemplateRejectsReferencedInvalidURL(t *testing.T
 		StreamURL:   "not-a-url",
 	}, "{{stream_title}} {{stream_url}}")
 
-	if len(notes) != 1 || !strings.Contains(notes[0], "valid absolute URL") {
+	if len(notes) != 1 || !strings.Contains(notes[0].Message, "valid absolute URL") || notes[0].Severity != ValidationSeverityError {
 		t.Fatalf("expected invalid referenced url note, got %v", notes)
 	}
 }
@@ -105,13 +112,19 @@ func TestValidatePreviewContentChecksCharacterLimits(t *testing.T) {
 	if len(notes) == 0 {
 		t.Fatal("expected character limit validation note")
 	}
+	if notes[0].Severity != ValidationSeverityError {
+		t.Fatalf("expected character limit to be an error, got %q", notes[0].Severity)
+	}
 }
 
 func TestPreviewValidationState(t *testing.T) {
 	if state := PreviewValidationState(nil); state != PreviewValidationValid {
 		t.Fatalf("expected valid state, got %q", state)
 	}
-	if state := PreviewValidationState([]string{"warning"}); state != PreviewValidationInvalid {
+	if state := PreviewValidationState([]ValidationNote{{Message: "empty field", Severity: ValidationSeverityWarning}}); state != PreviewValidationWarning {
+		t.Fatalf("expected warning state, got %q", state)
+	}
+	if state := PreviewValidationState([]ValidationNote{{Message: "error", Severity: ValidationSeverityError}}); state != PreviewValidationInvalid {
 		t.Fatalf("expected invalid state, got %q", state)
 	}
 }

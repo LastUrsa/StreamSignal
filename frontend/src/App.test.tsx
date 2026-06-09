@@ -299,6 +299,28 @@ describe('App', () => {
         expect(screen.getByText('Rendered content is empty.')).toBeInTheDocument();
     });
 
+    it('shows a warning marker for blank template fields', async () => {
+        mockedGeneratePreview.mockResolvedValue([
+            {
+                destinationID: 'discord-main',
+                destinationName: 'Main Discord',
+                platform: 'discord',
+                content: 'Going live ',
+                characterCount: 11,
+                validationState: 'WARNING',
+                validationNotes: ['Message is empty but used by this template.'],
+            },
+        ]);
+
+        render(<App />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Generate Preview' }));
+
+        expect(await screen.findByText('WARNING')).toBeInTheDocument();
+        expect(screen.getByLabelText('Template field empty')).toBeInTheDocument();
+        expect(screen.getByText('Message is empty but used by this template.')).toBeInTheDocument();
+    });
+
     it('shows a loading state while preview generation is pending', async () => {
         const pendingPreview = deferred<PreviewItem[]>();
         mockedGeneratePreview.mockReturnValue(pendingPreview.promise);

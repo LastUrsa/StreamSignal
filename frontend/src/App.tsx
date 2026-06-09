@@ -20,6 +20,7 @@ import {
     ShieldAlert,
     Square,
     Trash2,
+    TriangleAlert,
     Wrench,
     X,
     Zap,
@@ -2050,13 +2051,14 @@ function App() {
                 <span className="preview-summary-meta">
                     <span>{item.characterCount} chars</span>
                     {item.validationNotes.length > 0 ? <span>{item.validationNotes.length} notes</span> : null}
+                    {item.validationState === 'WARNING' ? <TriangleAlert className="preview-warning-icon" aria-label="Template field empty" /> : null}
                     <StatusBadge status={item.validationState} label={item.validationState} />
                 </span>
             </summary>
             <div className="preview-body">
                 <pre className="preview-content">{item.content || '(empty content)'}</pre>
                 {renderPlatformPreview(item)}
-                {item.validationNotes.length > 0 ? <ul className="note-list">{item.validationNotes.map((note) => <li key={note}>{note}</li>)}</ul> : <p className="success-copy">Ready from a validation standpoint.</p>}
+                {item.validationNotes.length > 0 ? <ul className={item.validationState === 'WARNING' ? 'note-list warning-note-list' : 'note-list'}>{item.validationNotes.map((note) => <li key={note}>{note}</li>)}</ul> : <p className="success-copy">Ready from a validation standpoint.</p>}
             </div>
         </details>
     );

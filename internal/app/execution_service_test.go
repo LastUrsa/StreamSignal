@@ -348,6 +348,37 @@ func TestExecutionServiceReturnsValidationErrorsPerDestination(t *testing.T) {
 	}
 }
 
+func TestExecutionServicePublishesWhenReferencedFieldIsBlank(t *testing.T) {
+	destRepo := newDestinationRepositoryStub()
+	destRepo.items["discord-main"] = domain.Destination{
+		ID:         "discord-main",
+		Platform:   domain.PlatformDiscord,
+		Name:       "Main Discord",
+		Enabled:    true,
+		Template:   "Going live {{message}}",
+		ConfigJSON: `{"webhookKey":"https://discord.com/api/webhooks/123/main"}`,
+	}
+	settingsRepo := &settingsRepositoryStub{item: domain.DefaultAppSettings()}
+	history := &postHistoryRepositoryStub{recordsByDestination: map[string][]ports.PostHistoryRecord{}}
+	discord := &discordPublisherStub{}
+	service := NewExecutionService(destRepo, settingsRepo, history, &liveNowSessionRepositoryExecutionStub{}, discord, &blueskyPublisherStub{}, &mastodonPublisherStub{})
+	service.clock = fixedClock{now: time.Date(2026, 5, 31, 18, 0, 0, 0, time.UTC)}
+
+	summary, err := service.GoLive(context.Background(), domain.Announcement{})
+	if err != nil {
+		t.Fatalf("go live: %v", err)
+	}
+	if len(discord.calls) != 1 {
+		t.Fatalf("expected discord publish call, got %d", len(discord.calls))
+	}
+	if discord.calls[0].content != "Going live " {
+		t.Fatalf("expected blank message to render empty, got %q", discord.calls[0].content)
+	}
+	if summary.TotalCount != 1 || summary.SuccessCount != 1 || summary.ValidationErrorCount != 0 {
+		t.Fatalf("unexpected execution summary counts: %+v", summary)
+	}
+}
+
 func TestExecutionServiceGoLiveReturnsDuplicateWarningBeforePublishing(t *testing.T) {
 	destRepo := newDestinationRepositoryStub()
 	destRepo.items["discord-main"] = domain.Destination{
