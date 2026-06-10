@@ -1,64 +1,83 @@
 # StreamSignal
 
-StreamSignal is a local-first desktop app for streamers and VTubers that creates one announcement and distributes it to multiple platforms.
+StreamSignal is a local-first desktop app for streamers and VTubers who want one repeatable **Go Live** and **End Stream** workflow across Discord, Bluesky, and Mastodon.
 
-It is intended for creators who want a repeatable Go Live and End Stream workflow without handing their platform credentials to a hosted service. StreamSignal stores app data locally, keeps runtime secrets in the OS credential store, and posts only to the destinations selected for the current session.
+It keeps app data on the local machine, stores runtime secrets in the OS credential store, and posts only to the destinations selected for the current session.
 
-## What It Does
+## Features
 
-- publishes Go Live announcements to Discord, Bluesky, and Mastodon
-- generates destination-specific previews before anything is sent
-- supports optional End Stream messages per destination
-- can set and clear Bluesky `Live Now` status, including recovery after an interrupted app session
-- supports reusable Announcement Profiles as prefill presets for repeated stream types
-- supports default stream URLs, hashtags, and optional announcement media for fresh sessions
-
-## App Areas
-
-- **Home**: session details, destination selection, preview, Go Live, End Stream, and recovery awareness.
-- **Destinations**: Discord, Bluesky, and Mastodon setup, testing, and Destination Groups.
-- **Profiles**: reusable announcement presets for repeated stream types.
-- **Settings**: session defaults, Bluesky Live Now recovery, and legal notices.
-
-Debug builds also include **Logs** for development and workflow validation. Logs are not shown in production releases.
+- Publish Go Live announcements to Discord, Bluesky, and Mastodon.
+- Preview destination-specific messages before sending.
+- Post optional End Stream messages per destination.
+- Set, clear, and recover Bluesky `Live Now` status.
+- Reuse Announcement Profiles for repeated stream types.
+- Target individual destinations or Destination Groups.
+- Control the active profile from LivePanel through StreamSignal's localhost-only SIP API.
 
 ## Quickstart
 
-1. Open StreamSignal and go to **Destinations**.
-2. Add a destination for each platform you want to publish to:
-   - **Discord**: create a channel webhook in Discord, name the webhook app/bot that should appear as the messenger, copy its webhook URL, paste it into StreamSignal, and test the connection.
-   - **Bluesky**: create a Bluesky app password, enter the account identifier and app password, then choose whether StreamSignal should change Bluesky Live Status during Go Live.
-   - **Mastodon**: create a Mastodon application/access token, enter the instance URL and token, then test the connection.
-3. On **Home**, enter the stream title, stream URL, optional category, message, and hashtags. Fields can be left blank when a template token is optional for the current announcement.
-4. Optionally create Announcement Profiles in **Profiles** as prefill presets for repeated stream types. Profiles can fill Home fields, media, and a Destination Group.
-5. On Home, choose individual destinations or switch to a Destination Group for the current session. New destinations start in **All Destinations**.
-6. Add optional media on Home when the selected destinations support it. The announcement image is shared by providers that support attached images; Bluesky link card thumbnails have their own field.
-7. Click **Generate Preview** to inspect the Go Live and enabled End Stream messages before anything is sent. Generated previews start collapsed and can be expanded per destination. If a selected template uses a blank field, StreamSignal shows a warning note without blocking the post unless the rendered message itself is invalid.
-8. Click **Go Live** to publish to the selected destinations. If duplicate protection warns you, confirm only when you intend to post again.
-9. Click **End Stream** when the stream is over. End Stream only posts to selected destinations with **Post End Stream Message** enabled and clears tracked Bluesky Live Now status when needed.
-10. Use **Settings > Live Now Recovery** if StreamSignal closed before it could clear a pending Bluesky Live Now status.
+1. Open **Destinations** and add each platform you want to publish to.
+2. Use Discord webhooks, Bluesky app passwords, and Mastodon access tokens from accounts you control.
+3. Create optional **Profiles** for repeated stream types.
+4. On **Home**, enter session details, choose destinations or a group, and add optional media.
+5. Generate previews and resolve any warnings.
+6. Click **Go Live**, then **End Stream** when the stream is over.
+
+## App Areas
+
+- **Home**: session details, destination selection, previews, Go Live, End Stream, and recovery awareness.
+- **Destinations**: platform setup, testing, templates, and Destination Groups.
+- **Profiles**: reusable announcement presets.
+- **Settings**: defaults, Bluesky Live Now recovery, and legal notices.
+- **Logs**: debug-only workflow validation in non-production builds.
 
 ## Stack
 
 - Go backend
 - Wails desktop shell
 - React + TypeScript frontend
-- SQLite for application data
-- Windows Credential Manager and macOS Keychain for secrets
+- SQLite for local data
+- Windows Credential Manager and macOS Keychain for runtime secrets
 
 ## Development
 
-Install dependencies before the first run:
+Install frontend dependencies:
 
 ```bash
 npm install --prefix frontend
 ```
 
-Run the app in development mode:
+Run the app in Wails development mode:
 
 ```bash
 wails dev
 ```
+
+Run a sandboxed local instance with separate app data and credential storage:
+
+```bash
+STREAMSIGNAL_ENV=dev wails dev
+```
+
+Build the Windows app from WSL:
+
+```bash
+./scripts/build-prod-windows.sh
+```
+
+Build and launch a sandboxed local review build:
+
+```bash
+./scripts/build-prod-windows.sh --launch --env dev
+```
+
+Run the Windows service-mode smoke test:
+
+```bash
+./scripts/build-prod-windows.sh --service-smoke --env dev
+```
+
+Production uses the normal `StreamSignal` app data folder and `streamsignal` credential namespace. Any non-production `STREAMSIGNAL_ENV` value uses its own namespaced store, such as `StreamSignal-dev` and `streamsignal-dev`.
 
 StreamSignal supports three launch forms:
 
@@ -68,87 +87,36 @@ StreamSignal.exe --service
 StreamSignal.exe --show
 ```
 
-The default launch opens the desktop UI and reports SIP mode `standalone`. `--service` starts the same backend services and SIP server in the background without showing the main window, reporting SIP mode `service`. `--show` asks an existing StreamSignal instance to restore and focus its window; if no instance is already running, it launches normally in standalone mode.
+`--service` starts backend services and the SIP server without showing the main window. `--show` asks an existing instance to restore and focus its window, or launches normally when no instance is running.
 
-Only one StreamSignal instance is allowed per runtime environment. Production uses the normal StreamSignal single-instance lock, while non-production `STREAMSIGNAL_ENV` values get separate locks so local review builds do not collide with the production app.
+## Quality Gates
 
-Run a sandboxed local test instance with separate database and credential storage:
-
-```bash
-STREAMSIGNAL_ENV=test wails dev
-```
-
-Production uses the normal `StreamSignal` app data folder and `streamsignal` credential namespace. Any non-production `STREAMSIGNAL_ENV` value uses its own namespaced store, such as `StreamSignal-test` and `streamsignal-test`, so test destinations and credentials do not mix with your personal streaming setup.
-
-Build the Windows desktop app from WSL:
+Run these before release:
 
 ```bash
-./scripts/build-prod-windows.sh
-```
-
-Build the Windows NSIS installer from WSL:
-
-```bash
-./scripts/build-prod-windows.sh --nsis
-```
-
-Build and launch it for local review:
-
-```bash
-./scripts/build-prod-windows.sh --launch
-```
-
-Build and launch it against a sandboxed test data store:
-
-```bash
-./scripts/build-prod-windows.sh --launch --env test
-```
-
-Build the Windows app and run the service-mode smoke test:
-
-```bash
+go test ./...
+go vet ./...
+npm test --prefix frontend
+npm run build --prefix frontend
+npm audit --prefix frontend
+govulncheck ./...
 ./scripts/build-prod-windows.sh --service-smoke --env dev
 ```
 
-Build a macOS app bundle on a Mac:
-
-```bash
-wails build -platform darwin/universal
-```
-
-Wails v2 does not cross-compile macOS app bundles from Windows. A DMG release artifact should be created on macOS after the `.app` bundle is built, signed, and tested.
-
-Run the usual local checks:
-
-```bash
-npm test --prefix frontend
-npm run build --prefix frontend
-go test ./...
-go vet ./...
-```
-
-Run provider-backed workflow E2E tests manually when you need to verify the real posting path outside GitHub Actions:
+Provider-backed workflow E2E tests are manual because they create and delete real test-account posts:
 
 ```bash
 STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
 ```
 
-The E2E tests create real posts through the StreamSignal execution workflow and then delete them. The GitHub `Provider Workflow E2E` action runs the same scenario on a schedule and before release artifact builds when the matching repo secrets are configured. Use test-only accounts with `E2E_BLUESKY_IDENTIFIER`, `E2E_BLUESKY_APP_PASSWORD`, `E2E_MASTODON_INSTANCE_URL`, and `E2E_MASTODON_ACCESS_TOKEN`. Mastodon tokens need `write:statuses`; add `write:media` only for future media-upload E2E coverage.
+## Docs
 
-Run dependency and vulnerability checks:
-
-```bash
-npm audit --prefix frontend
-govulncheck ./...
-```
-
-## Project Docs
-
-- [SECURITY.md](./SECURITY.md): vulnerability reporting policy.
-- [INTEGRATION_LIMITATIONS.md](./INTEGRATION_LIMITATIONS.md): practical platform constraints.
-- [RELEASE_NOTES.md](./RELEASE_NOTES.md): user-facing release notes and artifact names.
-- [BRAND_USAGE.md](./BRAND_USAGE.md): platform logo and legal-notice guardrails.
-- [TEST_VALIDATION.md](./TEST_VALIDATION.md): maintainer testing posture and PR quality gate.
-- [RELEASE_READINESS_CHECKLIST.md](./RELEASE_READINESS_CHECKLIST.md): maintainer release checklist.
-- [MACOS_RELEASE_TEST_PLAN.md](./MACOS_RELEASE_TEST_PLAN.md): macOS packaging and validation checklist.
-- [SECURITY_AUDIT.md](./SECURITY_AUDIT.md): maintainer security posture summary.
+- [SIP API Reference](./docs/sip-api-reference.md)
+- [Security Policy](./SECURITY.md)
+- [Release Notes](./RELEASE_NOTES.md)
+- [Release Readiness Checklist](./RELEASE_READINESS_CHECKLIST.md)
+- [Test Validation](./TEST_VALIDATION.md)
+- [Security Audit](./SECURITY_AUDIT.md)
+- [Integration Limitations](./INTEGRATION_LIMITATIONS.md)
+- [Brand Usage](./BRAND_USAGE.md)
+- [macOS Release Test Plan](./MACOS_RELEASE_TEST_PLAN.md)

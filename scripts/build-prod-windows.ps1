@@ -46,6 +46,9 @@ try {
             $smokeEnvironment = $LaunchEnvironment
         }
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $smokeScript -ExePath $exe -EnvironmentName $smokeEnvironment
+        if ($LASTEXITCODE -ne 0) {
+            throw "Service-mode smoke test failed with exit code $LASTEXITCODE"
+        }
     }
     if ($Launch) {
         $previousEnvironment = $env:STREAMSIGNAL_ENV

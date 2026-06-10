@@ -145,7 +145,15 @@ function Wait-ForMainWindowHandle {
 function Start-TestStreamSignal {
     param([string[]]$Arguments = @())
 
-    $process = Start-Process -FilePath $resolvedExePath -ArgumentList $Arguments -PassThru
+    $startArgs = @{
+        FilePath = $resolvedExePath
+        PassThru = $true
+    }
+    if ($Arguments.Count -gt 0) {
+        $startArgs.ArgumentList = $Arguments
+    }
+
+    $process = Start-Process @startArgs
     $startedProcesses.Add($process) | Out-Null
     return $process
 }

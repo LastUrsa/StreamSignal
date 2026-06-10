@@ -32,7 +32,7 @@ The current review focus is:
 - Remote image URLs for Bluesky and Mastodon are rejected if they resolve to localhost, private-network, link-local, unspecified, or multicast addresses.
 - Uploaded image data is size-limited before decode and again after decode.
 - Preview metadata image URLs are validated before being sent to the frontend.
-- SIP v1.1 remains localhost-only, rejects non-local Host headers, avoids CORS, exposes no generic command/action endpoints, limits publish/control execution to explicit active-profile Go Live and End Stream operations, and limits duplicate-guard bypass to single-use announcement confirmations.
+- SIP remains localhost-only, rejects non-local Host headers, avoids CORS, exposes no generic command/action endpoints, limits publish/control execution to explicit active-profile Go Live and End Stream operations, reports only sanitized status metadata, and limits duplicate-guard bypass to single-use announcement confirmations.
 
 ## Remaining Cautions
 
@@ -57,7 +57,7 @@ Security-sensitive changes should also add or update targeted tests for:
 - outbound URL validation
 - publisher request payloads
 - recovery workflows
-- SIP local-host enforcement, method/content-type validation, explicit announcement/end-stream execution, single-use duplicate-guard confirmation, and absent generic command/action endpoints
+- SIP local-host enforcement, method/content-type validation, explicit announcement/end-stream execution, sanitized status metadata, single-use duplicate-guard confirmation, and absent generic command/action endpoints
 
 ## References
 

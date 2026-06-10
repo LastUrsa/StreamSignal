@@ -60,7 +60,7 @@ Keep targeted coverage around:
 - credential persistence through secret references rather than raw values
 - non-production runtime data and credential namespace isolation
 - service-mode launch parsing, SIP mode reporting, single-instance behavior, and environment-scoped instance locks
-- SIP v1.1 current-profile, active-profile announcement/end-stream execution, duplicate-guard confirmation, last-run operation status, method/content-type rejection, local-host enforcement, and absent generic command/action endpoints
+- SIP current-profile, active-profile announcement/end-stream execution, duplicate-guard confirmation, sanitized status metadata, last-run operation status, method/content-type rejection, local-host enforcement, and absent generic command/action endpoints
 - Discord, Bluesky, and Mastodon publisher payloads
 - remote image and preview URL validation
 - settings and profile defaults that prefill Home sessions without overriding user edits unexpectedly

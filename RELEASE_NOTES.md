@@ -4,9 +4,43 @@ User-facing release notes and planned artifact names. Keep this focused on chang
 
 ## Unreleased
 
-### Fixes
+- None.
 
+## 0.4.0 LivePanel And SIP Control
+
+StreamSignal 0.4.0 is a feature release focused on LivePanel integration through StreamSignal's localhost-only SIP API, service-mode launch support, and release validation around that new control surface.
+
+### Highlights
+
+- Added a SIP API for LivePanel to inspect app identity, read the current active profile, trigger Go Live, confirm duplicate-guarded announcements, trigger End Stream, and read last-run operation status.
+- Added `--service` startup so StreamSignal can run backend services and SIP without showing the main window.
+- Added `--show` startup so LivePanel or shortcuts can restore an already-running StreamSignal window.
+- Kept SIP scoped to the active profile workflow instead of exposing generic command execution or raw destination configuration.
+- Added SIP API docs and a Postman collection for local integration testing.
+- Added drawer/status metadata for LivePanel control surfaces.
+- Aligned the StreamSignal UI with the Starsong design direction.
+
+### Security And Reliability
+
+- SIP remains localhost-only, rejects non-local Host headers, avoids CORS, and exposes no raw webhook URLs, credential keys, account identifiers, tokens, local secret references, raw image URLs, or image data.
+- Duplicate-guard confirmation through SIP is single-use and scoped to the pending active-profile announcement.
+- Service mode uses the same environment-separated app data, credential namespaces, and single-instance lock behavior as the desktop app.
+- Added Windows service-mode smoke validation for hidden startup, SIP service reporting, `--show` activation, standalone startup, and duplicate-process suppression.
+- Fixed the Windows service-mode smoke gate so standalone launches pass no empty argument list and nested smoke failures stop the build script.
 - Allowed Home fields referenced by destination templates to be left blank for a specific announcement. Preview now warns about the empty template field without blocking publish when the rendered message remains valid.
+- `go test`, `go vet`, `npm test`, `npm run build`, `npm audit`, `govulncheck`, and the Windows service-mode smoke test passed locally during release prep.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.4.0-windows-amd64-installer.exe`
+- `StreamSignal-0.4.0-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.4.0-windows-amd64-installer`
+- `streamsignal-0.4.0-macos-universal-dmg`
 
 ## 0.3.1 Profile And Destination Workflow Polish
 
