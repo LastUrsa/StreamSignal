@@ -109,6 +109,7 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 		Protocol: sip.ProtocolVersion,
 	}, settingsService, profileSvc, recoverySvc)
 	sipService.UseDestinations(destinationSvc)
+	sipService.UseDestinationGroups(groupRepo)
 	sipService.UseExecution(executionSvc)
 
 	return &App{

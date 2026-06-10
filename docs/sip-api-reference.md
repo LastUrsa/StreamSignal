@@ -168,7 +168,21 @@ After SIP profile activation:
   "activeProfile": "Music Stream",
   "activeProfileId": "music",
   "healthy": true,
-  "destinationCount": 8
+  "destinationCount": 3,
+  "enabledDestinationCount": 2,
+  "destinationGroup": "Main Announcements",
+  "destinationGroupId": "main-announcements",
+  "destinationPlatforms": [
+    "bluesky",
+    "discord"
+  ],
+  "image": "Announcement image + Bluesky card thumbnail",
+  "template": "2 destination templates",
+  "templateCount": 2,
+  "streamTitle": "Late Night Music",
+  "streamUrl": "https://example.com/live",
+  "category": "Music",
+  "hashtags": "#music #live"
 }
 ```
 
@@ -200,6 +214,11 @@ error
 - `activeProfile` and `activeProfileId` are omitted until a profile has been activated through SIP.
 - `healthy` is informational and mirrors whether StreamSignal is usable for local SIP work.
 - `destinationCount` is informational and omitted if destinations cannot be read.
+- When destination group metadata is available, `destinationCount` reflects the active profile's selected/default group. Without group metadata, it falls back to the total destination count.
+- `destinationGroup`, `destinationGroupId`, `enabledDestinationCount`, `destinationPlatforms`, `image`, `template`, `templateCount`, `streamTitle`, `streamUrl`, `category`, and `hashtags` are display-oriented drawer metadata for local SIP consumers.
+- `template` is a summary of enabled destination templates, such as `No enabled templates`, `1 destination template`, or `N destination templates`. StreamSignal does not expose a profile-level template here.
+- `image` is a summary label only, such as `Announcement image`, `Bluesky card thumbnail`, or `Announcement image + Bluesky card thumbnail`.
+- The status response intentionally omits raw destination configuration, webhook URLs, credential keys, account identifiers, tokens, local secret references, raw image URLs, and image data URLs.
 - SIP active profile state is backend/SIP state. It does not live-synchronize the React Home form in this prototype.
 
 ## GET /api/v1/profiles
