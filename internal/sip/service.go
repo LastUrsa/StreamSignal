@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,11 @@ type DestinationService interface {
 	List(ctx context.Context) ([]domain.Destination, error)
 }
 
+type DestinationGroupService interface {
+	Get(ctx context.Context, id string) (domain.DestinationGroup, error)
+	ListDestinations(ctx context.Context, groupID string) ([]domain.Destination, error)
+}
+
 type ExecutionService interface {
 	GoLive(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
 	ForceGoLive(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
@@ -64,6 +70,7 @@ type Service struct {
 	profiles     ProfileService
 	recovery     RecoveryService
 	destinations DestinationService
+	groups       DestinationGroupService
 	execution    ExecutionService
 
 	mu                              sync.RWMutex
@@ -93,6 +100,13 @@ func (s *Service) UseDestinations(destinations DestinationService) {
 		return
 	}
 	s.destinations = destinations
+}
+
+func (s *Service) UseDestinationGroups(groups DestinationGroupService) {
+	if s == nil {
+		return
+	}
+	s.groups = groups
 }
 
 func (s *Service) UseExecution(execution ExecutionService) {
@@ -169,6 +183,28 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	if active := s.ActiveProfile(); active != nil {
 		response.ActiveProfile = active.Name
 		response.ActiveProfileID = active.ID
+		announcement := announcementFromProfile(*active)
+		response.StreamTitle = announcement.StreamTitle
+		response.StreamURL = announcement.StreamURL
+		response.Category = announcement.Category
+		response.Hashtags = announcement.Hashtags
+		response.Image = statusImageSummary(announcement)
+
+		groupID := strings.TrimSpace(announcement.DestinationGroupID)
+		if groupID == "" {
+			groupID = domain.DefaultDestinationGroupID
+		}
+		response.DestinationGroupID = groupID
+
+		if s != nil && s.groups != nil {
+			if group, err := s.groups.Get(ctx, groupID); err == nil {
+				response.DestinationGroup = group.Name
+			}
+			if destinations, err := s.groups.ListDestinations(ctx, groupID); err == nil {
+				applyDestinationStatusSummary(&response, destinations)
+			}
+			return response, nil
+		}
 	}
 	if s != nil && s.destinations != nil {
 		destinations, err := s.destinations.List(ctx)
@@ -400,6 +436,72 @@ func announcementFromProfile(profile domain.AnnouncementProfile) domain.Announce
 		BlueskyCardThumbnailURL:     profile.DefaultBlueskyCardThumbnailURL,
 		BlueskyCardThumbnailDataURL: profile.DefaultBlueskyCardThumbnailDataURL,
 		DestinationGroupID:          profile.DefaultGroupID,
+	}
+}
+
+func applyDestinationStatusSummary(response *StatusResponse, destinations []domain.Destination) {
+	if response == nil {
+		return
+	}
+	response.DestinationCount = len(destinations)
+
+	platforms := make(map[string]struct{})
+	templateCount := 0
+	enabledCount := 0
+	for _, destination := range destinations {
+		if !destination.Enabled {
+			continue
+		}
+		enabledCount++
+		if strings.TrimSpace(destination.Template) != "" {
+			templateCount++
+		}
+		platform := strings.TrimSpace(string(destination.Platform))
+		if platform != "" {
+			platforms[platform] = struct{}{}
+		}
+	}
+	response.EnabledDestinationCount = enabledCount
+	response.TemplateCount = templateCount
+	response.Template = statusTemplateSummary(templateCount)
+	response.DestinationPlatforms = sortedStatusPlatforms(platforms)
+}
+
+func sortedStatusPlatforms(platforms map[string]struct{}) []string {
+	if len(platforms) == 0 {
+		return nil
+	}
+	labels := make([]string, 0, len(platforms))
+	for platform := range platforms {
+		labels = append(labels, platform)
+	}
+	sort.Strings(labels)
+	return labels
+}
+
+func statusTemplateSummary(count int) string {
+	switch count {
+	case 0:
+		return "No enabled templates"
+	case 1:
+		return "1 destination template"
+	default:
+		return fmt.Sprintf("%d destination templates", count)
+	}
+}
+
+func statusImageSummary(announcement domain.Announcement) string {
+	hasAnnouncementImage := strings.TrimSpace(announcement.AnnouncementImageURL) != "" || strings.TrimSpace(announcement.AnnouncementImageDataURL) != ""
+	hasBlueskyThumbnail := strings.TrimSpace(announcement.BlueskyCardThumbnailURL) != "" || strings.TrimSpace(announcement.BlueskyCardThumbnailDataURL) != ""
+	switch {
+	case hasAnnouncementImage && hasBlueskyThumbnail:
+		return "Announcement image + Bluesky card thumbnail"
+	case hasAnnouncementImage:
+		return "Announcement image"
+	case hasBlueskyThumbnail:
+		return "Bluesky card thumbnail"
+	default:
+		return ""
 	}
 }
 

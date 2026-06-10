@@ -88,6 +88,7 @@ Activation:
 - marks the selected profile as used
 - stores the active SIP profile in backend/SIP memory
 - makes the active profile visible through `GET /api/v1/status` and `GET /api/v1/profile/current`
+- exposes safe, display-oriented drawer metadata through `GET /api/v1/status`, including the selected destination group, enabled destination counts, enabled platforms, destination-template summary text, image summary text, and profile defaults
 
 Activation does not:
 
@@ -97,6 +98,7 @@ Activation does not:
 - call Force Go Live
 - edit destination configuration
 - live-synchronize the React Home form
+- expose raw destination config, credentials, webhook URLs, tokens, secret references, or raw image URLs/data through SIP status
 
 The Home screen's compose state is currently React-local state. For this prototype, SIP profile activation updates backend/SIP state and usage metadata only.
 

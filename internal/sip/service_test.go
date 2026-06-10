@@ -801,6 +801,171 @@ func TestActionsRemainOutOfScope(t *testing.T) {
 
 func TestStatusIncludesDashboardEnhancements(t *testing.T) {
 	service := newTestService()
+	service.profiles = &fakeProfiles{profiles: []domain.AnnouncementProfile{{
+		ID:                                 "music",
+		Name:                               "Music Stream",
+		DefaultStreamTitle:                 "Late Night Music",
+		DefaultStreamURL:                   "https://example.com/live",
+		DefaultCategory:                    "Music",
+		DefaultHashtags:                    "#music #live",
+		DefaultAnnouncementImageDataURL:    "data:image/png;base64,announcement-secret",
+		DefaultBlueskyCardThumbnailDataURL: "data:image/png;base64,thumbnail-secret",
+		DefaultGroupID:                     "main-announcements",
+	}}}
+	service.UseDestinationGroups(fakeDestinationGroups{
+		groups: map[string]domain.DestinationGroup{
+			"main-announcements": {ID: "main-announcements", Name: "Main Announcements"},
+		},
+		destinations: map[string][]domain.Destination{
+			"main-announcements": {
+				{ID: "discord-main", Platform: domain.PlatformDiscord, Name: "Discord", Enabled: true, Template: "Going live: {{title}}", ConfigJSON: `{"webhook":"secret"}`},
+				{ID: "bluesky-main", Platform: domain.PlatformBluesky, Name: "Bluesky", Enabled: true, Template: "Live now {{url}}", ConfigJSON: `{"token":"secret"}`},
+				{ID: "discord-backup", Platform: domain.PlatformDiscord, Name: "Discord Backup", Enabled: false, Template: "disabled template", ConfigJSON: `{"webhook":"disabled-secret"}`},
+			},
+		},
+	})
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+	payload := requestRawJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK)
+	var status StatusResponse
+	if err := json.Unmarshal(payload, &status); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+
+	if !status.Healthy || status.ActiveProfile != "Music Stream" || status.ActiveProfileID != "music" {
+		t.Fatalf("expected dashboard status fields, got %+v", status)
+	}
+	if status.StreamTitle != "Late Night Music" || status.StreamURL != "https://example.com/live" || status.Category != "Music" || status.Hashtags != "#music #live" {
+		t.Fatalf("expected profile display defaults, got %+v", status)
+	}
+	if status.DestinationGroup != "Main Announcements" || status.DestinationGroupID != "main-announcements" {
+		t.Fatalf("expected selected destination group, got %+v", status)
+	}
+	if status.DestinationCount != 3 || status.EnabledDestinationCount != 2 {
+		t.Fatalf("expected group destination counts, got %+v", status)
+	}
+	if strings.Join(status.DestinationPlatforms, ",") != "bluesky,discord" {
+		t.Fatalf("expected unique sorted enabled platforms, got %+v", status.DestinationPlatforms)
+	}
+	if status.Template != "2 destination templates" || status.TemplateCount != 2 {
+		t.Fatalf("expected destination template summary, got %+v", status)
+	}
+	if status.Image != "Announcement image + Bluesky card thumbnail" {
+		t.Fatalf("expected safe image summary, got %+v", status)
+	}
+	body := string(payload)
+	for _, secret := range []string{"webhook", "token", "announcement-secret", "thumbnail-secret", "data:image"} {
+		if strings.Contains(body, secret) {
+			t.Fatalf("status leaked private value %q in %s", secret, body)
+		}
+	}
+}
+
+func TestStatusImageSummaryVariants(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*domain.AnnouncementProfile)
+		wantImage string
+	}{
+		{
+			name: "announcement image only",
+			configure: func(profile *domain.AnnouncementProfile) {
+				profile.DefaultAnnouncementImageURL = "https://example.com/card.png"
+			},
+			wantImage: "Announcement image",
+		},
+		{
+			name: "bluesky thumbnail only",
+			configure: func(profile *domain.AnnouncementProfile) {
+				profile.DefaultBlueskyCardThumbnailURL = "https://example.com/thumb.png"
+			},
+			wantImage: "Bluesky card thumbnail",
+		},
+		{
+			name: "both images",
+			configure: func(profile *domain.AnnouncementProfile) {
+				profile.DefaultAnnouncementImageURL = "https://example.com/card.png"
+				profile.DefaultBlueskyCardThumbnailURL = "https://example.com/thumb.png"
+			},
+			wantImage: "Announcement image + Bluesky card thumbnail",
+		},
+		{
+			name:      "no images",
+			configure: func(*domain.AnnouncementProfile) {},
+			wantImage: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			profile := domain.AnnouncementProfile{ID: "music", Name: "Music Stream"}
+			test.configure(&profile)
+			service := newTestService()
+			service.profiles = &fakeProfiles{profiles: []domain.AnnouncementProfile{profile}}
+
+			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+			var status StatusResponse
+			requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK, &status)
+			if status.Image != test.wantImage {
+				t.Fatalf("expected image summary %q, got %+v", test.wantImage, status)
+			}
+		})
+	}
+}
+
+func TestStatusTemplateSummaryVariants(t *testing.T) {
+	tests := []struct {
+		name          string
+		destinations  []domain.Destination
+		wantTemplate  string
+		wantTemplates int
+	}{
+		{
+			name:          "none",
+			destinations:  []domain.Destination{{Enabled: true}, {Enabled: false, Template: "disabled"}},
+			wantTemplate:  "No enabled templates",
+			wantTemplates: 0,
+		},
+		{
+			name:          "one",
+			destinations:  []domain.Destination{{Enabled: true, Template: "one"}},
+			wantTemplate:  "1 destination template",
+			wantTemplates: 1,
+		},
+		{
+			name:          "multiple",
+			destinations:  []domain.Destination{{Enabled: true, Template: "one"}, {Enabled: true, Template: "two"}},
+			wantTemplate:  "2 destination templates",
+			wantTemplates: 2,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := newTestService()
+			service.UseDestinationGroups(fakeDestinationGroups{
+				groups: map[string]domain.DestinationGroup{
+					domain.DefaultDestinationGroupID: {ID: domain.DefaultDestinationGroupID, Name: domain.DefaultDestinationGroupName},
+				},
+				destinations: map[string][]domain.Destination{
+					domain.DefaultDestinationGroupID: test.destinations,
+				},
+			})
+
+			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+			var status StatusResponse
+			requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK, &status)
+			if status.Template != test.wantTemplate || status.TemplateCount != test.wantTemplates {
+				t.Fatalf("expected template summary %q/%d, got %+v", test.wantTemplate, test.wantTemplates, status)
+			}
+		})
+	}
+}
+
+func TestStatusFallsBackToAllDestinationCountWithoutGroupService(t *testing.T) {
+	service := newTestService()
 	service.UseDestinations(fakeDestinations{destinations: []domain.Destination{
 		{ID: "discord-main", Name: "Discord"},
 		{ID: "bluesky-main", Name: "Bluesky"},
@@ -811,7 +976,10 @@ func TestStatusIncludesDashboardEnhancements(t *testing.T) {
 	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/status", nil, http.StatusOK, &status)
 
 	if !status.Healthy || status.ActiveProfile != "Music Stream" || status.DestinationCount != 2 {
-		t.Fatalf("expected dashboard status fields, got %+v", status)
+		t.Fatalf("expected fallback dashboard status fields, got %+v", status)
+	}
+	if status.EnabledDestinationCount != 0 || status.Template != "" || len(status.DestinationPlatforms) != 0 {
+		t.Fatalf("expected group-only summaries to be omitted without group service, got %+v", status)
 	}
 }
 
@@ -889,6 +1057,30 @@ func (f fakeDestinations) List(context.Context) ([]domain.Destination, error) {
 		return nil, f.err
 	}
 	return f.destinations, nil
+}
+
+type fakeDestinationGroups struct {
+	groups       map[string]domain.DestinationGroup
+	destinations map[string][]domain.Destination
+	getErr       error
+	listErr      error
+}
+
+func (f fakeDestinationGroups) Get(_ context.Context, id string) (domain.DestinationGroup, error) {
+	if f.getErr != nil {
+		return domain.DestinationGroup{}, f.getErr
+	}
+	if group, ok := f.groups[id]; ok {
+		return group, nil
+	}
+	return domain.DestinationGroup{}, errors.New("missing group")
+}
+
+func (f fakeDestinationGroups) ListDestinations(_ context.Context, groupID string) ([]domain.Destination, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return f.destinations[groupID], nil
 }
 
 type fakeExecution struct {

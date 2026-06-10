@@ -122,9 +122,51 @@
                 "status"
               ]
             },
-            "description": "Returns SIP-visible status, including healthy, activeProfile/activeProfileId after activation, and destinationCount when available."
+            "description": "Returns SIP-visible status, including healthy, activeProfile/activeProfileId after activation, group-aware destination counts, enabled destination platforms, destination-template summary text, image summary text, and active profile display defaults. Drawer metadata intentionally omits raw destination config, credentials, webhook URLs, tokens, secret references, and raw image URLs/data."
           },
-          "response": []
+          "response": [
+            {
+              "name": "Activated profile with drawer metadata",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                }
+              ],
+              "body": "{\n  \"state\": \"idle\",\n  \"message\": \"Ready for announcement setup.\",\n  \"activeProfile\": \"Music Stream\",\n  \"activeProfileId\": \"music\",\n  \"healthy\": true,\n  \"destinationCount\": 3,\n  \"enabledDestinationCount\": 2,\n  \"destinationGroup\": \"Main Announcements\",\n  \"destinationGroupId\": \"main-announcements\",\n  \"destinationPlatforms\": [\n    \"bluesky\",\n    \"discord\"\n  ],\n  \"image\": \"Announcement image + Bluesky card thumbnail\",\n  \"template\": \"2 destination templates\",\n  \"templateCount\": 2,\n  \"streamTitle\": \"Late Night Music\",\n  \"streamUrl\": \"https://example.com/live\",\n  \"category\": \"Music\",\n  \"hashtags\": \"#music #live\"\n}"
+            }
+          ]
         }
       ]
     },

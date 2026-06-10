@@ -38,12 +38,23 @@ type CapabilitiesResponse struct {
 }
 
 type StatusResponse struct {
-	State            string `json:"state"`
-	Message          string `json:"message"`
-	ActiveProfile    string `json:"activeProfile,omitempty"`
-	ActiveProfileID  string `json:"activeProfileId,omitempty"`
-	Healthy          bool   `json:"healthy"`
-	DestinationCount int    `json:"destinationCount,omitempty"`
+	State                   string   `json:"state"`
+	Message                 string   `json:"message"`
+	ActiveProfile           string   `json:"activeProfile,omitempty"`
+	ActiveProfileID         string   `json:"activeProfileId,omitempty"`
+	Healthy                 bool     `json:"healthy"`
+	DestinationCount        int      `json:"destinationCount,omitempty"`
+	DestinationGroup        string   `json:"destinationGroup,omitempty"`
+	DestinationGroupID      string   `json:"destinationGroupId,omitempty"`
+	EnabledDestinationCount int      `json:"enabledDestinationCount,omitempty"`
+	DestinationPlatforms    []string `json:"destinationPlatforms,omitempty"`
+	Image                   string   `json:"image,omitempty"`
+	Template                string   `json:"template,omitempty"`
+	TemplateCount           int      `json:"templateCount,omitempty"`
+	StreamTitle             string   `json:"streamTitle,omitempty"`
+	StreamURL               string   `json:"streamUrl,omitempty"`
+	Category                string   `json:"category,omitempty"`
+	Hashtags                string   `json:"hashtags,omitempty"`
 }
 
 type ProfilesResponse struct {
