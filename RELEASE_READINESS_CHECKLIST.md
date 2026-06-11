@@ -4,9 +4,9 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
-Current release target: `0.3.1`.
+Current release target: `0.4.0`.
 
-Latest validation: GitHub Release Build run `26979277052` passed provider-backed E2E, Windows installer, and macOS DMG jobs.
+Latest validation: local quality gate and security scan passed on 2026-06-11 after installer metadata alignment; the Windows NSIS installer build also passed locally.
 
 Ship StreamSignal in a way that is:
 
@@ -45,9 +45,9 @@ Ship StreamSignal in a way that is:
 - [ ] produce a clean Windows NSIS installer with `wails build -platform windows/amd64 -nsis`
 - [ ] produce a macOS app bundle on macOS with `wails build -platform darwin/universal`
 - [ ] produce and inspect the macOS DMG
-- [ ] verify installer metadata, icon, version, and default install path
+- [ ] verify installer metadata, icon, version, and default `%ProgramFiles%\Starsong Tools\StreamSignal` install path
 - [ ] verify first launch after install succeeds without manual setup steps
-- [ ] verify upgrade behavior from the previous release
+- [ ] verify upgrade behavior from the previous release preserves the existing install path
 - [ ] verify GitHub Release artifact names match [RELEASE_NOTES.md](./RELEASE_NOTES.md)
 
 Wails v2 does not cross-compile macOS app bundles from Windows. Use a Mac runner or Mac tester for macOS app, DMG, Keychain, Gatekeeper, signing, and notarization checks.

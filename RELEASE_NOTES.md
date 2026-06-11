@@ -28,6 +28,8 @@ StreamSignal 0.4.0 is a feature release focused on LivePanel integration through
 - Added Windows service-mode smoke validation for hidden startup, SIP service reporting, `--show` activation, standalone startup, and duplicate-process suppression.
 - Fixed the Windows service-mode smoke gate so standalone launches pass no empty argument list and nested smoke failures stop the build script.
 - Allowed Home fields referenced by destination templates to be left blank for a specific announcement. Preview now warns about the empty template field without blocking publish when the rendered message remains valid.
+- Aligned Windows installer metadata with the Starsong Installer Standard v1 publisher identity, default install root, and upgrade-in-place behavior.
+- Updated Wails application metadata and platform identifiers so installer, executable, SIP, and About surfaces report the 0.4.0 release identity consistently.
 - `go test`, `go vet`, `npm test`, `npm run build`, `npm audit`, `govulncheck`, and the Windows service-mode smoke test passed locally during release prep.
 
 ### Release Artifacts

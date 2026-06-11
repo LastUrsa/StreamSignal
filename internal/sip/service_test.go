@@ -23,7 +23,7 @@ func TestReadOnlySIPV1ContractForLivePanel(t *testing.T) {
 	assertJSONFields(t, appPayload, map[string]any{
 		"appId":           "streamsignal",
 		"name":            "StreamSignal",
-		"version":         "0.3.1",
+		"version":         "0.4.0",
 		"mode":            "standalone",
 		"protocolVersion": "1.1",
 	})
@@ -56,7 +56,7 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 
 	var app AppResponse
 	getJSON(t, server.URL+"/api/v1/app", &app)
-	if app.AppID != "streamsignal" || app.Name != "StreamSignal" || app.Version != "0.3.1" || app.Mode != "standalone" || app.ProtocolVersion != "1.1" {
+	if app.AppID != "streamsignal" || app.Name != "StreamSignal" || app.Version != "0.4.0" || app.Mode != "standalone" || app.ProtocolVersion != "1.1" {
 		t.Fatalf("unexpected app response: %+v", app)
 	}
 
@@ -991,7 +991,7 @@ func newTestServiceWithMode(mode string) *Service {
 	return NewService(AppInfo{
 		AppID:    "streamsignal",
 		Name:     "StreamSignal",
-		Version:  "0.3.1",
+		Version:  "0.4.0",
 		Mode:     mode,
 		Protocol: ProtocolVersion,
 	}, fakeSettings{}, &fakeProfiles{profiles: []domain.AnnouncementProfile{{ID: "music", Name: "Music Stream"}}}, fakeRecovery{})

@@ -7,14 +7,14 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "DRDohr",
+    "name": "Starsong Tools",
     "email": "DRDohr@gmail.com"
   },
   "info": {
-    "companyName": "DRDohr",
+    "companyName": "Starsong Tools",
     "productName": "StreamSignal",
-    "productVersion": "0.3.1",
-    "copyright": "Copyright (c) 2026 DRDohr",
+    "productVersion": "0.4.0",
+    "copyright": "Copyright (c) 2026 Starsong Tools",
     "comments": "Local-first stream announcement desktop app"
   }
 }

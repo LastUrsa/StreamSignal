@@ -1360,7 +1360,7 @@ describe('App', () => {
         expect(within(settingsPanel!).getByRole('heading', { name: 'StreamSignal' })).toBeInTheDocument();
         expect(within(settingsPanel!).getByText('Local-first multi-destination stream announcements for creators.')).toBeInTheDocument();
 
-        const version = within(settingsPanel!).getByText('Version 0.3.1');
+        const version = within(settingsPanel!).getByText('Version 0.4.0');
         expect(version).toHaveClass('about-version');
         expect(version.closest('.about-product-row')).toBeInTheDocument();
         expect(version).not.toHaveClass('status-badge');
