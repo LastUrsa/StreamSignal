@@ -54,7 +54,7 @@ Current SIP safeguards:
 - exposes announcement and end-stream execution only through explicit active-profile lifecycle endpoints
 - exposes duplicate-guard continuation only through a single-use announcement confirmation endpoint
 
-SIP-v1.1 does not currently include authentication. Treat any future expansion beyond explicit local profile/status/announcement/end-stream behavior as requiring a fresh security review.
+SIP v1 does not currently include authentication. Treat any future expansion beyond explicit local profile, status, announcement-field, announcement, or end-stream behavior as requiring a fresh security review.
 
 ## Service Mode Security Notes
 

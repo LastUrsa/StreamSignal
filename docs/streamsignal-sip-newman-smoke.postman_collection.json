@@ -1,0 +1,636 @@
+{
+  "info": {
+    "_postman_id": "streamsignal-sip-newman-smoke",
+    "name": "StreamSignal SIP v1 Newman Smoke",
+    "description": "Non-publishing Newman smoke checks for StreamSignal SIP v1. Launch StreamSignal in a dev environment before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:47020",
+      "type": "string"
+    },
+    {
+      "key": "profileName",
+      "value": "Music Stream",
+      "type": "string"
+    },
+    {
+      "key": "confirmationId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Non-Publishing SIP Smoke",
+      "item": [
+        {
+          "name": "App Identity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app"
+              ]
+            },
+            "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, SIP protocol version, and capability names. Expect protocolVersion 1."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"identifies StreamSignal SIP v1\", function () {",
+                  "  pm.expect(body.appId).to.eql(\"streamsignal\");",
+                  "  pm.expect(body.appName || body.name).to.eql(\"StreamSignal\");",
+                  "  pm.expect(body.protocolVersion).to.eql(1);",
+                  "  pm.expect(body.capabilities).to.include(\"profiles\");",
+                  "  pm.expect(body.capabilities).to.include(\"announcement-fields\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Returns StreamSignal's SIP health state: ready, degraded, or error."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"health shape is valid\", function () {",
+                  "  pm.expect([\"ready\", \"degraded\", \"error\"]).to.include(body.status);",
+                  "  if (body.message !== undefined) pm.expect(body.message).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capabilities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capabilities"
+              ]
+            },
+            "description": "Returns SIP capability names and legacy capability flags. Command/action endpoints remain out of scope; lifecycle publishing is exposed only through POST /api/v1/announce and POST /api/v1/end-stream."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"advertises capability names\", function () {",
+                  "  pm.expect(body.capabilities).to.include(\"profiles\");",
+                  "  pm.expect(body.capabilities).to.include(\"announcement-fields\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Announcement Fields",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announcement-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announcement-fields"
+              ]
+            },
+            "description": "Returns StreamSignal-owned announcement field definitions and current values."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns seeded announcement field definitions\", function () {",
+                  "  pm.expect(body.fields).to.be.an(\"array\");",
+                  "  const ids = body.fields.map((field) => field.id);",
+                  "  [\"game\", \"category\", \"event\", \"guest\", \"series\", \"charity\"].forEach((id) => pm.expect(ids).to.include(id));",
+                  "  body.fields.forEach((field) => {",
+                  "    pm.expect(field.id).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(field.name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(field.value).to.be.a(\"string\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Announcement Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fields\": [\n    {\n      \"id\": \"game\",\n      \"value\": \"Clair Obscur\"\n    },\n    {\n      \"id\": \"event\",\n      \"value\": \"Blind Playthrough\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announcement-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announcement-fields"
+              ]
+            },
+            "description": "Updates current values for existing announcement fields. StreamSignal owns field definitions; this request cannot create or delete fields."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"updates field values\", function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "status"
+              ]
+            },
+            "description": "Returns SIP-visible status, including healthy, activeProfile/activeProfileId after activation, group-aware destination counts, enabled destination platforms, destination-template summary text, image summary text, and active profile display defaults. Drawer metadata intentionally omits raw destination config, credentials, webhook URLs, tokens, secret references, and raw image URLs/data."
+          },
+          "response": [
+            {
+              "name": "Activated profile with drawer metadata",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                }
+              ],
+              "body": "{\n  \"state\": \"idle\",\n  \"message\": \"Ready for announcement setup.\",\n  \"activeProfile\": \"Music Stream\",\n  \"activeProfileId\": \"music\",\n  \"healthy\": true,\n  \"destinationCount\": 3,\n  \"enabledDestinationCount\": 2,\n  \"destinationGroup\": \"Main Announcements\",\n  \"destinationGroupId\": \"main-announcements\",\n  \"destinationPlatforms\": [\n    \"bluesky\",\n    \"discord\"\n  ],\n  \"image\": \"Announcement image + Bluesky card thumbnail\",\n  \"template\": \"2 destination templates\",\n  \"templateCount\": 2,\n  \"streamTitle\": \"Late Night Music\",\n  \"streamUrl\": \"https://example.com/live\",\n  \"category\": \"Music\",\n  \"hashtags\": \"#music #live\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "pm.test(\"sets SIP security headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"status shape is valid\", function () {",
+                  "  pm.expect([\"idle\", \"warning\", \"error\"]).to.include(body.state);",
+                  "  pm.expect(body.message).to.be.a(\"string\");",
+                  "  pm.expect(body.healthy).to.be.a(\"boolean\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Announce Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce"
+              ]
+            },
+            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object. Expect 400 InvalidRequest."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns InvalidRequest\", function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error).to.eql(\"InvalidRequest\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End Stream Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"end_stream\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/end-stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "end-stream"
+              ]
+            },
+            "description": "Security check: POST /api/v1/end-stream accepts only an empty JSON object. Expect 400 InvalidRequest."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns InvalidRequest\", function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error).to.eql(\"InvalidRequest\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Announce Confirm Rejects Unknown Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmationId\": \"{{confirmationId}}\",\n  \"command\": \"force_go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announce/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announce",
+                "confirm"
+              ]
+            },
+            "description": "Security check: POST /api/v1/announce/confirm accepts only confirmationId. Expect 400 InvalidRequest."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns InvalidRequest\", function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error).to.eql(\"InvalidRequest\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Profile Rejects Text Plain",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"profile\":\"{{profileName}}\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "profile"
+              ]
+            },
+            "description": "Security check: profile activation requires application/json. Expect 415 InvalidRequest."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 415\", function () { pm.response.to.have.status(415); });",
+                  "pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns InvalidRequest\", function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error).to.eql(\"InvalidRequest\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generic Command Endpoint Missing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"go_live\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/command",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "command"
+              ]
+            },
+            "description": "Security/design check: generic command endpoints are intentionally absent. Expect 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"generic command endpoint is absent\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"security headers still apply\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -37,6 +37,11 @@ type AnnouncementProfileRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
+type AnnouncementFieldRepository interface {
+	List(ctx context.Context) ([]domain.AnnouncementField, error)
+	UpdateValues(ctx context.Context, values map[string]string, updatedAt time.Time) error
+}
+
 type SettingsRepository interface {
 	Load(ctx context.Context) (domain.AppSettings, error)
 	Save(ctx context.Context, settings domain.AppSettings) error

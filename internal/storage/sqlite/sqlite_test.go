@@ -218,6 +218,50 @@ func TestAnnouncementProfileRepositoryListsRecentlyUsedProfilesFirst(t *testing.
 	}
 }
 
+func TestAnnouncementFieldRepositorySeedsAndUpdatesValues(t *testing.T) {
+	db := openTestDB(t)
+	repository := NewAnnouncementFieldRepository(db)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 12, 10, 30, 0, 0, time.UTC)
+
+	fields, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list seeded announcement fields: %v", err)
+	}
+	if len(fields) != 6 {
+		t.Fatalf("expected seeded announcement fields, got %+v", fields)
+	}
+
+	if err := repository.UpdateValues(ctx, map[string]string{
+		"game":  "Clair Obscur",
+		"event": "Blind Playthrough",
+	}, now); err != nil {
+		t.Fatalf("update announcement fields: %v", err)
+	}
+
+	fields, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list updated announcement fields: %v", err)
+	}
+	values := make(map[string]string, len(fields))
+	for _, field := range fields {
+		values[field.ID] = field.Value
+	}
+	if values["game"] != "Clair Obscur" || values["event"] != "Blind Playthrough" {
+		t.Fatalf("expected updated values, got %+v", values)
+	}
+}
+
+func TestAnnouncementFieldRepositoryRejectsUnknownFieldUpdates(t *testing.T) {
+	db := openTestDB(t)
+	repository := NewAnnouncementFieldRepository(db)
+
+	err := repository.UpdateValues(context.Background(), map[string]string{"unknown": "value"}, time.Now().UTC())
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows for unknown field update, got %v", err)
+	}
+}
+
 func TestDestinationRepositoryCRUD(t *testing.T) {
 	db := openTestDB(t)
 	repository := NewDestinationRepository(db)

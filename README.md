@@ -75,6 +75,7 @@ Run the Windows service-mode smoke test:
 
 ```bash
 ./scripts/build-prod-windows.sh --service-smoke --env dev
+./scripts/test-sip-newman.sh
 ```
 
 Production uses the normal `StreamSignal` app data folder and `streamsignal` credential namespace. Any non-production `STREAMSIGNAL_ENV` value uses its own namespaced store, such as `StreamSignal-dev` and `streamsignal-dev`.

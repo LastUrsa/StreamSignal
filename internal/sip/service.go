@@ -14,10 +14,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const ProtocolVersion = "1.1"
+const ProtocolVersion = 1
 const (
 	StandaloneMode = "standalone"
 	ServiceMode    = "service"
+
+	CapabilityProfiles           = "profiles"
+	CapabilityAnnouncementFields = "announcement-fields"
 )
 
 const announcementConfirmationTTL = 5 * time.Minute
@@ -50,6 +53,11 @@ type ExecutionService interface {
 	EndStream(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error)
 }
 
+type AnnouncementFieldService interface {
+	List(ctx context.Context) ([]domain.AnnouncementField, error)
+	UpdateValues(ctx context.Context, values map[string]string) error
+}
+
 type pendingAnnouncementConfirmation struct {
 	id           string
 	announcement domain.Announcement
@@ -61,7 +69,7 @@ type AppInfo struct {
 	Name     string
 	Version  string
 	Mode     string
-	Protocol string
+	Protocol int
 }
 
 type Service struct {
@@ -72,6 +80,7 @@ type Service struct {
 	destinations DestinationService
 	groups       DestinationGroupService
 	execution    ExecutionService
+	fields       AnnouncementFieldService
 
 	mu                              sync.RWMutex
 	activeProfile                   *domain.AnnouncementProfile
@@ -81,7 +90,7 @@ type Service struct {
 }
 
 func NewService(info AppInfo, settings SettingsService, profiles ProfileService, recovery RecoveryService) *Service {
-	if info.Protocol == "" {
+	if info.Protocol == 0 {
 		info.Protocol = ProtocolVersion
 	}
 	if info.Mode == "" {
@@ -116,16 +125,25 @@ func (s *Service) UseExecution(execution ExecutionService) {
 	s.execution = execution
 }
 
+func (s *Service) UseAnnouncementFields(fields AnnouncementFieldService) {
+	if s == nil {
+		return
+	}
+	s.fields = fields
+}
+
 func (s *Service) App(ctx context.Context) (AppResponse, error) {
 	if s == nil {
 		return AppResponse{}, fmt.Errorf("sip service is unavailable")
 	}
 	return AppResponse{
 		AppID:           s.info.AppID,
+		AppName:         s.info.Name,
 		Name:            s.info.Name,
 		Version:         s.info.Version,
 		Mode:            s.info.Mode,
 		ProtocolVersion: s.info.Protocol,
+		Capabilities:    sipCapabilities(),
 	}, nil
 }
 
@@ -156,10 +174,48 @@ func (s *Service) Health(ctx context.Context) (HealthResponse, error) {
 
 func (s *Service) Capabilities(ctx context.Context) (CapabilitiesResponse, error) {
 	return CapabilitiesResponse{
+		Capabilities:            sipCapabilities(),
 		SupportsProfiles:        true,
 		SupportsStatusReporting: true,
 		SupportsAnnouncements:   true,
 	}, nil
+}
+
+func (s *Service) AnnouncementFields(ctx context.Context) (AnnouncementFieldsResponse, error) {
+	if s == nil || s.fields == nil {
+		return AnnouncementFieldsResponse{}, fmt.Errorf("announcement fields are unavailable")
+	}
+	fields, err := s.fields.List(ctx)
+	if err != nil {
+		return AnnouncementFieldsResponse{}, err
+	}
+	response := AnnouncementFieldsResponse{Fields: make([]AnnouncementFieldResponse, 0, len(fields))}
+	for _, field := range fields {
+		response.Fields = append(response.Fields, AnnouncementFieldResponse{
+			ID:    field.ID,
+			Name:  field.Name,
+			Value: field.Value,
+		})
+	}
+	return response, nil
+}
+
+func (s *Service) UpdateAnnouncementFields(ctx context.Context, request UpdateAnnouncementFieldsRequest) (SuccessResponse, error) {
+	if s == nil || s.fields == nil {
+		return SuccessResponse{}, fmt.Errorf("announcement fields are unavailable")
+	}
+	values := make(map[string]string, len(request.Fields))
+	for _, field := range request.Fields {
+		id := strings.TrimSpace(strings.ToLower(field.ID))
+		if id == "" {
+			return SuccessResponse{}, ErrInvalidRequest
+		}
+		values[id] = field.Value
+	}
+	if err := s.fields.UpdateValues(ctx, values); err != nil {
+		return SuccessResponse{}, ErrInvalidRequest
+	}
+	return SuccessResponse{Success: true}, nil
 }
 
 func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
@@ -293,7 +349,7 @@ func (s *Service) Announce(ctx context.Context) (AnnounceResponse, error) {
 		return response, nil
 	}
 
-	announcement := announcementFromProfile(*active)
+	announcement := s.announcementFromProfile(ctx, *active)
 	summary, err := s.execution.GoLive(ctx, announcement)
 	if err != nil {
 		response := AnnounceResponse{Success: false, Error: err.Error()}
@@ -361,7 +417,7 @@ func (s *Service) EndStream(ctx context.Context) (EndStreamResponse, error) {
 		return response, nil
 	}
 
-	summary, err := s.execution.EndStream(ctx, announcementFromProfile(*active))
+	summary, err := s.execution.EndStream(ctx, s.announcementFromProfile(ctx, *active))
 	if err != nil {
 		response := EndStreamResponse{Success: false, Error: err.Error()}
 		s.setLastEndStream(response, time.Now().UTC())
@@ -437,6 +493,29 @@ func announcementFromProfile(profile domain.AnnouncementProfile) domain.Announce
 		BlueskyCardThumbnailDataURL: profile.DefaultBlueskyCardThumbnailDataURL,
 		DestinationGroupID:          profile.DefaultGroupID,
 	}
+}
+
+func (s *Service) announcementFromProfile(ctx context.Context, profile domain.AnnouncementProfile) domain.Announcement {
+	announcement := announcementFromProfile(profile)
+	if s == nil || s.fields == nil {
+		return announcement
+	}
+	fields, err := s.fields.List(ctx)
+	if err != nil || len(fields) == 0 {
+		return announcement
+	}
+	announcement.Fields = make(map[string]string, len(fields))
+	for _, field := range fields {
+		id := strings.TrimSpace(strings.ToLower(field.ID))
+		if id != "" {
+			announcement.Fields[id] = field.Value
+		}
+	}
+	return announcement
+}
+
+func sipCapabilities() []string {
+	return []string{CapabilityProfiles, CapabilityAnnouncementFields}
 }
 
 func applyDestinationStatusSummary(response *StatusResponse, destinations []domain.Destination) {

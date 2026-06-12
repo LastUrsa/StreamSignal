@@ -19,11 +19,13 @@ var (
 )
 
 type AppResponse struct {
-	AppID           string `json:"appId"`
-	Name            string `json:"name"`
-	Version         string `json:"version"`
-	Mode            string `json:"mode"`
-	ProtocolVersion string `json:"protocolVersion"`
+	AppID           string   `json:"appId"`
+	AppName         string   `json:"appName"`
+	Name            string   `json:"name"`
+	Version         string   `json:"version"`
+	Mode            string   `json:"mode"`
+	ProtocolVersion int      `json:"protocolVersion"`
+	Capabilities    []string `json:"capabilities"`
 }
 
 type HealthResponse struct {
@@ -32,9 +34,33 @@ type HealthResponse struct {
 }
 
 type CapabilitiesResponse struct {
-	SupportsProfiles        bool `json:"supportsProfiles"`
-	SupportsStatusReporting bool `json:"supportsStatusReporting"`
-	SupportsAnnouncements   bool `json:"supportsAnnouncements"`
+	Capabilities            []string `json:"capabilities"`
+	SupportsProfiles        bool     `json:"supportsProfiles"`
+	SupportsStatusReporting bool     `json:"supportsStatusReporting"`
+	SupportsAnnouncements   bool     `json:"supportsAnnouncements"`
+}
+
+type AnnouncementFieldResponse struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type AnnouncementFieldsResponse struct {
+	Fields []AnnouncementFieldResponse `json:"fields"`
+}
+
+type UpdateAnnouncementFieldRequest struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+}
+
+type UpdateAnnouncementFieldsRequest struct {
+	Fields []UpdateAnnouncementFieldRequest `json:"fields"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
 }
 
 type StatusResponse struct {

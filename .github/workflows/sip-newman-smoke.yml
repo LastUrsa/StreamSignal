@@ -1,0 +1,108 @@
+name: SIP Newman Smoke
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      enabled:
+        description: Run the SIP Newman smoke test
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  STREAMSIGNAL_ENV: sip-newman
+
+jobs:
+  sip-newman-smoke:
+    name: SIP Newman Smoke
+    runs-on: windows-latest
+
+    steps:
+      - name: Skip disabled SIP Newman smoke test
+        if: github.event_name == 'workflow_call' && !inputs.enabled
+        shell: pwsh
+        run: Write-Host "SIP Newman smoke test disabled for this release run."
+
+      - name: Check out repository
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        run: npm ci --prefix frontend
+
+      - name: Install Wails CLI
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          "$env:USERPROFILE\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build Windows app
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        run: wails build -platform windows/amd64
+
+      - name: Run SIP Newman smoke test
+        if: github.event_name != 'workflow_call' || inputs.enabled
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $process = $null
+          $baseUrl = ""
+
+          try {
+            $exe = Join-Path $PWD "build\bin\StreamSignal.exe"
+            if (!(Test-Path $exe)) {
+              throw "Expected StreamSignal executable was not created at $exe"
+            }
+
+            $env:STREAMSIGNAL_ENV = "sip-newman"
+            $process = Start-Process -FilePath $exe -ArgumentList "--service" -PassThru
+
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Get-Date) -lt $deadline -and [string]::IsNullOrWhiteSpace($baseUrl)) {
+              foreach ($port in 47020..47029) {
+                $candidate = "http://127.0.0.1:$port"
+                try {
+                  $app = Invoke-RestMethod -Uri "$candidate/api/v1/app" -TimeoutSec 1
+                  if ($app.appId -eq "streamsignal" -and $app.mode -eq "service") {
+                    $baseUrl = $candidate
+                    break
+                  }
+                } catch {
+                }
+              }
+              if ([string]::IsNullOrWhiteSpace($baseUrl)) {
+                Start-Sleep -Seconds 1
+              }
+            }
+
+            if ([string]::IsNullOrWhiteSpace($baseUrl)) {
+              throw "Timed out waiting for StreamSignal SIP on 127.0.0.1:47020-47029"
+            }
+
+            npx --yes newman@6.2.1 run docs/streamsignal-sip-newman-smoke.postman_collection.json --env-var "baseUrl=$baseUrl"
+          } finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }

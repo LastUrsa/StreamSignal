@@ -14,6 +14,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/v1/status", s.handleStatus)
+	mux.HandleFunc("/api/v1/announcement-fields", s.handleAnnouncementFields)
 	mux.HandleFunc("/api/v1/profiles", s.handleProfiles)
 	mux.HandleFunc("/api/v1/profile/current", s.handleCurrentProfile)
 	mux.HandleFunc("/api/v1/profile", s.handleProfile)
@@ -55,6 +56,36 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := s.Status(r.Context())
 	writeResult(w, response, err)
+}
+
+func (s *Service) handleAnnouncementFields(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		response, err := s.AnnouncementFields(r.Context())
+		writeResult(w, response, err)
+	case http.MethodPost:
+		if !requireJSON(w, r) {
+			return
+		}
+		defer r.Body.Close()
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		var request UpdateAnnouncementFieldsRequest
+		if err := decoder.Decode(&request); err != nil {
+			writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+			return
+		}
+		var extra struct{}
+		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+			return
+		}
+		response, err := s.UpdateAnnouncementFields(r.Context(), request)
+		writeResult(w, response, err)
+	default:
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
+		writeError(w, http.StatusMethodNotAllowed, ErrInvalidRequest)
+	}
 }
 
 func (s *Service) handleProfiles(w http.ResponseWriter, r *http.Request) {

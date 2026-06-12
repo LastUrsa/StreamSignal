@@ -25,6 +25,14 @@ STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
 
 In GitHub Actions, `Provider Workflow E2E` runs on a schedule and as a release-build prerequisite when the test-account secrets are configured.
 
+SIP contract smoke tests run through Newman for release validation, not on every pull request:
+
+```bash
+./scripts/test-sip-newman.sh
+```
+
+In GitHub Actions, `SIP Newman Smoke` is available manually and runs as a release-build prerequisite. It launches StreamSignal in service mode with an isolated `STREAMSIGNAL_ENV`, discovers the localhost SIP port, and runs the non-publishing Postman collection in `docs/streamsignal-sip-newman-smoke.postman_collection.json`.
+
 If dependency manifests change, also confirm:
 
 ```bash
@@ -81,6 +89,7 @@ Before release, validate the OS/window-manager behavior manually on Windows:
 
 ```bash
 ./scripts/build-prod-windows.sh --service-smoke --env dev
+./scripts/test-sip-newman.sh
 ```
 
 The service-mode smoke test builds the Windows executable and checks:
