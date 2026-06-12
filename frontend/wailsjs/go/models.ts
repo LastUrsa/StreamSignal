@@ -57,6 +57,7 @@ export namespace domain {
 	    blueskyCardThumbnailDataURL: string;
 	    destinationGroupID: string;
 	    destinationIDs: string[];
+	    fields?: {[key: string]: string};
 	    // Go type: time
 	    createdAt: any;
 	
@@ -77,6 +78,7 @@ export namespace domain {
 	        this.blueskyCardThumbnailDataURL = source["blueskyCardThumbnailDataURL"];
 	        this.destinationGroupID = source["destinationGroupID"];
 	        this.destinationIDs = source["destinationIDs"];
+	        this.fields = source["fields"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	    }
 	
@@ -502,4 +504,3 @@ export namespace domain {
 	}
 
 }
-

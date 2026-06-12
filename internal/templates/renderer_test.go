@@ -32,6 +32,21 @@ func TestRenderLeavesUnknownVariablesUnchanged(t *testing.T) {
 	}
 }
 
+func TestRenderReplacesAnnouncementFieldTokens(t *testing.T) {
+	announcement := domain.Announcement{
+		Fields: map[string]string{
+			"game":  "Clair Obscur",
+			"event": "Blind Playthrough",
+		},
+	}
+
+	rendered := Render("Going live with {game}! Today's event: {event}.", announcement, domain.PlatformDiscord, time.Now().UTC())
+	expected := "Going live with Clair Obscur! Today's event: Blind Playthrough."
+	if rendered != expected {
+		t.Fatalf("expected %q, got %q", expected, rendered)
+	}
+}
+
 func TestRenderUsesEmptyStringForMissingOptionalValues(t *testing.T) {
 	rendered := Render("{{message}}/{{hashtags}}", domain.Announcement{}, domain.PlatformDiscord, time.Now().UTC())
 	if rendered != "/" {

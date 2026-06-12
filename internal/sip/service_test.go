@@ -22,10 +22,11 @@ func TestReadOnlySIPV1ContractForLivePanel(t *testing.T) {
 	appPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/app", nil, http.StatusOK)
 	assertJSONFields(t, appPayload, map[string]any{
 		"appId":           "streamsignal",
+		"appName":         "StreamSignal",
 		"name":            "StreamSignal",
 		"version":         "0.4.0",
 		"mode":            "standalone",
-		"protocolVersion": "1.1",
+		"protocolVersion": 1,
 	})
 
 	healthPayload := requestRawJSON(t, handler, http.MethodGet, "/api/v1/health", nil, http.StatusOK)
@@ -56,14 +57,20 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 
 	var app AppResponse
 	getJSON(t, server.URL+"/api/v1/app", &app)
-	if app.AppID != "streamsignal" || app.Name != "StreamSignal" || app.Version != "0.4.0" || app.Mode != "standalone" || app.ProtocolVersion != "1.1" {
+	if app.AppID != "streamsignal" || app.AppName != "StreamSignal" || app.Name != "StreamSignal" || app.Version != "0.4.0" || app.Mode != "standalone" || app.ProtocolVersion != 1 {
 		t.Fatalf("unexpected app response: %+v", app)
+	}
+	if strings.Join(app.Capabilities, ",") != "profiles,announcement-fields" {
+		t.Fatalf("unexpected app capabilities: %+v", app.Capabilities)
 	}
 
 	var capabilities CapabilitiesResponse
 	getJSON(t, server.URL+"/api/v1/capabilities", &capabilities)
 	if !capabilities.SupportsProfiles || !capabilities.SupportsStatusReporting || !capabilities.SupportsAnnouncements {
 		t.Fatalf("expected core capabilities, got %+v", capabilities)
+	}
+	if strings.Join(capabilities.Capabilities, ",") != "profiles,announcement-fields" {
+		t.Fatalf("unexpected capabilities list: %+v", capabilities.Capabilities)
 	}
 }
 
@@ -169,6 +176,67 @@ func TestProfilesAndActivationUseExistingAnnouncementProfiles(t *testing.T) {
 	}
 }
 
+func TestAnnouncementFieldsReadAndUpdateValues(t *testing.T) {
+	fields := &fakeAnnouncementFields{fields: []domain.AnnouncementField{
+		{ID: "game", Name: "Game", Value: "Final Fantasy XIV"},
+		{ID: "event", Name: "Event", Value: "Raid Night"},
+	}}
+	service := newTestService()
+	service.UseAnnouncementFields(fields)
+
+	var listed AnnouncementFieldsResponse
+	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announcement-fields", nil, http.StatusOK, &listed)
+	if len(listed.Fields) != 2 || listed.Fields[0].ID != "game" || listed.Fields[0].Value != "Final Fantasy XIV" {
+		t.Fatalf("unexpected announcement fields response: %+v", listed)
+	}
+
+	var updated SuccessResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announcement-fields", UpdateAnnouncementFieldsRequest{
+		Fields: []UpdateAnnouncementFieldRequest{
+			{ID: " game ", Value: "Clair Obscur"},
+			{ID: "event", Value: "Blind Playthrough"},
+		},
+	}, http.StatusOK, &updated)
+	if !updated.Success {
+		t.Fatalf("expected successful update, got %+v", updated)
+	}
+	if fields.values["game"] != "Clair Obscur" || fields.values["event"] != "Blind Playthrough" {
+		t.Fatalf("expected field values to update, got %+v", fields.values)
+	}
+}
+
+func TestAnnouncementFieldsRejectInvalidUpdates(t *testing.T) {
+	tests := []struct {
+		name string
+		body any
+	}{
+		{
+			name: "blank id",
+			body: UpdateAnnouncementFieldsRequest{Fields: []UpdateAnnouncementFieldRequest{{ID: "", Value: "x"}}},
+		},
+		{
+			name: "unknown id",
+			body: UpdateAnnouncementFieldsRequest{Fields: []UpdateAnnouncementFieldRequest{{ID: "unknown", Value: "x"}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := newTestService()
+			service.UseAnnouncementFields(&fakeAnnouncementFields{
+				fields: []domain.AnnouncementField{{ID: "game", Name: "Game"}},
+				err:    errors.New("missing field"),
+			})
+
+			var errorResponse ErrorResponse
+			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announcement-fields", test.body, http.StatusBadRequest, &errorResponse)
+			if errorResponse.Error != "InvalidRequest" {
+				t.Fatalf("expected InvalidRequest, got %+v", errorResponse)
+			}
+		})
+	}
+}
+
 func TestCurrentProfileReturnsActiveAndEmptyState(t *testing.T) {
 	service := newTestService()
 
@@ -232,6 +300,10 @@ func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
 	service := newTestService()
 	service.profiles = profiles
 	service.UseExecution(execution)
+	service.UseAnnouncementFields(&fakeAnnouncementFields{fields: []domain.AnnouncementField{
+		{ID: "game", Name: "Game", Value: "Clair Obscur"},
+		{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+	}})
 
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
 
@@ -246,6 +318,9 @@ func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
 	got := execution.announcements[0]
 	if got.StreamTitle != "Boss Night" || got.StreamURL != "https://example.com/live" || got.DestinationGroupID != "main-group" || got.AnnouncementImageURL != "https://example.com/card.png" {
 		t.Fatalf("expected profile defaults to become announcement, got %+v", got)
+	}
+	if got.Fields["game"] != "Clair Obscur" || got.Fields["event"] != "Blind Playthrough" {
+		t.Fatalf("expected announcement fields on execution snapshot, got %+v", got.Fields)
 	}
 
 	var status AnnounceStatusResponse
@@ -706,6 +781,8 @@ func TestHandlerRejectsNonLocalHost(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v1/app"},
 		{method: http.MethodGet, path: "/api/v1/profile/current"},
+		{method: http.MethodGet, path: "/api/v1/announcement-fields"},
+		{method: http.MethodPost, path: "/api/v1/announcement-fields", body: `{"fields":[]}`},
 		{method: http.MethodPost, path: "/api/v1/profile", body: `{"profile":"Music Stream"}`},
 		{method: http.MethodPost, path: "/api/v1/announce", body: `{}`},
 		{method: http.MethodPost, path: "/api/v1/announce/confirm", body: `{"confirmationId":"missing"}`},
@@ -746,6 +823,8 @@ func TestHandlerSetsSecurityHeaders(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v1/app"},
 		{method: http.MethodGet, path: "/api/v1/profile/current"},
+		{method: http.MethodGet, path: "/api/v1/announcement-fields"},
+		{method: http.MethodPost, path: "/api/v1/announcement-fields", body: `{"fields":[]}`},
 		{method: http.MethodPost, path: "/api/v1/announce", body: `{}`},
 		{method: http.MethodPost, path: "/api/v1/announce/confirm", body: `{"confirmationId":"missing"}`},
 		{method: http.MethodGet, path: "/api/v1/announce/status"},
@@ -1057,6 +1136,44 @@ func (f fakeDestinations) List(context.Context) ([]domain.Destination, error) {
 		return nil, f.err
 	}
 	return f.destinations, nil
+}
+
+type fakeAnnouncementFields struct {
+	fields []domain.AnnouncementField
+	values map[string]string
+	err    error
+}
+
+func (f *fakeAnnouncementFields) List(context.Context) ([]domain.AnnouncementField, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.fields, nil
+}
+
+func (f *fakeAnnouncementFields) UpdateValues(_ context.Context, values map[string]string) error {
+	if f.err != nil {
+		return f.err
+	}
+	known := make(map[string]struct{}, len(f.fields))
+	for _, field := range f.fields {
+		known[field.ID] = struct{}{}
+	}
+	if f.values == nil {
+		f.values = make(map[string]string, len(values))
+	}
+	for id, value := range values {
+		if _, ok := known[id]; !ok {
+			return errors.New("missing field")
+		}
+		f.values[id] = value
+		for index := range f.fields {
+			if f.fields[index].ID == id {
+				f.fields[index].Value = value
+			}
+		}
+	}
+	return nil
 }
 
 type fakeDestinationGroups struct {

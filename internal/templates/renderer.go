@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,21 @@ func Render(template string, announcement domain.Announcement, platform domain.D
 	rendered := template
 	for key, value := range replacements {
 		rendered = strings.ReplaceAll(rendered, key, value)
+	}
+	if len(announcement.Fields) > 0 {
+		fieldIDs := make([]string, 0, len(announcement.Fields))
+		for id := range announcement.Fields {
+			fieldIDs = append(fieldIDs, id)
+		}
+		sort.Strings(fieldIDs)
+		for _, id := range fieldIDs {
+			value := announcement.Fields[id]
+			normalizedID := strings.TrimSpace(strings.ToLower(id))
+			if normalizedID == "" {
+				continue
+			}
+			rendered = strings.ReplaceAll(rendered, "{"+normalizedID+"}", value)
+		}
 	}
 
 	return rendered

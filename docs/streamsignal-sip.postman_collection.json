@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "d9da2ce2-8bb2-4d07-9ff7-58c2d55b48e8",
-    "name": "StreamSignal SIP v1.1",
-    "description": "Postman collection for the StreamSignal SIP-v1.1 localhost endpoints. The default baseUrl is http://127.0.0.1:47020; update it if StreamSignal selects another port in the 47020-47029 range.",
+    "name": "StreamSignal SIP v1",
+    "description": "Postman collection for the StreamSignal SIP v1 localhost endpoints. The default baseUrl is http://127.0.0.1:47020; update it if StreamSignal selects another port in the 47020-47029 range.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -47,7 +47,7 @@
                 "app"
               ]
             },
-            "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, and SIP protocol version. Expect protocolVersion 1.1."
+            "description": "Returns StreamSignal's SIP app identity, product version, runtime mode, SIP protocol version, and capability names. Expect protocolVersion 1."
           },
           "response": []
         },
@@ -97,7 +97,65 @@
                 "capabilities"
               ]
             },
-            "description": "Returns SIP capability flags. Command/action endpoints remain out of scope; lifecycle publishing is exposed only through POST /api/v1/announce and POST /api/v1/end-stream."
+            "description": "Returns SIP capability names and legacy capability flags. Command/action endpoints remain out of scope; lifecycle publishing is exposed only through POST /api/v1/announce and POST /api/v1/end-stream."
+          },
+          "response": []
+        },
+        {
+          "name": "Announcement Fields",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announcement-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announcement-fields"
+              ]
+            },
+            "description": "Returns StreamSignal-owned announcement field definitions and current values."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Announcement Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fields\": [\n    {\n      \"id\": \"game\",\n      \"value\": \"Clair Obscur\"\n    },\n    {\n      \"id\": \"event\",\n      \"value\": \"Blind Playthrough\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/announcement-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "announcement-fields"
+              ]
+            },
+            "description": "Updates current values for existing announcement fields. StreamSignal owns field definitions; this request cannot create or delete fields."
           },
           "response": []
         },

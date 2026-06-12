@@ -1,16 +1,18 @@
 # StreamSignal SIP Prototype
 
-This document captures the StreamSignal SIP-v1.1 architecture and scope.
+This document captures the StreamSignal SIP v1 architecture and scope.
 
 ## Scope
 
-The prototype implements these SIP-v1.1 endpoints:
+The prototype implements these SIP v1 endpoints:
 
 ```text
 GET  /api/v1/app
 GET  /api/v1/health
 GET  /api/v1/capabilities
 GET  /api/v1/status
+GET  /api/v1/announcement-fields
+POST /api/v1/announcement-fields
 GET  /api/v1/profiles
 GET  /api/v1/profile/current
 POST /api/v1/profile
@@ -57,12 +59,13 @@ The SIP prototype is intentionally local and conservative:
 - non-local `Host` headers are rejected
 - CORS headers are not emitted
 - profile activation requires `Content-Type: application/json`
+- announcement field updates require `Content-Type: application/json`
 - request bodies are limited to 1 MiB
 - responses include `X-Content-Type-Options: nosniff`
 - responses include `Cache-Control: no-store`
 - the HTTP server uses read, write, idle, and header timeouts
 
-SIP-v1.1 does not include authentication. This implementation relies on same-machine locality and exposes only explicit StreamSignal business operations, not generic command execution.
+SIP v1 does not include authentication. This implementation relies on same-machine locality and exposes only explicit StreamSignal business operations, not generic command execution.
 
 ## Architecture
 
@@ -72,11 +75,17 @@ That package owns:
 
 - HTTP routing and JSON responses
 - SIP response models
-- SIP health, capabilities, status, and profile translation
+- SIP health, capabilities, announcement fields, status, and profile translation
 - in-memory active SIP profile state
 - SIP announcement and end-stream execution and last-run status
 
 The SIP layer uses existing StreamSignal services. It does not replace or redesign announcement profiles, settings, recovery, publishing, or frontend state.
+
+## Announcement Fields
+
+`GET /api/v1/announcement-fields` returns StreamSignal-owned field definitions and current values.
+
+`POST /api/v1/announcement-fields` updates values for existing fields only. LivePanel does not create or delete field definitions; StreamSignal remains responsible for definitions, validation, template rendering, and storage.
 
 ## Profile Activation
 
@@ -175,4 +184,4 @@ GET  /api/v1/actions
 POST /api/v1/action
 ```
 
-The current SIP-v1.1 module contract omits generic command execution and action endpoints. This implementation follows the updated scope and focuses on explicit StreamSignal operations for discovery, health, status, profile discovery, profile activation, current profile lookup, announcement execution/confirmation/status, and end-stream execution/status.
+The current SIP v1 module contract omits generic command execution and action endpoints. This implementation follows the updated scope and focuses on explicit StreamSignal operations for discovery, health, status, announcement-field values, profile discovery, profile activation, current profile lookup, announcement execution/confirmation/status, and end-stream execution/status.

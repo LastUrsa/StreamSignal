@@ -3,18 +3,19 @@ package domain
 import "time"
 
 type Announcement struct {
-	StreamTitle                 string    `json:"streamTitle"`
-	StreamURL                   string    `json:"streamURL"`
-	Category                    string    `json:"category"`
-	Message                     string    `json:"message"`
-	Hashtags                    string    `json:"hashtags"`
-	AnnouncementImageURL        string    `json:"announcementImageURL"`
-	AnnouncementImageDataURL    string    `json:"announcementImageDataURL"`
-	BlueskyCardThumbnailURL     string    `json:"blueskyCardThumbnailURL"`
-	BlueskyCardThumbnailDataURL string    `json:"blueskyCardThumbnailDataURL"`
-	DestinationGroupID          string    `json:"destinationGroupID"`
-	DestinationIDs              []string  `json:"destinationIDs"`
-	CreatedAt                   time.Time `json:"createdAt"`
+	StreamTitle                 string            `json:"streamTitle"`
+	StreamURL                   string            `json:"streamURL"`
+	Category                    string            `json:"category"`
+	Message                     string            `json:"message"`
+	Hashtags                    string            `json:"hashtags"`
+	AnnouncementImageURL        string            `json:"announcementImageURL"`
+	AnnouncementImageDataURL    string            `json:"announcementImageDataURL"`
+	BlueskyCardThumbnailURL     string            `json:"blueskyCardThumbnailURL"`
+	BlueskyCardThumbnailDataURL string            `json:"blueskyCardThumbnailDataURL"`
+	DestinationGroupID          string            `json:"destinationGroupID"`
+	DestinationIDs              []string          `json:"destinationIDs"`
+	Fields                      map[string]string `json:"fields,omitempty"`
+	CreatedAt                   time.Time         `json:"createdAt"`
 }
 
 type DestinationPlatform string
@@ -72,6 +73,14 @@ type AnnouncementProfile struct {
 	UseCount                           int        `json:"useCount"`
 	CreatedAt                          time.Time  `json:"createdAt"`
 	UpdatedAt                          time.Time  `json:"updatedAt"`
+}
+
+type AnnouncementField struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Value     string    `json:"value"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type AppSettings struct {

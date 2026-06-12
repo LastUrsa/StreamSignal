@@ -164,6 +164,26 @@ create unique index if not exists announcement_profiles_name_unique on announcem
 			return addColumnIfMissing(tx, "announcement_profiles", "default_stream_title", "default_stream_title text not null default ''")
 		},
 	},
+	{
+		version: 12,
+		name:    "create_announcement_fields",
+		sql: `
+create table if not exists announcement_fields (
+  id text primary key,
+  name text not null,
+  value text not null,
+  created_at text not null,
+  updated_at text not null
+);
+insert or ignore into announcement_fields(id, name, value, created_at, updated_at)
+values
+  ('game', 'Game', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('category', 'Category', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('event', 'Event', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('guest', 'Guest', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('series', 'Series', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('charity', 'Charity', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));`,
+	},
 }
 
 func ApplyMigrations(db *sql.DB) error {

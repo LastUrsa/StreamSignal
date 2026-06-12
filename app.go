@@ -79,6 +79,7 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 	destinationRepo := secure.NewDestinationRepository(sqlite.NewDestinationRepository(db), secretStore)
 	groupRepo := sqlite.NewDestinationGroupRepository(db)
 	profileRepo := sqlite.NewAnnouncementProfileRepository(db)
+	fieldRepo := sqlite.NewAnnouncementFieldRepository(db)
 	logRepo := sqlite.NewLogRepository(db)
 	historyRepo := sqlite.NewPostHistoryRepository(db)
 	liveNowSessionRepo := secure.NewLiveNowSessionRepository(sqlite.NewLiveNowSessionRepository(db), secretStore)
@@ -89,6 +90,7 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 	destinationSvc := appsvc.NewDestinationService(destinationRepo)
 	groupSvc := appsvc.NewDestinationGroupService(groupRepo)
 	profileSvc := appsvc.NewAnnouncementProfileService(profileRepo, groupRepo)
+	fieldSvc := appsvc.NewAnnouncementFieldService(fieldRepo)
 	logService := appsvc.NewLogService(logRepo)
 	recoverySvc := appsvc.NewLiveNowRecoveryService(destinationRepo, liveNowSessionRepo, blueskyPublisher)
 	executionSvc := appsvc.NewExecutionService(
@@ -111,6 +113,7 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 	sipService.UseDestinations(destinationSvc)
 	sipService.UseDestinationGroups(groupRepo)
 	sipService.UseExecution(executionSvc)
+	sipService.UseAnnouncementFields(fieldSvc)
 
 	return &App{
 		db:              db,

@@ -27,6 +27,11 @@ on:
         type: boolean
         required: true
         default: true
+      run_sip_newman:
+        description: Run SIP Newman smoke test before building artifacts
+        type: boolean
+        required: true
+        default: true
   push:
     tags:
       - 'v*'
@@ -47,9 +52,16 @@ jobs:
       run_mastodon: true
     secrets: inherit
 
+  sip-newman-smoke:
+    name: SIP Newman Smoke
+    needs: provider-workflow-e2e
+    uses: ./.github/workflows/sip-newman-smoke.yml
+    with:
+      enabled: ${{ github.event_name == 'push' || github.event.inputs.run_sip_newman == 'true' }}
+
   windows-installer:
     name: Windows Installer
-    needs: provider-workflow-e2e
+    needs: sip-newman-smoke
     runs-on: windows-latest
 
     steps:
@@ -125,7 +137,7 @@ jobs:
 
   macos-dmg:
     name: macOS DMG
-    needs: provider-workflow-e2e
+    needs: sip-newman-smoke
     runs-on: macos-latest
 
     steps:

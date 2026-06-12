@@ -1,8 +1,8 @@
 # StreamSignal SIP API Reference
 
-This document is the implementation-aligned reference for StreamSignal's SIP-v1.1 surface.
+This document is the implementation-aligned reference for StreamSignal's SIP v1 surface.
 
-SIP-v1.1 is currently a local ecosystem protocol, not a public developer API. StreamSignal exposes SIP over localhost HTTP only, using JSON request and response bodies. Request and response model definitions are centralized in `internal/sip/models.go`.
+SIP v1 is currently a local ecosystem protocol, not a public developer API. StreamSignal exposes SIP over localhost HTTP only, using JSON request and response bodies. Request and response model definitions are centralized in `internal/sip/models.go`.
 
 Implemented endpoints:
 
@@ -11,6 +11,8 @@ GET  /api/v1/app
 GET  /api/v1/health
 GET  /api/v1/capabilities
 GET  /api/v1/status
+GET  /api/v1/announcement-fields
+POST /api/v1/announcement-fields
 GET  /api/v1/profiles
 GET  /api/v1/profile/current
 POST /api/v1/profile
@@ -23,6 +25,28 @@ GET  /api/v1/end-stream/status
 
 Action endpoints are not implemented in this prototype.
 
+## Newman Smoke Test
+
+The full Postman collection includes publishing endpoints for manual integration testing. For automated checks, use the non-publishing Newman smoke collection:
+
+```bash
+./scripts/test-sip-newman.sh
+```
+
+The runner builds and launches StreamSignal in service mode with the separated dev environment, discovers the active SIP port in `47020-47029`, and runs `docs/streamsignal-sip-newman-smoke.postman_collection.json` with the discovered `baseUrl`.
+
+To run against an already running instance:
+
+```bash
+./scripts/test-sip-newman.sh --no-launch
+```
+
+To target a specific SIP URL:
+
+```bash
+./scripts/test-sip-newman.sh --no-launch --base-url http://127.0.0.1:47020
+```
+
 ## Security Posture
 
 The SIP server is intentionally local and narrow:
@@ -32,13 +56,14 @@ The SIP server is intentionally local and narrow:
 - does not emit CORS headers
 - limits request bodies to 1 MiB
 - requires `Content-Type: application/json` for `POST /api/v1/profile`
+- requires `Content-Type: application/json` for `POST /api/v1/announcement-fields`
 - requires `Content-Type: application/json` for `POST /api/v1/announce/confirm`
 - accepts an empty body or `{}` for `POST /api/v1/announce` and `POST /api/v1/end-stream`
 - sends `X-Content-Type-Options: nosniff`
 - sends `Cache-Control: no-store`
 - uses HTTP server read, write, idle, and header timeouts
 
-SIP-v1.1 has no authentication layer. It is intended for same-machine module communication, and no destructive or generic command execution endpoints are exposed.
+SIP v1 has no authentication layer. It is intended for same-machine module communication, and no destructive or generic command execution endpoints are exposed.
 
 ## GET /api/v1/app
 
@@ -51,10 +76,15 @@ Identifies StreamSignal as a SIP participant so another local Starsong applicati
 ```json
 {
   "appId": "streamsignal",
+  "appName": "StreamSignal",
   "name": "StreamSignal",
   "version": "0.3.1",
   "mode": "standalone",
-  "protocolVersion": "1.1"
+  "protocolVersion": 1,
+  "capabilities": [
+    "profiles",
+    "announcement-fields"
+  ]
 }
 ```
 
@@ -63,7 +93,8 @@ Identifies StreamSignal as a SIP participant so another local Starsong applicati
 - `appId` is fixed as `streamsignal`.
 - `version` comes from `wails.json` product metadata.
 - `mode` is `standalone` for normal desktop launches and `service` for `--service` launches.
-- `protocolVersion` is fixed to SIP `1.1`.
+- `protocolVersion` is fixed to SIP `1`.
+- New non-breaking functionality is advertised through `capabilities`.
 
 ## GET /api/v1/health
 
@@ -126,6 +157,10 @@ Advertises the StreamSignal SIP features that another local participant can rely
 
 ```json
 {
+  "capabilities": [
+    "profiles",
+    "announcement-fields"
+  ],
   "supportsProfiles": true,
   "supportsStatusReporting": true,
   "supportsAnnouncements": true
@@ -134,10 +169,73 @@ Advertises the StreamSignal SIP features that another local participant can rely
 
 ## Notes
 
+- `capabilities` contains stable feature names for SIP v1 discovery.
 - `supportsProfiles` is `true` because StreamSignal exposes existing `AnnouncementProfile` records through SIP.
 - `supportsStatusReporting` is `true` because `/api/v1/status` is implemented.
 - `supportsAnnouncements` is `true` because SIP can trigger the existing Go Live and End Stream announcement workflows for the active profile.
-- Command execution and action endpoints are intentionally out of scope for SIP-v1.1.
+- Command execution and action endpoints are intentionally out of scope for SIP v1.
+
+## GET /api/v1/announcement-fields
+
+## Purpose
+
+Returns StreamSignal-owned announcement field definitions and current values. LivePanel may read these values for stream profile coordination.
+
+## Response
+
+```json
+{
+  "fields": [
+    {
+      "id": "game",
+      "name": "Game",
+      "value": "Final Fantasy XIV"
+    },
+    {
+      "id": "event",
+      "name": "Event",
+      "value": "Raid Night"
+    }
+  ]
+}
+```
+
+## POST /api/v1/announcement-fields
+
+## Purpose
+
+Updates current values for existing StreamSignal-owned announcement fields. This endpoint does not create or delete field definitions.
+
+## Request
+
+```json
+{
+  "fields": [
+    {
+      "id": "game",
+      "value": "Clair Obscur"
+    },
+    {
+      "id": "event",
+      "value": "Blind Playthrough"
+    }
+  ]
+}
+```
+
+## Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Notes
+
+- Unknown or blank field IDs return `InvalidRequest`.
+- StreamSignal owns field definitions, validation, rendering, and storage.
+- Field tokens can be used in destination templates as `{game}`, `{event}`, and other field IDs.
 
 ## GET /api/v1/status
 
