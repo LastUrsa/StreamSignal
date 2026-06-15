@@ -228,13 +228,22 @@ func TestAnnouncementFieldRepositorySeedsAndUpdatesValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list seeded announcement fields: %v", err)
 	}
-	if len(fields) != 6 {
+	if len(fields) != 5 {
 		t.Fatalf("expected seeded announcement fields, got %+v", fields)
+	}
+	expectedIDs := []string{"category", "hashtags", "message", "stream_title", "stream_url"}
+	for index, id := range expectedIDs {
+		if fields[index].ID != id {
+			t.Fatalf("expected seeded announcement field %q at index %d, got %+v", id, index, fields)
+		}
 	}
 
 	if err := repository.UpdateValues(ctx, map[string]string{
-		"game":  "Clair Obscur",
-		"event": "Blind Playthrough",
+		"stream_title": "Late Night Stream",
+		"stream_url":   "https://example.com/live",
+		"category":     "Clair Obscur",
+		"hashtags":     "#vtuber #gaming",
+		"message":      "Blind playthrough",
 	}, now); err != nil {
 		t.Fatalf("update announcement fields: %v", err)
 	}
@@ -247,8 +256,64 @@ func TestAnnouncementFieldRepositorySeedsAndUpdatesValues(t *testing.T) {
 	for _, field := range fields {
 		values[field.ID] = field.Value
 	}
-	if values["game"] != "Clair Obscur" || values["event"] != "Blind Playthrough" {
+	if values["stream_title"] != "Late Night Stream" || values["stream_url"] != "https://example.com/live" || values["category"] != "Clair Obscur" || values["hashtags"] != "#vtuber #gaming" || values["message"] != "Blind playthrough" {
 		t.Fatalf("expected updated values, got %+v", values)
+	}
+	if _, ok := values["game"]; ok {
+		t.Fatalf("game is not a supported StreamSignal announcement field: %+v", values)
+	}
+	if _, ok := values["event"]; ok {
+		t.Fatalf("event is not a supported StreamSignal announcement field: %+v", values)
+	}
+	if _, ok := values["guest"]; ok {
+		t.Fatalf("guest is not a supported StreamSignal announcement field: %+v", values)
+	}
+	if _, ok := values["series"]; ok {
+		t.Fatalf("series is not a supported StreamSignal announcement field: %+v", values)
+	}
+	if _, ok := values["charity"]; ok {
+		t.Fatalf("charity is not a supported StreamSignal announcement field: %+v", values)
+	}
+}
+
+func TestAnnouncementFieldMigrationSyncsSupportedFields(t *testing.T) {
+	db := openTestDB(t)
+	if _, err := db.Exec(`
+delete from schema_migrations where version = 13;
+insert into announcement_fields(id, name, value, created_at, updated_at)
+values
+  ('game', 'Game', 'Migrated Game', '2026-06-15T00:00:00Z', '2026-06-15T00:00:00Z'),
+  ('event', 'Event', 'Old Event', '2026-06-15T00:00:00Z', '2026-06-15T00:00:00Z'),
+  ('guest', 'Guest', 'Guest Value', '2026-06-15T00:00:00Z', '2026-06-15T00:00:00Z'),
+  ('series', 'Series', 'Series Value', '2026-06-15T00:00:00Z', '2026-06-15T00:00:00Z'),
+  ('charity', 'Charity', 'Charity Value', '2026-06-15T00:00:00Z', '2026-06-15T00:00:00Z');`); err != nil {
+		t.Fatalf("seed unsupported announcement fields: %v", err)
+	}
+
+	if err := ApplyMigrations(db); err != nil {
+		t.Fatalf("apply cleanup migration: %v", err)
+	}
+
+	fields, err := NewAnnouncementFieldRepository(db).List(context.Background())
+	if err != nil {
+		t.Fatalf("list announcement fields: %v", err)
+	}
+	values := make(map[string]string, len(fields))
+	for _, field := range fields {
+		values[field.ID] = field.Value
+	}
+	for _, id := range []string{"game", "event", "guest", "series", "charity"} {
+		if _, ok := values[id]; ok {
+			t.Fatalf("unsupported announcement field %q was not removed: %+v", id, values)
+		}
+	}
+	for _, id := range []string{"stream_title", "stream_url", "category", "hashtags", "message"} {
+		if _, ok := values[id]; !ok {
+			t.Fatalf("supported announcement field %q missing after cleanup: %+v", id, values)
+		}
+	}
+	if values["category"] != "Migrated Game" {
+		t.Fatalf("expected old game value to migrate into category when category is blank, got %+v", values)
 	}
 }
 

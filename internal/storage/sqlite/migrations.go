@@ -177,12 +177,39 @@ create table if not exists announcement_fields (
 );
 insert or ignore into announcement_fields(id, name, value, created_at, updated_at)
 values
-  ('game', 'Game', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ('category', 'Category', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ('event', 'Event', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ('guest', 'Guest', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ('series', 'Series', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ('charity', 'Charity', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));`,
+  ('stream_title', 'Stream Title', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('stream_url', 'Stream URL', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('category', 'Category/Game', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('hashtags', 'Hashtags', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('message', 'Optional Message', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));`,
+	},
+	{
+		version: 13,
+		name:    "sync_sip_announcement_fields",
+		sql: `
+insert or ignore into announcement_fields(id, name, value, created_at, updated_at)
+values
+  ('stream_title', 'Stream Title', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('stream_url', 'Stream URL', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('category', 'Category/Game', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('hashtags', 'Hashtags', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('message', 'Optional Message', '', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+update announcement_fields
+set value = (
+  select value from announcement_fields as game_field where game_field.id = 'game'
+),
+updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+where id = 'category'
+  and trim(value) = ''
+  and exists(select 1 from announcement_fields as game_field where game_field.id = 'game' and trim(game_field.value) <> '');
+
+update announcement_fields
+set name = 'Category/Game', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+where id = 'category';
+
+delete from announcement_fields
+where id not in ('stream_title', 'stream_url', 'category', 'hashtags', 'message');`,
 	},
 }
 

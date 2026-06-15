@@ -26,6 +26,14 @@ const (
 const announcementConfirmationTTL = 5 * time.Minute
 const maxAnnouncementFieldOverrideValueLength = 500
 
+const (
+	announcementFieldStreamTitle = "stream_title"
+	announcementFieldStreamURL   = "stream_url"
+	announcementFieldCategory    = "category"
+	announcementFieldHashtags    = "hashtags"
+	announcementFieldMessage     = "message"
+)
+
 type ProfileService interface {
 	List(ctx context.Context) ([]domain.AnnouncementProfile, error)
 	MarkUsed(ctx context.Context, id string) error
@@ -508,11 +516,10 @@ func (s *Service) announcementFromProfile(ctx context.Context, profile domain.An
 	if err != nil || len(fields) == 0 {
 		return announcement
 	}
-	announcement.Fields = make(map[string]string, len(fields))
 	for _, field := range fields {
 		id := strings.TrimSpace(strings.ToLower(field.ID))
 		if id != "" {
-			announcement.Fields[id] = field.Value
+			applyAnnouncementFieldValue(&announcement, id, field.Value, false)
 		}
 	}
 	return announcement
@@ -536,9 +543,6 @@ func (s *Service) applyAnnouncementFieldOverrides(ctx context.Context, announcem
 			known[id] = struct{}{}
 		}
 	}
-	if announcement.Fields == nil {
-		announcement.Fields = make(map[string]string, len(overrides))
-	}
 	for _, override := range overrides {
 		id := strings.TrimSpace(strings.ToLower(override.ID))
 		if id == "" {
@@ -551,9 +555,30 @@ func (s *Service) applyAnnouncementFieldOverrides(ctx context.Context, announcem
 		if len(value) > maxAnnouncementFieldOverrideValueLength {
 			return ErrInvalidRequest
 		}
-		announcement.Fields[id] = value
+		applyAnnouncementFieldValue(announcement, id, value, true)
 	}
 	return nil
+}
+
+func applyAnnouncementFieldValue(announcement *domain.Announcement, id string, value string, allowBlank bool) {
+	if announcement == nil {
+		return
+	}
+	if !allowBlank && strings.TrimSpace(value) == "" {
+		return
+	}
+	switch id {
+	case announcementFieldStreamTitle:
+		announcement.StreamTitle = value
+	case announcementFieldStreamURL:
+		announcement.StreamURL = value
+	case announcementFieldCategory:
+		announcement.Category = value
+	case announcementFieldHashtags:
+		announcement.Hashtags = value
+	case announcementFieldMessage:
+		announcement.Message = value
+	}
 }
 
 func sipCapabilities() []string {

@@ -207,7 +207,7 @@
                   "pm.test(\"returns seeded announcement field definitions\", function () {",
                   "  pm.expect(body.fields).to.be.an(\"array\");",
                   "  const ids = body.fields.map((field) => field.id);",
-                  "  [\"game\", \"category\", \"event\", \"guest\", \"series\", \"charity\"].forEach((id) => pm.expect(ids).to.include(id));",
+                  "  [\"stream_title\", \"stream_url\", \"category\", \"hashtags\", \"message\"].forEach((id) => pm.expect(ids).to.include(id));",
                   "  body.fields.forEach((field) => {",
                   "    pm.expect(field.id).to.be.a(\"string\").and.not.empty;",
                   "    pm.expect(field.name).to.be.a(\"string\").and.not.empty;",
@@ -235,7 +235,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fields\": [\n    {\n      \"id\": \"game\",\n      \"value\": \"Clair Obscur\"\n    },\n    {\n      \"id\": \"event\",\n      \"value\": \"Blind Playthrough\"\n    }\n  ]\n}"
+              "raw": "{\n  \"fields\": [\n    {\n      \"id\": \"stream_title\",\n      \"value\": \"Late Night Raid\"\n    },\n    {\n      \"id\": \"stream_url\",\n      \"value\": \"https://example.com/live\"\n    },\n    {\n      \"id\": \"category\",\n      \"value\": \"Final Fantasy XIV\"\n    },\n    {\n      \"id\": \"hashtags\",\n      \"value\": \"#vtuber #raid\"\n    },\n    {\n      \"id\": \"message\",\n      \"value\": \"Raid Night\"\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/announcement-fields",
