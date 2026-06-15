@@ -1,8 +1,6 @@
 name: Provider Workflow E2E
 
 on:
-  schedule:
-    - cron: '17 10 * * *'
   workflow_dispatch:
     inputs:
       run_bluesky:

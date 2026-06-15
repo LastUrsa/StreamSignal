@@ -72,7 +72,7 @@ Wails v2 does not cross-compile macOS app bundles from Windows. Use a Mac runner
 ## CI And Release
 
 - [ ] keep the GitHub quality gate green on the release branch
-- [ ] confirm `Provider Workflow E2E` passes with the configured test-account secrets
+- [ ] confirm `Provider Workflow E2E` passes through the release build, or run it manually with configured test-account secrets before publishing artifacts
 - [ ] validate the release-build workflow before publishing artifacts
 - [ ] confirm branch protection checks match the live job names
 - [ ] confirm release notes describe user-visible changes

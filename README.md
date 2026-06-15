@@ -104,7 +104,7 @@ govulncheck ./...
 ./scripts/build-prod-windows.sh --service-smoke --env dev
 ```
 
-Provider-backed workflow E2E tests are manual because they create and delete real test-account posts:
+Provider-backed workflow E2E tests are on demand because they create and delete real test-account posts. They also run as part of the tag-driven release build before artifacts are produced:
 
 ```bash
 STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
