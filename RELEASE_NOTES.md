@@ -6,6 +6,36 @@ User-facing release notes and planned artifact names. Keep this focused on chang
 
 - None.
 
+## 0.5.1 SIP One-Shot Announcement Field Overrides
+
+StreamSignal 0.5.1 is a patch release focused on letting LivePanel send temporary SIP announcement field values for a single Go Live announcement without changing StreamSignal's stored announcement fields or saved profiles.
+
+### Highlights
+
+- Added optional one-shot `fields` overrides to `POST /api/v1/announce`.
+- Kept empty announce requests working for the existing active-profile workflow.
+- Preserved one-shot field overrides through duplicate-guard confirmation, so LivePanel does not need to resend draft values when confirming.
+- Updated SIP API reference docs and Postman collections for the expanded announce request body.
+
+### Security And Reliability
+
+- SIP remains localhost-only, strict-decodes JSON, rejects unknown request fields, and keeps the existing request size limit.
+- One-shot overrides validate field IDs against existing StreamSignal announcement field definitions and apply only to the in-memory announcement snapshot.
+- One-shot overrides do not update the `announcement_fields` table or announcement profiles.
+- Local release prep quality gate and security scan were run for this release.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.5.1-windows-amd64-installer.exe`
+- `StreamSignal-0.5.1-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.5.1-windows-amd64-installer`
+- `streamsignal-0.5.1-macos-universal-dmg`
+
 ## 0.5.0 SIP Announcement Fields
 
 StreamSignal 0.5.0 is a feature release focused on expanding SIP v1 so LivePanel and other local Starsong tools can read and use the announcement fields that StreamSignal stores for the active profile workflow.

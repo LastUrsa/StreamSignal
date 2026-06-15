@@ -78,7 +78,7 @@ Identifies StreamSignal as a SIP participant so another local Starsong applicati
   "appId": "streamsignal",
   "appName": "StreamSignal",
   "name": "StreamSignal",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "mode": "standalone",
   "protocolVersion": 1,
   "capabilities": [

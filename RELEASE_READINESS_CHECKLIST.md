@@ -4,9 +4,9 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
-Current release target: `0.5.0`.
+Current release target: `0.5.1`.
 
-Latest validation: local quality gate, security scan, and SIP Newman smoke passed on 2026-06-15 after SIP announcement-field expansion.
+Latest validation: local quality gate and security scan passed on 2026-06-15 for the SIP one-shot announcement field override patch. SIP Newman smoke remains blocked locally by a locked Windows temp build executable.
 
 Ship StreamSignal in a way that is:
 
