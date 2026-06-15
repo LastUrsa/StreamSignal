@@ -127,10 +127,11 @@ func (s *Service) handleAnnounce(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	if !readEmptyJSONBody(w, r) {
+	request, ok := readAnnounceRequest(w, r)
+	if !ok {
 		return
 	}
-	response, err := s.Announce(r.Context())
+	response, err := s.Announce(r.Context(), request)
 	writeResult(w, response, err)
 }
 
@@ -206,6 +207,29 @@ func readEmptyJSONBody(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func readAnnounceRequest(w http.ResponseWriter, r *http.Request) (AnnounceRequest, bool) {
+	if (r.Header.Get("Content-Type") != "" || r.ContentLength != 0) && !requireJSON(w, r) {
+		return AnnounceRequest{}, false
+	}
+	defer r.Body.Close()
+	if r.Body == nil {
+		return AnnounceRequest{}, true
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	var request AnnounceRequest
+	if err := decoder.Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return AnnounceRequest{}, false
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, ErrInvalidRequest)
+		return AnnounceRequest{}, false
+	}
+	return request, true
 }
 
 func requireLocalHost(next http.Handler) http.Handler {
