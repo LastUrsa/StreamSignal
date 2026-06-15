@@ -187,13 +187,28 @@ Returns StreamSignal-owned announcement field definitions and current values. Li
 {
   "fields": [
     {
-      "id": "game",
-      "name": "Game",
+      "id": "stream_title",
+      "name": "Stream Title",
+      "value": "Late Night Raid"
+    },
+    {
+      "id": "stream_url",
+      "name": "Stream URL",
+      "value": "https://example.com/live"
+    },
+    {
+      "id": "category",
+      "name": "Category/Game",
       "value": "Final Fantasy XIV"
     },
     {
-      "id": "event",
-      "name": "Event",
+      "id": "hashtags",
+      "name": "Hashtags",
+      "value": "#vtuber #raid"
+    },
+    {
+      "id": "message",
+      "name": "Optional Message",
       "value": "Raid Night"
     }
   ]
@@ -212,12 +227,24 @@ Updates current values for existing StreamSignal-owned announcement fields. This
 {
   "fields": [
     {
-      "id": "game",
-      "value": "Clair Obscur"
+      "id": "stream_title",
+      "value": "Late Night Raid"
     },
     {
-      "id": "event",
-      "value": "Blind Playthrough"
+      "id": "stream_url",
+      "value": "https://example.com/live"
+    },
+    {
+      "id": "category",
+      "value": "Final Fantasy XIV"
+    },
+    {
+      "id": "hashtags",
+      "value": "#vtuber #raid"
+    },
+    {
+      "id": "message",
+      "value": "Raid Night"
     }
   ]
 }
@@ -235,7 +262,7 @@ Updates current values for existing StreamSignal-owned announcement fields. This
 
 - Unknown or blank field IDs return `InvalidRequest`.
 - StreamSignal owns field definitions, validation, rendering, and storage.
-- Field tokens can be used in destination templates as `{game}`, `{event}`, and other field IDs.
+- Announcement fields map to StreamSignal's existing template variables: `{{stream_title}}`, `{{stream_url}}`, `{{category}}`, `{{hashtags}}`, and `{{message}}`.
 
 ## GET /api/v1/status
 
@@ -421,11 +448,23 @@ The body may also be empty. To override announcement field values for this annou
 {
   "fields": [
     {
-      "id": "game",
+      "id": "stream_title",
+      "value": "Late Night Raid"
+    },
+    {
+      "id": "stream_url",
+      "value": "https://example.com/live"
+    },
+    {
+      "id": "category",
       "value": "Final Fantasy XIV"
     },
     {
-      "id": "event",
+      "id": "hashtags",
+      "value": "#vtuber #raid"
+    },
+    {
+      "id": "message",
       "value": "Raid Night"
     }
   ]

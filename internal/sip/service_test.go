@@ -178,29 +178,32 @@ func TestProfilesAndActivationUseExistingAnnouncementProfiles(t *testing.T) {
 
 func TestAnnouncementFieldsReadAndUpdateValues(t *testing.T) {
 	fields := &fakeAnnouncementFields{fields: []domain.AnnouncementField{
-		{ID: "game", Name: "Game", Value: "Final Fantasy XIV"},
-		{ID: "event", Name: "Event", Value: "Raid Night"},
+		{ID: "stream_title", Name: "Stream Title", Value: "Late Night Stream"},
+		{ID: "stream_url", Name: "Stream URL", Value: "https://example.com/live"},
+		{ID: "category", Name: "Category/Game", Value: "Final Fantasy XIV"},
+		{ID: "hashtags", Name: "Hashtags", Value: "#vtuber #gaming"},
+		{ID: "message", Name: "Optional Message", Value: "Raid Night"},
 	}}
 	service := newTestService()
 	service.UseAnnouncementFields(fields)
 
 	var listed AnnouncementFieldsResponse
 	requestJSON(t, service.Handler(), http.MethodGet, "/api/v1/announcement-fields", nil, http.StatusOK, &listed)
-	if len(listed.Fields) != 2 || listed.Fields[0].ID != "game" || listed.Fields[0].Value != "Final Fantasy XIV" {
+	if len(listed.Fields) != 5 || listed.Fields[0].ID != "stream_title" || listed.Fields[0].Value != "Late Night Stream" {
 		t.Fatalf("unexpected announcement fields response: %+v", listed)
 	}
 
 	var updated SuccessResponse
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announcement-fields", UpdateAnnouncementFieldsRequest{
 		Fields: []UpdateAnnouncementFieldRequest{
-			{ID: " game ", Value: "Clair Obscur"},
-			{ID: "event", Value: "Blind Playthrough"},
+			{ID: " category ", Value: "Clair Obscur"},
+			{ID: "message", Value: "Blind Playthrough"},
 		},
 	}, http.StatusOK, &updated)
 	if !updated.Success {
 		t.Fatalf("expected successful update, got %+v", updated)
 	}
-	if fields.values["game"] != "Clair Obscur" || fields.values["event"] != "Blind Playthrough" {
+	if fields.values["category"] != "Clair Obscur" || fields.values["message"] != "Blind Playthrough" {
 		t.Fatalf("expected field values to update, got %+v", fields.values)
 	}
 }
@@ -224,7 +227,7 @@ func TestAnnouncementFieldsRejectInvalidUpdates(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			service := newTestService()
 			service.UseAnnouncementFields(&fakeAnnouncementFields{
-				fields: []domain.AnnouncementField{{ID: "game", Name: "Game"}},
+				fields: []domain.AnnouncementField{{ID: "category", Name: "Category/Game"}},
 				err:    errors.New("missing field"),
 			})
 
@@ -301,8 +304,11 @@ func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
 	service.profiles = profiles
 	service.UseExecution(execution)
 	service.UseAnnouncementFields(&fakeAnnouncementFields{fields: []domain.AnnouncementField{
-		{ID: "game", Name: "Game", Value: "Clair Obscur"},
-		{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+		{ID: "stream_title", Name: "Stream Title", Value: ""},
+		{ID: "stream_url", Name: "Stream URL", Value: ""},
+		{ID: "category", Name: "Category/Game", Value: "Clair Obscur"},
+		{ID: "hashtags", Name: "Hashtags", Value: "#co33"},
+		{ID: "message", Name: "Optional Message", Value: "Blind Playthrough"},
 	}})
 
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
@@ -316,11 +322,8 @@ func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
 		t.Fatalf("expected one announcement execution, got %d", len(execution.announcements))
 	}
 	got := execution.announcements[0]
-	if got.StreamTitle != "Boss Night" || got.StreamURL != "https://example.com/live" || got.DestinationGroupID != "main-group" || got.AnnouncementImageURL != "https://example.com/card.png" {
+	if got.StreamTitle != "Boss Night" || got.StreamURL != "https://example.com/live" || got.Category != "Clair Obscur" || got.Message != "Blind Playthrough" || got.Hashtags != "#co33" || got.DestinationGroupID != "main-group" || got.AnnouncementImageURL != "https://example.com/card.png" {
 		t.Fatalf("expected profile defaults to become announcement, got %+v", got)
-	}
-	if got.Fields["game"] != "Clair Obscur" || got.Fields["event"] != "Blind Playthrough" {
-		t.Fatalf("expected announcement fields on execution snapshot, got %+v", got.Fields)
 	}
 
 	var status AnnounceStatusResponse
@@ -340,12 +343,18 @@ func TestAnnounceAppliesOneShotFieldOverridesWithoutPersisting(t *testing.T) {
 	}
 	fields := &fakeAnnouncementFields{
 		fields: []domain.AnnouncementField{
-			{ID: "game", Name: "Game", Value: "Clair Obscur"},
-			{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+			{ID: "stream_title", Name: "Stream Title", Value: "Stored Stream"},
+			{ID: "stream_url", Name: "Stream URL", Value: "https://example.com/stored"},
+			{ID: "category", Name: "Category/Game", Value: "Clair Obscur"},
+			{ID: "hashtags", Name: "Hashtags", Value: "#stored"},
+			{ID: "message", Name: "Optional Message", Value: "Blind Playthrough"},
 		},
 		values: map[string]string{
-			"game":  "Clair Obscur",
-			"event": "Blind Playthrough",
+			"stream_title": "Stored Stream",
+			"stream_url":   "https://example.com/stored",
+			"category":     "Clair Obscur",
+			"hashtags":     "#stored",
+			"message":      "Blind Playthrough",
 		},
 	}
 	service := newTestService()
@@ -357,8 +366,11 @@ func TestAnnounceAppliesOneShotFieldOverridesWithoutPersisting(t *testing.T) {
 	var announced AnnounceResponse
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", AnnounceRequest{
 		Fields: []AnnouncementFieldOverride{
-			{ID: " GAME ", Value: " Final Fantasy XIV "},
-			{ID: "event", Value: "Raid Night"},
+			{ID: " STREAM_TITLE ", Value: " Late Night Raid "},
+			{ID: "stream_url", Value: "https://example.com/live"},
+			{ID: "category", Value: "Final Fantasy XIV"},
+			{ID: "hashtags", Value: "#vtuber #raid"},
+			{ID: "message", Value: "Raid Night"},
 		},
 	}, http.StatusOK, &announced)
 	if !announced.Success || announced.Error != "" {
@@ -368,13 +380,13 @@ func TestAnnounceAppliesOneShotFieldOverridesWithoutPersisting(t *testing.T) {
 		t.Fatalf("expected one announcement execution, got %d", len(execution.announcements))
 	}
 	got := execution.announcements[0]
-	if got.Fields["game"] != "Final Fantasy XIV" || got.Fields["event"] != "Raid Night" {
-		t.Fatalf("expected one-shot field overrides on execution snapshot, got %+v", got.Fields)
+	if got.StreamTitle != "Late Night Raid" || got.StreamURL != "https://example.com/live" || got.Category != "Final Fantasy XIV" || got.Hashtags != "#vtuber #raid" || got.Message != "Raid Night" {
+		t.Fatalf("expected one-shot field overrides on execution snapshot, got %+v", got)
 	}
-	if fields.values["game"] != "Clair Obscur" || fields.values["event"] != "Blind Playthrough" {
+	if fields.values["stream_title"] != "Stored Stream" || fields.values["stream_url"] != "https://example.com/stored" || fields.values["category"] != "Clair Obscur" || fields.values["hashtags"] != "#stored" || fields.values["message"] != "Blind Playthrough" {
 		t.Fatalf("expected persistent field values to remain unchanged, got %+v", fields.values)
 	}
-	if fields.fields[0].Value != "Clair Obscur" || fields.fields[1].Value != "Blind Playthrough" {
+	if fields.fields[0].Value != "Stored Stream" || fields.fields[1].Value != "https://example.com/stored" || fields.fields[2].Value != "Clair Obscur" || fields.fields[3].Value != "#stored" || fields.fields[4].Value != "Blind Playthrough" {
 		t.Fatalf("expected field definitions to remain unchanged, got %+v", fields.fields)
 	}
 }
@@ -394,7 +406,7 @@ func TestAnnounceRejectsInvalidOneShotFieldOverrides(t *testing.T) {
 		},
 		{
 			name: "too long value",
-			body: AnnounceRequest{Fields: []AnnouncementFieldOverride{{ID: "game", Value: strings.Repeat("x", maxAnnouncementFieldOverrideValueLength+1)}}},
+			body: AnnounceRequest{Fields: []AnnouncementFieldOverride{{ID: "category", Value: strings.Repeat("x", maxAnnouncementFieldOverrideValueLength+1)}}},
 		},
 	}
 
@@ -404,7 +416,7 @@ func TestAnnounceRejectsInvalidOneShotFieldOverrides(t *testing.T) {
 			service := newTestService()
 			service.UseExecution(execution)
 			service.UseAnnouncementFields(&fakeAnnouncementFields{
-				fields: []domain.AnnouncementField{{ID: "game", Name: "Game", Value: "Clair Obscur"}},
+				fields: []domain.AnnouncementField{{ID: "category", Name: "Category/Game", Value: "Clair Obscur"}},
 			})
 			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
 
@@ -495,8 +507,11 @@ func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
 	service.profiles = profiles
 	service.UseExecution(execution)
 	service.UseAnnouncementFields(&fakeAnnouncementFields{fields: []domain.AnnouncementField{
-		{ID: "game", Name: "Game", Value: "Clair Obscur"},
-		{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+		{ID: "stream_title", Name: "Stream Title", Value: ""},
+		{ID: "stream_url", Name: "Stream URL", Value: ""},
+		{ID: "category", Name: "Category/Game", Value: "Clair Obscur"},
+		{ID: "hashtags", Name: "Hashtags", Value: ""},
+		{ID: "message", Name: "Optional Message", Value: "Blind Playthrough"},
 	}})
 
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
@@ -504,8 +519,11 @@ func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
 	var guarded AnnounceResponse
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", AnnounceRequest{
 		Fields: []AnnouncementFieldOverride{
-			{ID: "game", Value: "Final Fantasy XIV"},
-			{ID: "event", Value: "Raid Night"},
+			{ID: "stream_title", Value: "Late Night Raid"},
+			{ID: "stream_url", Value: "https://example.com/raid"},
+			{ID: "category", Value: "Final Fantasy XIV"},
+			{ID: "hashtags", Value: "#raid"},
+			{ID: "message", Value: "Raid Night"},
 		},
 	}, http.StatusOK, &guarded)
 	if guarded.Success || !guarded.RequiresConfirmation || guarded.ConfirmationID == "" || !strings.Contains(guarded.Error, "Continue?") {
@@ -527,11 +545,8 @@ func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
 		t.Fatalf("expected one force execution, got %d", len(execution.forceAnnouncements))
 	}
 	forced := execution.forceAnnouncements[0]
-	if forced.StreamTitle != "Boss Night" || forced.StreamURL != "https://example.com/live" || forced.DestinationGroupID != "main-group" {
+	if forced.StreamTitle != "Late Night Raid" || forced.StreamURL != "https://example.com/raid" || forced.Category != "Final Fantasy XIV" || forced.Hashtags != "#raid" || forced.Message != "Raid Night" || forced.DestinationGroupID != "main-group" {
 		t.Fatalf("expected force execution to use guarded snapshot, got %+v", forced)
-	}
-	if forced.Fields["game"] != "Final Fantasy XIV" || forced.Fields["event"] != "Raid Night" {
-		t.Fatalf("expected force execution to use guarded field overrides, got %+v", forced.Fields)
 	}
 
 	var confirmedStatus AnnounceStatusResponse

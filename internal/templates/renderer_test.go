@@ -35,13 +35,12 @@ func TestRenderLeavesUnknownVariablesUnchanged(t *testing.T) {
 func TestRenderReplacesAnnouncementFieldTokens(t *testing.T) {
 	announcement := domain.Announcement{
 		Fields: map[string]string{
-			"game":  "Clair Obscur",
-			"event": "Blind Playthrough",
+			"custom_label": "Community Night",
 		},
 	}
 
-	rendered := Render("Going live with {game}! Today's event: {event}.", announcement, domain.PlatformDiscord, time.Now().UTC())
-	expected := "Going live with Clair Obscur! Today's event: Blind Playthrough."
+	rendered := Render("Going live for {custom_label}.", announcement, domain.PlatformDiscord, time.Now().UTC())
+	expected := "Going live for Community Night."
 	if rendered != expected {
 		t.Fatalf("expected %q, got %q", expected, rendered)
 	}
