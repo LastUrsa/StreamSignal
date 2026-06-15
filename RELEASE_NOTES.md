@@ -6,6 +6,37 @@ User-facing release notes and planned artifact names. Keep this focused on chang
 
 - None.
 
+## 0.5.0 SIP Announcement Fields
+
+StreamSignal 0.5.0 is a feature release focused on expanding SIP v1 so LivePanel and other local Starsong tools can read and use the announcement fields that StreamSignal stores for the active profile workflow.
+
+### Highlights
+
+- Added SIP announcement-field capability reporting through `/api/v1/app`.
+- Added SIP announcement-field models, handlers, service coverage, SQLite persistence, and Wails service wiring.
+- Added template rendering support for the expanded announcement field set.
+- Updated SIP API reference docs and Postman collections for the announcement-field surface.
+- Added a Newman SIP smoke collection and script, plus CI workflow coverage for the local SIP smoke path.
+
+### Security And Reliability
+
+- SIP remains localhost-only, rejects non-local Host headers, avoids CORS, and exposes no generic command/action endpoints.
+- Announcement-field responses remain scoped to local SIP integration data and do not expose raw destination credentials, webhook URLs, access tokens, or app passwords.
+- Added targeted tests for SIP announcement fields, SQLite migrations, and template rendering.
+- Local release prep quality gate and security scan were run for this release.
+
+### Release Artifacts
+
+Planned artifact names:
+
+- `StreamSignal-0.5.0-windows-amd64-installer.exe`
+- `StreamSignal-0.5.0-macos-universal.dmg`
+
+The GitHub release build workflow uploads matching build artifacts and attaches them to GitHub Releases created from `v*` tags:
+
+- `streamsignal-0.5.0-windows-amd64-installer`
+- `streamsignal-0.5.0-macos-universal-dmg`
+
 ## 0.4.0 LivePanel And SIP Control
 
 StreamSignal 0.4.0 is a feature release focused on LivePanel integration through StreamSignal's localhost-only SIP API, service-mode launch support, and release validation around that new control surface.

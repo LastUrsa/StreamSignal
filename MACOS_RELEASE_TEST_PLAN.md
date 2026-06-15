@@ -29,7 +29,7 @@ Wails creates the `.app` bundle. DMG creation should happen after the `.app` bun
 Initial tester DMG option:
 
 ```bash
-hdiutil create -volname StreamSignal -srcfolder build/bin/StreamSignal.app -ov -format UDZO build/bin/StreamSignal-0.4.0-macos-universal.dmg
+hdiutil create -volname StreamSignal -srcfolder build/bin/StreamSignal.app -ov -format UDZO build/bin/StreamSignal-0.5.0-macos-universal.dmg
 ```
 
 Before public release, decide whether the DMG should be:

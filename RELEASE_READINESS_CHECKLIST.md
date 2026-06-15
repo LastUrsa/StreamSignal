@@ -4,9 +4,9 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
-Current release target: `0.4.0`.
+Current release target: `0.5.0`.
 
-Latest validation: local quality gate and security scan passed on 2026-06-11 after installer metadata alignment; the Windows NSIS installer build also passed locally.
+Latest validation: local quality gate, security scan, and SIP Newman smoke passed on 2026-06-15 after SIP announcement-field expansion.
 
 Ship StreamSignal in a way that is:
 

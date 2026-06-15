@@ -96,7 +96,7 @@ type TabKey = 'home' | 'destinations' | 'profiles' | 'settings' | 'logs';
 
 const STORED_SECRET_TOKEN = '[stored securely]';
 const SHOW_DEBUG_WORKFLOW_UI = import.meta.env.DEV || import.meta.env.MODE === 'debug';
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.5.0';
 const TAB_KEYS: TabKey[] = ['home', 'destinations', 'profiles', 'settings', 'logs'];
 const PRODUCTION_TAB_KEYS: TabKey[] = ['home', 'destinations', 'profiles', 'settings'];
 
