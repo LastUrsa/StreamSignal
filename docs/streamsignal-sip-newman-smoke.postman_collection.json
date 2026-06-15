@@ -395,7 +395,7 @@
                 "announce"
               ]
             },
-            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object. Expect 400 InvalidRequest."
+            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object or optional fields overrides. Unknown fields still return 400 InvalidRequest."
           },
           "response": [],
           "event": [

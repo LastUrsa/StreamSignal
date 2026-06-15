@@ -102,6 +102,15 @@ type CurrentProfileResponse struct {
 	Name string `json:"name"`
 }
 
+type AnnouncementFieldOverride struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+}
+
+type AnnounceRequest struct {
+	Fields []AnnouncementFieldOverride `json:"fields,omitempty"`
+}
+
 type AnnounceResponse struct {
 	Success              bool   `json:"success"`
 	RequiresConfirmation bool   `json:"requiresConfirmation,omitempty"`

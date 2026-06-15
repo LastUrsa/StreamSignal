@@ -415,7 +415,22 @@ Triggers a Go Live announcement using the currently active SIP profile. This use
 {}
 ```
 
-The body may also be empty.
+The body may also be empty. To override announcement field values for this announcement only, include `fields`:
+
+```json
+{
+  "fields": [
+    {
+      "id": "game",
+      "value": "Final Fantasy XIV"
+    },
+    {
+      "id": "event",
+      "value": "Raid Night"
+    }
+  ]
+}
+```
 
 ## Response
 
@@ -450,8 +465,12 @@ Duplicate guard:
 ## Notes
 
 - The active profile's default fields become the announcement input.
+- StreamSignal loads current persistent announcement field values, then overlays optional `fields` values onto the in-memory announcement snapshot.
+- One-shot field overrides are not written to `announcement_fields` and do not update announcement profiles.
+- Unknown, blank, or invalid field overrides return `InvalidRequest`.
 - Execution uses the same `GoLive` path as the standalone UI.
 - Duplicate guard responses include a single-use `confirmationId` for `POST /api/v1/announce/confirm`.
+- Duplicate guard confirmation preserves the exact announcement snapshot from `POST /api/v1/announce`, including one-shot field overrides. Clients do not resend overrides to confirm.
 - Validation errors are returned as `success: false`.
 
 ## POST /api/v1/announce/confirm
@@ -620,6 +639,7 @@ UnexpectedFailure
 - `POST /api/v1/announce` receives a body without `Content-Type: application/json`
 - `POST /api/v1/announce` receives malformed JSON
 - `POST /api/v1/announce` receives unknown JSON fields
+- `POST /api/v1/announce` receives blank, unknown, or invalid `fields` entries
 - `POST /api/v1/announce` receives trailing JSON values
 - `POST /api/v1/announce/confirm` receives invalid JSON
 - `POST /api/v1/announce/confirm` receives an empty, expired, reused, or unknown `confirmationId`

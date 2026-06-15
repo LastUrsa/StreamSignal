@@ -362,7 +362,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n  \"fields\": [\n    {\n      \"id\": \"game\",\n      \"value\": \"Final Fantasy XIV\"\n    },\n    {\n      \"id\": \"event\",\n      \"value\": \"Raid Night\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -380,7 +380,7 @@
                 "announce"
               ]
             },
-            "description": "Triggers the existing Go Live announcement workflow using the active SIP profile defaults. This can publish to configured destinations."
+            "description": "Triggers the existing Go Live announcement workflow using the active SIP profile defaults plus optional one-shot announcement field overrides. Overrides apply only to this execution and are not persisted."
           },
           "response": []
         },
@@ -526,7 +526,7 @@
                 "announce"
               ]
             },
-            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object. Expect 400 InvalidRequest."
+            "description": "Security check: POST /api/v1/announce accepts only an empty JSON object or optional fields overrides. Unknown fields still return 400 InvalidRequest."
           },
           "response": []
         },

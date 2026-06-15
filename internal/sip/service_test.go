@@ -330,6 +330,96 @@ func TestAnnounceWorkflowUsesActiveProfileAndExecutionService(t *testing.T) {
 	}
 }
 
+func TestAnnounceAppliesOneShotFieldOverridesWithoutPersisting(t *testing.T) {
+	execution := &fakeExecution{
+		summary: domain.ExecutionSummary{
+			Status:       domain.ExecutionSummaryStatusSuccess,
+			TotalCount:   1,
+			SuccessCount: 1,
+		},
+	}
+	fields := &fakeAnnouncementFields{
+		fields: []domain.AnnouncementField{
+			{ID: "game", Name: "Game", Value: "Clair Obscur"},
+			{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+		},
+		values: map[string]string{
+			"game":  "Clair Obscur",
+			"event": "Blind Playthrough",
+		},
+	}
+	service := newTestService()
+	service.UseExecution(execution)
+	service.UseAnnouncementFields(fields)
+
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+	var announced AnnounceResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", AnnounceRequest{
+		Fields: []AnnouncementFieldOverride{
+			{ID: " GAME ", Value: " Final Fantasy XIV "},
+			{ID: "event", Value: "Raid Night"},
+		},
+	}, http.StatusOK, &announced)
+	if !announced.Success || announced.Error != "" {
+		t.Fatalf("expected announcement success, got %+v", announced)
+	}
+	if len(execution.announcements) != 1 {
+		t.Fatalf("expected one announcement execution, got %d", len(execution.announcements))
+	}
+	got := execution.announcements[0]
+	if got.Fields["game"] != "Final Fantasy XIV" || got.Fields["event"] != "Raid Night" {
+		t.Fatalf("expected one-shot field overrides on execution snapshot, got %+v", got.Fields)
+	}
+	if fields.values["game"] != "Clair Obscur" || fields.values["event"] != "Blind Playthrough" {
+		t.Fatalf("expected persistent field values to remain unchanged, got %+v", fields.values)
+	}
+	if fields.fields[0].Value != "Clair Obscur" || fields.fields[1].Value != "Blind Playthrough" {
+		t.Fatalf("expected field definitions to remain unchanged, got %+v", fields.fields)
+	}
+}
+
+func TestAnnounceRejectsInvalidOneShotFieldOverrides(t *testing.T) {
+	tests := []struct {
+		name string
+		body AnnounceRequest
+	}{
+		{
+			name: "blank id",
+			body: AnnounceRequest{Fields: []AnnouncementFieldOverride{{ID: "", Value: "x"}}},
+		},
+		{
+			name: "unknown id",
+			body: AnnounceRequest{Fields: []AnnouncementFieldOverride{{ID: "unknown", Value: "x"}}},
+		},
+		{
+			name: "too long value",
+			body: AnnounceRequest{Fields: []AnnouncementFieldOverride{{ID: "game", Value: strings.Repeat("x", maxAnnouncementFieldOverrideValueLength+1)}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			execution := &fakeExecution{}
+			service := newTestService()
+			service.UseExecution(execution)
+			service.UseAnnouncementFields(&fakeAnnouncementFields{
+				fields: []domain.AnnouncementField{{ID: "game", Name: "Game", Value: "Clair Obscur"}},
+			})
+			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+
+			var response ErrorResponse
+			requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", test.body, http.StatusBadRequest, &response)
+			if response.Error != "InvalidRequest" {
+				t.Fatalf("expected InvalidRequest, got %+v", response)
+			}
+			if len(execution.announcements) != 0 {
+				t.Fatalf("expected invalid overrides not to execute, got %+v", execution.announcements)
+			}
+		})
+	}
+}
+
 func TestAnnounceReportsMissingProfileAndValidationFailures(t *testing.T) {
 	t.Run("missing profile", func(t *testing.T) {
 		service := newTestService()
@@ -404,11 +494,20 @@ func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
 	service := newTestService()
 	service.profiles = profiles
 	service.UseExecution(execution)
+	service.UseAnnouncementFields(&fakeAnnouncementFields{fields: []domain.AnnouncementField{
+		{ID: "game", Name: "Game", Value: "Clair Obscur"},
+		{ID: "event", Name: "Event", Value: "Blind Playthrough"},
+	}})
 
 	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Gaming Stream"}, http.StatusOK, nil)
 
 	var guarded AnnounceResponse
-	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", nil, http.StatusOK, &guarded)
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", AnnounceRequest{
+		Fields: []AnnouncementFieldOverride{
+			{ID: "game", Value: "Final Fantasy XIV"},
+			{ID: "event", Value: "Raid Night"},
+		},
+	}, http.StatusOK, &guarded)
 	if guarded.Success || !guarded.RequiresConfirmation || guarded.ConfirmationID == "" || !strings.Contains(guarded.Error, "Continue?") {
 		t.Fatalf("expected duplicate guard response, got %+v", guarded)
 	}
@@ -430,6 +529,9 @@ func TestAnnounceDuplicateGuardCanBeConfirmedOnce(t *testing.T) {
 	forced := execution.forceAnnouncements[0]
 	if forced.StreamTitle != "Boss Night" || forced.StreamURL != "https://example.com/live" || forced.DestinationGroupID != "main-group" {
 		t.Fatalf("expected force execution to use guarded snapshot, got %+v", forced)
+	}
+	if forced.Fields["game"] != "Final Fantasy XIV" || forced.Fields["event"] != "Raid Night" {
+		t.Fatalf("expected force execution to use guarded field overrides, got %+v", forced.Fields)
 	}
 
 	var confirmedStatus AnnounceStatusResponse
@@ -622,6 +724,10 @@ func TestAnnounceRequestValidation(t *testing.T) {
 	service.UseExecution(&fakeExecution{})
 
 	assertEmptyOperationRequestValidation(t, service.Handler(), "/api/v1/announce")
+
+	var announced AnnounceResponse
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/profile", map[string]string{"profile": "Music Stream"}, http.StatusOK, nil)
+	requestJSON(t, service.Handler(), http.MethodPost, "/api/v1/announce", AnnounceRequest{Fields: []AnnouncementFieldOverride{}}, http.StatusOK, &announced)
 }
 
 func TestEndStreamRequestValidation(t *testing.T) {

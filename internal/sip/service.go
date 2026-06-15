@@ -24,6 +24,7 @@ const (
 )
 
 const announcementConfirmationTTL = 5 * time.Minute
+const maxAnnouncementFieldOverrideValueLength = 500
 
 type ProfileService interface {
 	List(ctx context.Context) ([]domain.AnnouncementProfile, error)
@@ -331,7 +332,7 @@ func (s *Service) CurrentProfile(ctx context.Context) (CurrentProfileResponse, e
 	return CurrentProfileResponse{ID: active.ID, Name: active.Name}, nil
 }
 
-func (s *Service) Announce(ctx context.Context) (AnnounceResponse, error) {
+func (s *Service) Announce(ctx context.Context, request AnnounceRequest) (AnnounceResponse, error) {
 	if s == nil {
 		return AnnounceResponse{Success: false, Error: "SIP service is unavailable"}, nil
 	}
@@ -350,6 +351,9 @@ func (s *Service) Announce(ctx context.Context) (AnnounceResponse, error) {
 	}
 
 	announcement := s.announcementFromProfile(ctx, *active)
+	if err := s.applyAnnouncementFieldOverrides(ctx, &announcement, request.Fields); err != nil {
+		return AnnounceResponse{}, err
+	}
 	summary, err := s.execution.GoLive(ctx, announcement)
 	if err != nil {
 		response := AnnounceResponse{Success: false, Error: err.Error()}
@@ -512,6 +516,44 @@ func (s *Service) announcementFromProfile(ctx context.Context, profile domain.An
 		}
 	}
 	return announcement
+}
+
+func (s *Service) applyAnnouncementFieldOverrides(ctx context.Context, announcement *domain.Announcement, overrides []AnnouncementFieldOverride) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	if s == nil || s.fields == nil || announcement == nil {
+		return ErrInvalidRequest
+	}
+	fields, err := s.fields.List(ctx)
+	if err != nil {
+		return ErrInvalidRequest
+	}
+	known := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		id := strings.TrimSpace(strings.ToLower(field.ID))
+		if id != "" {
+			known[id] = struct{}{}
+		}
+	}
+	if announcement.Fields == nil {
+		announcement.Fields = make(map[string]string, len(overrides))
+	}
+	for _, override := range overrides {
+		id := strings.TrimSpace(strings.ToLower(override.ID))
+		if id == "" {
+			return ErrInvalidRequest
+		}
+		if _, ok := known[id]; !ok {
+			return ErrInvalidRequest
+		}
+		value := strings.TrimSpace(override.Value)
+		if len(value) > maxAnnouncementFieldOverrideValueLength {
+			return ErrInvalidRequest
+		}
+		announcement.Fields[id] = value
+	}
+	return nil
 }
 
 func sipCapabilities() []string {
