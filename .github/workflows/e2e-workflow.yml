@@ -3,6 +3,11 @@ name: Provider Workflow E2E
 on:
   workflow_dispatch:
     inputs:
+      enabled:
+        description: Enable provider-backed tests (creates and deletes test posts)
+        type: boolean
+        required: false
+        default: true
       run_bluesky:
         description: Run the Bluesky workflow E2E scenario
         type: boolean
@@ -67,7 +72,7 @@ jobs:
           E2E_MASTODON_INSTANCE_URL: ${{ secrets.E2E_MASTODON_INSTANCE_URL }}
           E2E_MASTODON_ACCESS_TOKEN: ${{ secrets.E2E_MASTODON_ACCESS_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ] && [ "${{ inputs.enabled }}" != "true" ]; then
+          if [ "${{ inputs.enabled }}" != "true" ]; then
             echo "Provider-backed workflow E2E disabled for this release run."
             exit 0
           fi
