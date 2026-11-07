@@ -41,7 +41,7 @@ It keeps app data on the local machine, stores runtime secrets in the OS credent
 
 ## Release support
 
-Version 1.0 targets Windows x64 and macOS universal. Windows requires WebView2; macOS packaging is built on a macOS runner. Release builds are currently unsigned/not notarized; installation may require OS approval. Installer and DMG downloads are published on [GitHub Releases](https://github.com/LastUrsa/StreamSignal/releases).
+Version 1.0 targets Windows x64 and macOS universal. Windows requires WebView2; macOS packaging is built on a macOS runner. The workflow does not configure Windows Authenticode signing or macOS Developer ID signing/notarization. Wails may apply an ad-hoc macOS signature; installation can still require OS approval. Installer and DMG downloads are published on [GitHub Releases](https://github.com/LastUrsa/StreamSignal/releases).
 
 Provider credentials and destination permissions are required for posting. A configured credential reference does not prove remote authentication. Unknown publication outcomes should be inspected by operation ID before retrying.
 

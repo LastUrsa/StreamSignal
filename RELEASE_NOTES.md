@@ -8,7 +8,7 @@ First stable release for Windows x64 and macOS universal. Keeps existing local d
 
 - Includes Go Live/End Stream publishing to Discord, Bluesky and Mastodon; destination selection/groups; message previews; reusable profiles; duplicate confirmation; and Bluesky Live Now recovery.
 - Windows installer: `StreamSignal-1.0.0-windows-amd64-installer.exe`.
-- macOS DMG: `StreamSignal-1.0.0-macos-universal.dmg`. The current workflow does not sign or notarize the macOS bundle; Gatekeeper may require user approval. See `MACOS_RELEASE_TEST_PLAN.md` for platform checks.
+- macOS DMG: `StreamSignal-1.0.0-macos-universal.dmg`. The workflow does not configure Developer ID signing or notarization. Wails may apply an ad-hoc signature; Gatekeeper may still require user approval. See `MACOS_RELEASE_TEST_PLAN.md` for platform checks.
 
 ### Reliability and observability
 
