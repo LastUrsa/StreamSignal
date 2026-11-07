@@ -23,7 +23,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/announce", s.handleAnnounce)
 	mux.HandleFunc("/api/v1/end-stream/status", s.handleEndStreamStatus)
 	mux.HandleFunc("/api/v1/end-stream", s.handleEndStream)
-	return securityHeaders(requireLocalHost(mux))
+	return securityHeaders(s.observer.Wrap(requireLocalHost(mux)))
 }
 
 func (s *Service) handleApp(w http.ResponseWriter, r *http.Request) {

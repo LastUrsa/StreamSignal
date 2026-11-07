@@ -721,3 +721,10 @@ The shared SIP model layer defines these contract types in `internal/sip/models.
 - `ErrorResponse`
 
 Handlers and tests use these centralized models directly. No Swagger, OpenAPI generation, Swagger UI, code generation, API explorer, or API client tooling is part of this prototype.
+
+
+## Additive Observability Extension
+
+Adds capability-advertised SIP operations and diagnostics, correlated safe operation logs, per-destination publication/follow-up results, credential readiness, opt-in asynchronous publishing, and durable idempotency/restart recovery. Existing synchronous clients remain supported. Publishing operations use a five-minute server write deadline; asynchronous work has a separate 4.5-minute execution budget. The operation journal is `sip-operations.json` beside the selected app database (including the isolated dev store), retains up to 256 operations/14 days, and never contains request bodies, rendered content, credentials or receipt URLs. A failed journal write prevents new publishing; interrupted operations are unknown and never automatically replayed. Idempotency compares the route and exact request body bytes. A key is only protected while its operation remains in retained history.
+
+The [shared protocol contract](../SIP_OBSERVABILITY_V1.md) defines `X-Request-ID`, safe error fields, `GET /api/v1/diagnostics`, and `GET /api/v1/operations/{id}`. Capability detection is required before using optional behavior.

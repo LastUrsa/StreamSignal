@@ -14,7 +14,20 @@ const (
 	ExecutionSummaryStatusPartial ExecutionSummaryStatus = "PARTIAL"
 )
 
+type ExecutionStage struct {
+	Phase     string `json:"phase"`
+	State     string `json:"state"`
+	ErrorCode string `json:"errorCode,omitempty"`
+}
+
 type ExecutionResult struct {
+	Stages      []ExecutionStage `json:"stages,omitempty"`
+	Published   *bool            `json:"published"`
+	Phase       string           `json:"phase,omitempty"`
+	ErrorCode   string           `json:"errorCode,omitempty"`
+	StartedAt   string           `json:"startedAt,omitempty"`
+	CompletedAt string           `json:"completedAt,omitempty"`
+
 	DestinationID   string              `json:"destinationID"`
 	DestinationName string              `json:"destinationName"`
 	Platform        DestinationPlatform `json:"platform"`

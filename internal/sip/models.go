@@ -112,18 +112,24 @@ type AnnounceRequest struct {
 }
 
 type AnnounceResponse struct {
-	Success              bool   `json:"success"`
-	RequiresConfirmation bool   `json:"requiresConfirmation,omitempty"`
-	ConfirmationID       string `json:"confirmationId,omitempty"`
-	Error                string `json:"error,omitempty"`
+	Results              []DiagnosticResult `json:"results,omitempty"`
+	OperationOutcome     string             `json:"operationOutcome,omitempty"`
+	ErrorCode            string             `json:"errorCode,omitempty"`
+	Success              bool               `json:"success"`
+	RequiresConfirmation bool               `json:"requiresConfirmation,omitempty"`
+	ConfirmationID       string             `json:"confirmationId,omitempty"`
+	Error                string             `json:"error,omitempty"`
 }
 
 type AnnounceStatusResponse struct {
-	LastRun              string `json:"lastRun"`
-	Success              bool   `json:"success"`
-	RequiresConfirmation bool   `json:"requiresConfirmation,omitempty"`
-	ConfirmationID       string `json:"confirmationId,omitempty"`
-	Error                string `json:"error,omitempty"`
+	Results              []DiagnosticResult `json:"results,omitempty"`
+	OperationOutcome     string             `json:"operationOutcome,omitempty"`
+	ErrorCode            string             `json:"errorCode,omitempty"`
+	LastRun              string             `json:"lastRun"`
+	Success              bool               `json:"success"`
+	RequiresConfirmation bool               `json:"requiresConfirmation,omitempty"`
+	ConfirmationID       string             `json:"confirmationId,omitempty"`
+	Error                string             `json:"error,omitempty"`
 }
 
 type AnnounceConfirmRequest struct {
@@ -131,14 +137,20 @@ type AnnounceConfirmRequest struct {
 }
 
 type EndStreamResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
+	Results          []DiagnosticResult `json:"results,omitempty"`
+	OperationOutcome string             `json:"operationOutcome,omitempty"`
+	ErrorCode        string             `json:"errorCode,omitempty"`
+	Success          bool               `json:"success"`
+	Error            string             `json:"error,omitempty"`
 }
 
 type EndStreamStatusResponse struct {
-	LastRun string `json:"lastRun"`
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
+	Results          []DiagnosticResult `json:"results,omitempty"`
+	OperationOutcome string             `json:"operationOutcome,omitempty"`
+	ErrorCode        string             `json:"errorCode,omitempty"`
+	LastRun          string             `json:"lastRun"`
+	Success          bool               `json:"success"`
+	Error            string             `json:"error,omitempty"`
 }
 
 type ErrorResponse struct {

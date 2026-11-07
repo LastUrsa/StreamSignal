@@ -710,6 +710,11 @@ func TestExecutionServiceGoLiveReturnsFailureWhenBlueskyLiveNowUpdateFailsAfterP
 	if len(sessions.upserts) != 0 {
 		t.Fatalf("expected no live now tracking on set failure, got %+v", sessions.upserts)
 	}
+	diagnosticResult := summary.Results[0]
+	if diagnosticResult.Published == nil || !*diagnosticResult.Published || diagnosticResult.Phase != "live_now" || diagnosticResult.ErrorCode != "FOLLOW_UP_FAILED" || diagnosticResult.StartedAt == "" || diagnosticResult.CompletedAt == "" {
+		t.Fatalf("missing post/follow-up diagnostics: %+v", diagnosticResult)
+	}
+
 }
 
 func TestExecutionServiceGoLiveSkipsBlueskyLiveNowWhenDisabled(t *testing.T) {
@@ -791,6 +796,11 @@ func TestExecutionServiceGoLiveReturnsResultWhenPostHistoryRecordFailsAfterPubli
 	if summary.TotalCount != 1 || summary.FailedCount != 1 || summary.SuccessCount != 0 {
 		t.Fatalf("unexpected summary counts: %+v", summary)
 	}
+	diagnosticResult := summary.Results[0]
+	if diagnosticResult.Published == nil || !*diagnosticResult.Published || diagnosticResult.Phase != "history" || diagnosticResult.ErrorCode != "FOLLOW_UP_FAILED" || diagnosticResult.StartedAt == "" || diagnosticResult.CompletedAt == "" {
+		t.Fatalf("missing post/follow-up diagnostics: %+v", diagnosticResult)
+	}
+
 }
 
 func TestExecutionServiceEndStreamClearsBlueskyLiveNow(t *testing.T) {
@@ -1086,5 +1096,12 @@ func TestExecutionServiceForceGoLivePublishesAndRecordsHistory(t *testing.T) {
 	}
 	if summary.Status != domain.ExecutionSummaryStatusSuccess {
 		t.Fatalf("expected success summary status, got %+v", summary)
+	}
+}
+
+func TestGoLiveDoesNotReportSuccessWithoutEnabledDestinations(t *testing.T) {
+	service := NewExecutionService(newDestinationRepositoryStub(), &settingsRepositoryStub{item: domain.DefaultAppSettings()}, &postHistoryRepositoryStub{}, &liveNowSessionRepositoryExecutionStub{}, &discordPublisherStub{}, &blueskyPublisherStub{}, &mastodonPublisherStub{})
+	if _, err := service.GoLive(context.Background(), domain.Announcement{StreamTitle: "Example"}); err == nil {
+		t.Fatal("zero-target publication must not report success")
 	}
 }

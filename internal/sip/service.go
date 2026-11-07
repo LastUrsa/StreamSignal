@@ -82,6 +82,7 @@ type AppInfo struct {
 }
 
 type Service struct {
+	observer     *Observability
 	info         AppInfo
 	settings     SettingsService
 	profiles     ProfileService
@@ -105,12 +106,16 @@ func NewService(info AppInfo, settings SettingsService, profiles ProfileService,
 	if info.Mode == "" {
 		info.Mode = StandaloneMode
 	}
-	return &Service{
+	service := &Service{
 		info:     info,
+		observer: NewObservability(info.Version, true),
 		settings: settings,
 		profiles: profiles,
 		recovery: recovery,
 	}
+	service.observer.dependencies = service.diagnosticDependencies
+	service.observer.prepare = service.preparePublication
+	return service
 }
 
 func (s *Service) UseDestinations(destinations DestinationService) {
@@ -344,9 +349,9 @@ func (s *Service) Announce(ctx context.Context, request AnnounceRequest) (Announ
 	if s == nil {
 		return AnnounceResponse{Success: false, Error: "SIP service is unavailable"}, nil
 	}
-	active := s.ActiveProfile()
+	active, announcement := s.currentAnnouncement(ctx)
 	if active == nil {
-		response := AnnounceResponse{Success: false, Error: "No active profile"}
+		response := AnnounceResponse{Success: false, Error: "No active profile", ErrorCode: "INVALID_REQUEST"}
 		s.setLastAnnouncement(response, time.Now().UTC())
 		s.clearPendingAnnouncementConfirmation()
 		return response, nil
@@ -358,13 +363,12 @@ func (s *Service) Announce(ctx context.Context, request AnnounceRequest) (Announ
 		return response, nil
 	}
 
-	announcement := s.announcementFromProfile(ctx, *active)
 	if err := s.applyAnnouncementFieldOverrides(ctx, &announcement, request.Fields); err != nil {
 		return AnnounceResponse{}, err
 	}
 	summary, err := s.execution.GoLive(ctx, announcement)
 	if err != nil {
-		response := AnnounceResponse{Success: false, Error: err.Error()}
+		response := AnnounceResponse{Success: false, Error: err.Error(), ErrorCode: executionErrorCode(err)}
 		s.setLastAnnouncement(response, time.Now().UTC())
 		s.clearPendingAnnouncementConfirmation()
 		return response, nil
@@ -404,7 +408,7 @@ func (s *Service) ConfirmAnnouncement(ctx context.Context, confirmationID string
 
 	summary, err := s.execution.ForceGoLive(ctx, pending.announcement)
 	if err != nil {
-		response := AnnounceResponse{Success: false, Error: err.Error()}
+		response := AnnounceResponse{Success: false, Error: err.Error(), ErrorCode: executionErrorCode(err)}
 		s.setLastAnnouncement(response, time.Now().UTC())
 		return response, nil
 	}
@@ -417,9 +421,9 @@ func (s *Service) EndStream(ctx context.Context) (EndStreamResponse, error) {
 	if s == nil {
 		return EndStreamResponse{Success: false, Error: "SIP service is unavailable"}, nil
 	}
-	active := s.ActiveProfile()
+	active, announcement := s.currentAnnouncement(ctx)
 	if active == nil {
-		response := EndStreamResponse{Success: false, Error: "No active profile"}
+		response := EndStreamResponse{Success: false, Error: "No active profile", ErrorCode: "INVALID_REQUEST"}
 		s.setLastEndStream(response, time.Now().UTC())
 		return response, nil
 	}
@@ -429,14 +433,14 @@ func (s *Service) EndStream(ctx context.Context) (EndStreamResponse, error) {
 		return response, nil
 	}
 
-	summary, err := s.execution.EndStream(ctx, s.announcementFromProfile(ctx, *active))
+	summary, err := s.execution.EndStream(ctx, announcement)
 	if err != nil {
-		response := EndStreamResponse{Success: false, Error: err.Error()}
+		response := EndStreamResponse{Success: false, Error: err.Error(), ErrorCode: executionErrorCode(err)}
 		s.setLastEndStream(response, time.Now().UTC())
 		return response, nil
 	}
 	announcementResponse := announceResponseFromSummary(summary)
-	response := EndStreamResponse{Success: announcementResponse.Success, Error: announcementResponse.Error}
+	response := EndStreamResponse{Success: announcementResponse.Success, Error: announcementResponse.Error, Results: announcementResponse.Results, OperationOutcome: announcementResponse.OperationOutcome, ErrorCode: announcementResponse.ErrorCode}
 	s.setLastEndStream(response, time.Now().UTC())
 	return response, nil
 }
@@ -479,6 +483,7 @@ func (s *Service) setLastAnnouncement(response AnnounceResponse, ranAt time.Time
 		RequiresConfirmation: response.RequiresConfirmation,
 		ConfirmationID:       response.ConfirmationID,
 		Error:                response.Error,
+		Results:              response.Results, OperationOutcome: response.OperationOutcome, ErrorCode: response.ErrorCode,
 	}
 }
 
@@ -489,6 +494,7 @@ func (s *Service) setLastEndStream(response EndStreamResponse, ranAt time.Time) 
 		LastRun: ranAt.Format(time.RFC3339),
 		Success: response.Success,
 		Error:   response.Error,
+		Results: response.Results, OperationOutcome: response.OperationOutcome, ErrorCode: response.ErrorCode,
 	}
 }
 
@@ -582,7 +588,7 @@ func applyAnnouncementFieldValue(announcement *domain.Announcement, id string, v
 }
 
 func sipCapabilities() []string {
-	return []string{CapabilityProfiles, CapabilityAnnouncementFields}
+	return []string{"operations", "diagnostics", "async-publishing", CapabilityProfiles, CapabilityAnnouncementFields}
 }
 
 func applyDestinationStatusSummary(response *StatusResponse, destinations []domain.Destination) {
@@ -669,7 +675,14 @@ func (s *Service) announceResponseFromSummary(summary domain.ExecutionSummary, a
 	return announceResponseFromSummary(summary)
 }
 
-func announceResponseFromSummary(summary domain.ExecutionSummary) AnnounceResponse {
+func announceResponseFromSummary(summary domain.ExecutionSummary) (response AnnounceResponse) {
+	defer func() {
+		response.Results = diagnosticResults(summary)
+		if summary.Status == domain.ExecutionSummaryStatusPartial {
+			response.OperationOutcome = "partial"
+			response.ErrorCode = "PARTIAL_FAILURE"
+		}
+	}()
 	if summary.Status == domain.ExecutionSummaryStatusSuccess && !summary.RequiresDuplicateConfirmation {
 		return AnnounceResponse{Success: true}
 	}
@@ -716,4 +729,63 @@ func (s *Service) consumePendingAnnouncementConfirmation(id string, now time.Tim
 	}
 	s.pendingAnnouncementConfirmation = nil
 	return pending, true
+}
+
+func (s *Service) UseOperationHistory(path string) error { return s.observer.OpenHistory(path) }
+
+func diagnosticResults(summary domain.ExecutionSummary) []DiagnosticResult {
+	var results []DiagnosticResult
+	for _, r := range summary.Results {
+		if len(results) >= 128 {
+			break
+		}
+		state := strings.ToLower(string(r.State))
+		phase := r.Phase
+		if phase == "" {
+			phase = "publish"
+		}
+		code := r.ErrorCode
+		if code == "" {
+			switch r.State {
+			case domain.ExecutionStateValidationError:
+				code = "VALIDATION_FAILED"
+			case domain.ExecutionStateSkipped:
+				code = "INTEGRATION_DISABLED"
+			case domain.ExecutionStateFailed:
+				code = "PUBLISH_FAILED"
+			}
+		}
+		published := r.Published
+		// Old execution adapters may lack detailed metadata; never claim a failed
+		// publication was absent merely because there is no receipt.
+		if published == nil && r.State == domain.ExecutionStateSuccess {
+			v := true
+			published = &v
+		}
+		stages := []DiagnosticStage{{Phase: phase, State: state, ErrorCode: code}}
+		if published != nil && *published && r.State != domain.ExecutionStateSuccess {
+			stages = []DiagnosticStage{{Phase: "publish", State: "success"}, {Phase: phase, State: "failed", ErrorCode: code}}
+		}
+		if len(r.Stages) > 0 {
+			stages = nil
+			for _, step := range r.Stages {
+				stages = append(stages, DiagnosticStage{Phase: step.Phase, State: step.State, ErrorCode: step.ErrorCode})
+			}
+		}
+		results = append(results, DiagnosticResult{DestinationID: r.DestinationID, Platform: string(r.Platform), State: state, Phase: phase, ErrorCode: code, Message: safeMessage(code), Published: published, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Stages: stages})
+	}
+	return results
+}
+
+func executionErrorCode(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "TIMEOUT"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "CANCELED"
+	}
+	if strings.HasPrefix(err.Error(), "No enabled destinations") {
+		return "INTEGRATION_DISABLED"
+	}
+	return "INTERNAL_ERROR"
 }
