@@ -23,7 +23,7 @@ import (
 //go:embed wails.json
 var wailsConfigJSON []byte
 
-const fallbackAppVersion = "0.5.1"
+const fallbackAppVersion = "1.0.0"
 
 // App exposes Wails bindings for the frontend.
 type App struct {

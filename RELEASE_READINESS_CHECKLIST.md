@@ -4,9 +4,11 @@ This maintainer checklist is for release candidates, packaging, and final pre-re
 
 ## Release Goal
 
-Current release target: `0.5.1`.
+Current release target: `1.0.0`.
 
-Latest validation: local quality gate and security scan passed on 2026-06-15 for the SIP one-shot announcement field override patch. SIP Newman smoke remains blocked locally by a locked Windows temp build executable.
+Latest local automated validation: 2026-11-07. Frontend (71 tests/build), Go race tests/vet, native Windows tests/build, and frontend/Go dependency security scans passed. See [RELEASE_VALIDATION.md](RELEASE_VALIDATION.md). Packaging, provider-backed E2E, and SIP smoke are enforced by the release workflow; use a non-publishing workflow dispatch before tagging. The older locked-temp-executable report is historical, not a current validation result.
+
+Unchecked interactive acceptance items below have not been performed by this automated audit and must not be represented as passed.
 
 Ship StreamSignal in a way that is:
 
@@ -59,8 +61,8 @@ Wails v2 does not cross-compile macOS app bundles from Windows. Use a Mac runner
 - [ ] verify secrets do not appear in SQLite, logs, diagnostics, or exported recovery data
 - [ ] verify masked secret-edit UX works in release builds
 - [ ] verify uninstall behavior expectations for retained config and credentials are documented
-- [ ] run `npm audit --prefix frontend`
-- [ ] run `govulncheck ./...`
+- [x] run `npm audit --prefix frontend`
+- [x] run `govulncheck ./...`
 
 ## First-Run UX
 
@@ -75,5 +77,5 @@ Wails v2 does not cross-compile macOS app bundles from Windows. Use a Mac runner
 - [ ] confirm `Provider Workflow E2E` passes through the release build, or run it manually with configured test-account secrets before publishing artifacts
 - [ ] validate the release-build workflow before publishing artifacts
 - [ ] confirm branch protection checks match the live job names
-- [ ] confirm release notes describe user-visible changes
+- [x] confirm release notes describe user-visible changes
 - [ ] confirm no open high-severity security concerns remain

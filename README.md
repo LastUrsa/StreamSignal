@@ -39,7 +39,15 @@ It keeps app data on the local machine, stores runtime secrets in the OS credent
 - SQLite for local data
 - Windows Credential Manager and macOS Keychain for runtime secrets
 
+## Release support
+
+Version 1.0 targets Windows x64 and macOS universal. Windows requires WebView2; macOS packaging is built on a macOS runner. Release builds are currently unsigned/not notarized; installation may require OS approval. Installer and DMG downloads are published on [GitHub Releases](https://github.com/LastUrsa/StreamSignal/releases).
+
+Provider credentials and destination permissions are required for posting. A configured credential reference does not prove remote authentication. Unknown publication outcomes should be inspected by operation ID before retrying.
+
 ## Development
+
+Use Go 1.26.10+, Node.js 22+, and Wails CLI 2.13.0 (matching the module).
 
 Install frontend dependencies:
 
@@ -132,3 +140,5 @@ See [SIP Observability v1](./SIP_OBSERVABILITY_V1.md) for the common headers, op
 Build and validate with Go 1.26.10 or newer. Frontend build/test dependencies and Wails have been updated for security advisories.
 
 Credential readiness checks only local configuration and the last recorded attempt. A rejected state is historical evidence, not a fresh authentication test; inspect `lastAttemptAt` after changing credentials. No readiness request publishes a post.
+
+See [1.0 release validation](RELEASE_VALIDATION.md) for the verified checks, packaging gates, and manual-validation boundaries.
