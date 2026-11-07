@@ -41,6 +41,9 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Verify provider E2E opt-out gate
+        run: python3 scripts/test-provider-e2e-gate.py
+
       - name: Verify module hygiene
         run: |
           go mod tidy

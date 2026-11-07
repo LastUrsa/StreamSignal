@@ -1,6 +1,6 @@
 # StreamSignal SIP Prototype
 
-This document captures the StreamSignal SIP v1 architecture and scope.
+This document records the original StreamSignal SIP v1 architecture. For the current implementation, including operations/diagnostics and asynchronous publishing, use [the API reference](docs/sip-api-reference.md) and [SIP Observability v1](SIP_OBSERVABILITY_V1.md).
 
 ## Scope
 

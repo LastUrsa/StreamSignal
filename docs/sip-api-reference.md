@@ -23,7 +23,7 @@ POST /api/v1/end-stream
 GET  /api/v1/end-stream/status
 ```
 
-Action endpoints are not implemented in this prototype.
+Publishing uses the explicit announce/confirm/end-stream routes above. No generic command/action endpoint is exposed. The additive observability extension also provides `GET /api/v1/diagnostics` and `GET /api/v1/operations/{id}` when advertised by capabilities.
 
 ## Newman Smoke Test
 
@@ -78,7 +78,7 @@ Identifies StreamSignal as a SIP participant so another local Starsong applicati
   "appId": "streamsignal",
   "appName": "StreamSignal",
   "name": "StreamSignal",
-  "version": "0.5.1",
+  "version": "1.0.0",
   "mode": "standalone",
   "protocolVersion": 1,
   "capabilities": [

@@ -9,6 +9,7 @@ Every pull request and release candidate should pass:
 ```bash
 go test ./...
 go vet ./...
+python3 scripts/test-provider-e2e-gate.py
 npm test --prefix frontend
 npm run build --prefix frontend
 npm audit --prefix frontend
