@@ -115,6 +115,8 @@ func (s *ExecutionService) ForceGoLive(ctx context.Context, announcement domain.
 }
 
 func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.Announcement) (domain.ExecutionSummary, error) {
+	startedTimes := map[string]time.Time{}
+
 	settings, err := s.settings.Load(ctx)
 	if err != nil {
 		return domain.ExecutionSummary{}, err
@@ -124,7 +126,7 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 	if err != nil {
 		return domain.ExecutionSummary{}, err
 	}
-	if announcement.DestinationGroupID != "" && len(destinations) == 0 {
+	if len(destinations) == 0 {
 		return domain.ExecutionSummary{}, fmt.Errorf("No enabled destinations in this group.")
 	}
 
@@ -139,6 +141,7 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 
 	results := make([]domain.ExecutionResult, 0, len(destinations)*2)
 	for _, destination := range destinations {
+		startedTimes[destination.ID] = time.Now().UTC()
 		if destination.Platform != domain.PlatformBluesky {
 			continue
 		}
@@ -155,13 +158,13 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 		}
 
 		if err := validateDestinationConfig(destination); err != nil {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         err.Error(),
-			})
+			}, startedTimes)
 			continue
 		}
 
@@ -171,51 +174,53 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 			if domain.IsIntegrationUnavailable(err) {
 				state = domain.ExecutionStateSkipped
 			}
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           state,
 				Message:         err.Error(),
-			})
+				Phase:           "live_now", ErrorCode: "UNAVAILABLE", Published: publicationFlag(false),
+			}, startedTimes)
 			continue
 		}
 		if err := s.sessions.Delete(ctx, destination.ID); err != nil {
 			return domain.ExecutionSummary{}, err
 		}
 
-		results = append(results, domain.ExecutionResult{
+		results = appendExecutionResult(results, domain.ExecutionResult{
 			DestinationID:   destination.ID,
 			DestinationName: destination.Name,
 			Platform:        destination.Platform,
 			State:           domain.ExecutionStateSuccess,
-			Message:         "Live Now cleared successfully.",
-		})
+			Message:         "Live Now cleared successfully.", Phase: "live_now",
+		}, startedTimes)
 	}
 
 	for _, destination := range destinations {
+		startedTimes[destination.ID] = time.Now().UTC()
 		endConfig, err := endStreamConfigForDestination(destination)
 		if err != nil {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         err.Error(),
-			})
+			}, startedTimes)
 			continue
 		}
 		if !endConfig.Enabled {
 			continue
 		}
 		if err := validateDestinationConfig(destination); err != nil {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         err.Error(),
-			})
+			}, startedTimes)
 			continue
 		}
 
@@ -235,14 +240,14 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 		notes := domain.ValidateAnnouncementForTemplate(announcementForDestination, endConfig.Template)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
 		if message, ok := domain.FirstValidationError(notes); ok {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         message,
 				Content:         content,
-			})
+			}, startedTimes)
 			continue
 		}
 
@@ -252,32 +257,35 @@ func (s *ExecutionService) EndStream(ctx context.Context, announcement domain.An
 			if domain.IsIntegrationUnavailable(err) {
 				state = domain.ExecutionStateSkipped
 			}
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           state,
 				Message:         fmt.Sprintf("End stream post failed: %s", err.Error()),
 				Content:         content,
-			})
+			}, startedTimes)
 			continue
 		}
 
-		results = append(results, domain.ExecutionResult{
+		results = appendExecutionResult(results, domain.ExecutionResult{
 			DestinationID:   destination.ID,
 			DestinationName: destination.Name,
 			Platform:        destination.Platform,
 			State:           domain.ExecutionStateSuccess,
 			Message:         "End stream post published successfully.",
-			Content:         content,
-			Receipt:         receipt,
-		})
+			Published:       publicationFlag(true), Phase: "publish",
+			Content: content,
+			Receipt: receipt,
+		}, startedTimes)
 	}
 
 	return buildExecutionSummary(domain.ExecutionModeEndStream, settings, results, nil), nil
 }
 
 func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMode, announcement domain.Announcement, skipDuplicateWarning bool) ([]domain.ExecutionResult, domain.AppSettings, *duplicate.Warning, error) {
+	startedTimes := map[string]time.Time{}
+
 	settings, err := s.settings.Load(ctx)
 	if err != nil {
 		return nil, domain.AppSettings{}, nil, err
@@ -287,7 +295,7 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 	if err != nil {
 		return nil, domain.AppSettings{}, nil, err
 	}
-	if announcement.DestinationGroupID != "" && len(destinations) == 0 {
+	if len(destinations) == 0 {
 		return nil, domain.AppSettings{}, nil, fmt.Errorf("No enabled destinations in this group.")
 	}
 
@@ -297,19 +305,20 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 	renderedTargets := make([]renderedExecutionTarget, 0, len(destinations))
 
 	for _, destination := range destinations {
+		startedTimes[destination.ID] = time.Now().UTC()
 		content := templates.Render(destination.Template, normalized, destination.Platform, now)
 		renderedTargets = append(renderedTargets, renderedExecutionTarget{destination: destination, content: content})
 		notes := domain.ValidateAnnouncementForTemplate(normalized, destination.Template)
 		notes = append(notes, domain.ValidatePreviewContent(destination.Platform, content)...)
 		if message, ok := domain.FirstValidationError(notes); ok {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         message,
 				Content:         content,
-			})
+			}, startedTimes)
 			continue
 		}
 	}
@@ -333,20 +342,21 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 
 	for _, rendered := range renderedTargets {
 		destination := rendered.destination
+		startedTimes[destination.ID] = time.Now().UTC()
 		content := rendered.content
 		if hasValidationResult(results, destination.ID) {
 			continue
 		}
 
 		if err := validateDestinationConfig(destination); err != nil {
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           domain.ExecutionStateValidationError,
 				Message:         err.Error(),
 				Content:         content,
-			})
+			}, startedTimes)
 			continue
 		}
 
@@ -356,18 +366,19 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 			if domain.IsIntegrationUnavailable(err) {
 				state = domain.ExecutionStateSkipped
 			}
-			results = append(results, domain.ExecutionResult{
+			results = appendExecutionResult(results, domain.ExecutionResult{
 				DestinationID:   destination.ID,
 				DestinationName: destination.Name,
 				Platform:        destination.Platform,
 				State:           state,
 				Message:         err.Error(),
 				Content:         content,
-			})
+			}, startedTimes)
 			continue
 		}
 
 		message := "Published successfully."
+		stages := []domain.ExecutionStage{{Phase: "publish", State: "success"}}
 		state := domain.ExecutionStateSuccess
 
 		if destination.Platform == domain.PlatformBluesky {
@@ -375,75 +386,82 @@ func (s *ExecutionService) execute(ctx context.Context, mode domain.ExecutionMod
 			if err != nil {
 				liveStatusErr := err
 				if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-					results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", liveStatusErr.Error()), err))
+					results = appendExecutionResult(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", liveStatusErr.Error()), err, "live_now"), startedTimes)
 					continue
 				}
-				results = append(results, domain.ExecutionResult{
+				results = appendExecutionResult(results, domain.ExecutionResult{
 					DestinationID:   destination.ID,
 					DestinationName: destination.Name,
 					Platform:        destination.Platform,
 					State:           domain.ExecutionStateFailed,
-					Message:         fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", err.Error()),
-					Content:         content,
-					Receipt:         receipt,
-				})
+					Published:       publicationFlag(true), Phase: "live_now", ErrorCode: "FOLLOW_UP_FAILED",
+					Message: fmt.Sprintf("Published successfully, but Live Status config was invalid: %s", err.Error()),
+					Content: content,
+					Receipt: receipt,
+				}, startedTimes)
 				continue
 			}
 			if !liveStatusEnabled {
 				message = "Published successfully. Live Status off."
+				stages = append(stages, domain.ExecutionStage{Phase: "live_now", State: "skipped", ErrorCode: "INTEGRATION_DISABLED"})
 			} else {
 				if err := s.applyBlueskyLiveNow(ctx, destination, normalized); err != nil {
 					liveNowErr := err
 					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-						results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Now update failed: %s", liveNowErr.Error()), err))
+						results = appendExecutionResult(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully, but Live Now update failed: %s", liveNowErr.Error()), err, "live_now"), startedTimes)
 						continue
 					}
-					results = append(results, domain.ExecutionResult{
+					results = appendExecutionResult(results, domain.ExecutionResult{
 						DestinationID:   destination.ID,
 						DestinationName: destination.Name,
 						Platform:        destination.Platform,
 						State:           domain.ExecutionStateFailed,
-						Message:         fmt.Sprintf("Published successfully, but Live Now update failed: %s", err.Error()),
-						Content:         content,
-						Receipt:         receipt,
-					})
+						Published:       publicationFlag(true), Phase: "live_now", ErrorCode: "FOLLOW_UP_FAILED",
+						Message: fmt.Sprintf("Published successfully, but Live Now update failed: %s", err.Error()),
+						Content: content,
+						Receipt: receipt,
+					}, startedTimes)
 					continue
 				}
 				if err := s.trackBlueskyLiveNowSession(ctx, destination, normalized, now); err != nil {
 					trackingErr := err
 					if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-						results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", trackingErr.Error()), err))
+						results = appendExecutionResult(results, publishedWithPostHistoryFailureResult(destination, content, receipt, fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", trackingErr.Error()), err, "recovery_tracking"), startedTimes)
 						continue
 					}
-					results = append(results, domain.ExecutionResult{
+					results = appendExecutionResult(results, domain.ExecutionResult{
 						DestinationID:   destination.ID,
 						DestinationName: destination.Name,
 						Platform:        destination.Platform,
 						State:           domain.ExecutionStateFailed,
-						Message:         fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", err.Error()),
-						Content:         content,
-						Receipt:         receipt,
-					})
+						Published:       publicationFlag(true), Phase: "history", ErrorCode: "FOLLOW_UP_FAILED",
+						Message: fmt.Sprintf("Published successfully and Live Now was set, but recovery tracking failed: %s", err.Error()),
+						Content: content,
+						Receipt: receipt,
+					}, startedTimes)
 					continue
 				}
 				message = "Published successfully. Live Now set."
+				stages = append(stages, domain.ExecutionStage{Phase: "live_now", State: "success"}, domain.ExecutionStage{Phase: "recovery_tracking", State: "success"})
 			}
 		}
 
 		if err := s.history.Record(ctx, destination.ID, content, duplicate.HashContent(content), now); err != nil {
-			results = append(results, publishedWithPostHistoryFailureResult(destination, content, receipt, "", err))
+			results = appendExecutionResult(results, publishedWithPostHistoryFailureResult(destination, content, receipt, "", err), startedTimes)
 			continue
 		}
 
-		results = append(results, domain.ExecutionResult{
+		results = appendExecutionResult(results, domain.ExecutionResult{
 			DestinationID:   destination.ID,
 			DestinationName: destination.Name,
 			Platform:        destination.Platform,
 			State:           state,
 			Message:         message,
-			Content:         content,
-			Receipt:         receipt,
-		})
+			Stages:          append(stages, domain.ExecutionStage{Phase: "history", State: "success"}),
+			Published:       publicationFlag(true), Phase: "publish",
+			Content: content,
+			Receipt: receipt,
+		}, startedTimes)
 	}
 
 	return results, settings, nil, nil
@@ -513,19 +531,26 @@ func enabledDestinations(destinations []domain.Destination) []domain.Destination
 	return enabled
 }
 
-func publishedWithPostHistoryFailureResult(destination domain.Destination, content string, receipt *domain.PublishReceipt, baseMessage string, err error) domain.ExecutionResult {
+func publishedWithPostHistoryFailureResult(destination domain.Destination, content string, receipt *domain.PublishReceipt, baseMessage string, err error, additionalFailedPhase ...string) domain.ExecutionResult {
 	message := fmt.Sprintf("Published successfully, but duplicate tracking failed: %s", err.Error())
 	if strings.TrimSpace(baseMessage) != "" {
 		message = fmt.Sprintf("%s. Duplicate tracking also failed: %s", strings.TrimRight(baseMessage, "."), err.Error())
 	}
-	return domain.ExecutionResult{
+	stages := []domain.ExecutionStage{{Phase: "publish", State: "success"}}
+	for _, phase := range additionalFailedPhase {
+		stages = append(stages, domain.ExecutionStage{Phase: phase, State: "failed", ErrorCode: "FOLLOW_UP_FAILED"})
+	}
+	stages = append(stages, domain.ExecutionStage{Phase: "history", State: "failed", ErrorCode: "FOLLOW_UP_FAILED"})
+	return domain.ExecutionResult{Stages: stages,
 		DestinationID:   destination.ID,
 		DestinationName: destination.Name,
 		Platform:        destination.Platform,
 		State:           domain.ExecutionStateFailed,
-		Message:         message,
-		Content:         content,
-		Receipt:         receipt,
+		Phase:           "history", ErrorCode: "FOLLOW_UP_FAILED",
+		Message:   message,
+		Content:   content,
+		Receipt:   receipt,
+		Published: publicationFlag(true),
 	}
 }
 
@@ -750,4 +775,44 @@ func executionSummaryStatus(summary domain.ExecutionSummary) domain.ExecutionSum
 	default:
 		return domain.ExecutionSummaryStatusSuccess
 	}
+}
+
+func publicationFlag(value bool) *bool { return &value }
+func appendExecutionResult(results []domain.ExecutionResult, result domain.ExecutionResult, started map[string]time.Time) []domain.ExecutionResult {
+	begin := started[result.DestinationID]
+	if begin.IsZero() {
+		begin = time.Now().UTC()
+	}
+	result.StartedAt = begin.Format(time.RFC3339Nano)
+	result.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if result.Phase == "" {
+		result.Phase = "publish"
+	}
+	if result.State == domain.ExecutionStateValidationError {
+		result.Phase = "validation"
+		result.ErrorCode = "VALIDATION_FAILED"
+		if strings.Contains(strings.ToLower(result.Message), "missing") {
+			result.ErrorCode = "MISSING_CREDENTIALS"
+		}
+		result.Published = publicationFlag(false)
+	}
+	if result.State == domain.ExecutionStateSkipped {
+		result.ErrorCode = "INTEGRATION_DISABLED"
+		result.Published = publicationFlag(false)
+	}
+	if result.State == domain.ExecutionStateFailed && result.ErrorCode == "" {
+		result.ErrorCode = "PUBLISH_FAILED"
+		lower := strings.ToLower(result.Message)
+		if strings.Contains(lower, "request failed: 401") || strings.Contains(lower, "request failed: 403") {
+			result.ErrorCode = "AUTH_REJECTED"
+			result.Published = publicationFlag(false)
+		}
+		if strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "timeout") {
+			result.ErrorCode = "TIMEOUT"
+		}
+	}
+	if result.State == domain.ExecutionStateSuccess && result.Published == nil {
+		result.Published = publicationFlag(false)
+	}
+	return append(results, result)
 }

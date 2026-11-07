@@ -4,7 +4,11 @@ User-facing release notes and planned artifact names. Keep this focused on chang
 
 ## Unreleased
 
-- None.
+- Adds the additive SIP observability contract, safe operation correlation and diagnostics.
+- Adds capability-advertised SIP operations and diagnostics, correlated safe operation logs, per-destination publication/follow-up results, credential readiness, opt-in asynchronous publishing, and durable idempotency/restart recovery. Existing synchronous clients remain supported. Publishing operations use a five-minute server write deadline; asynchronous work has a separate 4.5-minute execution budget. The operation journal is `sip-operations.json` beside the selected app database (including the isolated dev store), retains up to 256 operations/14 days, and never contains request bodies, rendered content, credentials or receipt URLs. A failed journal write prevents new publishing; interrupted operations are unknown and never automatically replayed. Idempotency compares the route and exact request body bytes. A key is only protected while its operation remains in retained history.
+- Freezes the active profile/default fields when accepting publishing work and rejects zero-enabled-target announcements instead of reporting an empty success.
+- Adds regression tests and updates patched build/test dependencies.
+
 
 ## 0.5.1 SIP One-Shot Announcement Field Overrides
 

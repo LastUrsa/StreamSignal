@@ -60,7 +60,7 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 	if app.AppID != "streamsignal" || app.AppName != "StreamSignal" || app.Name != "StreamSignal" || app.Version != "0.4.0" || app.Mode != "standalone" || app.ProtocolVersion != 1 {
 		t.Fatalf("unexpected app response: %+v", app)
 	}
-	if strings.Join(app.Capabilities, ",") != "profiles,announcement-fields" {
+	if strings.Join(app.Capabilities, ",") != "operations,diagnostics,async-publishing,profiles,announcement-fields" {
 		t.Fatalf("unexpected app capabilities: %+v", app.Capabilities)
 	}
 
@@ -69,7 +69,7 @@ func TestHandlerReturnsIdentityAndCapabilities(t *testing.T) {
 	if !capabilities.SupportsProfiles || !capabilities.SupportsStatusReporting || !capabilities.SupportsAnnouncements {
 		t.Fatalf("expected core capabilities, got %+v", capabilities)
 	}
-	if strings.Join(capabilities.Capabilities, ",") != "profiles,announcement-fields" {
+	if strings.Join(capabilities.Capabilities, ",") != "operations,diagnostics,async-publishing,profiles,announcement-fields" {
 		t.Fatalf("unexpected capabilities list: %+v", capabilities.Capabilities)
 	}
 }

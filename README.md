@@ -121,3 +121,14 @@ STREAMSIGNAL_E2E=1 go test -tags=e2e ./internal/e2e -v -count=1
 - [Integration Limitations](./INTEGRATION_LIMITATIONS.md)
 - [Brand Usage](./BRAND_USAGE.md)
 - [macOS Release Test Plan](./MACOS_RELEASE_TEST_PLAN.md)
+
+
+## SIP Troubleshooting and Operation Metadata
+
+Adds capability-advertised SIP operations and diagnostics, correlated safe operation logs, per-destination publication/follow-up results, credential readiness, opt-in asynchronous publishing, and durable idempotency/restart recovery. Existing synchronous clients remain supported. Publishing operations use a five-minute server write deadline; asynchronous work has a separate 4.5-minute execution budget. The operation journal is `sip-operations.json` beside the selected app database (including the isolated dev store), retains up to 256 operations/14 days, and never contains request bodies, rendered content, credentials or receipt URLs. A failed journal write prevents new publishing; interrupted operations are unknown and never automatically replayed. Idempotency compares the route and exact request body bytes. A key is only protected while its operation remains in retained history.
+
+See [SIP Observability v1](./SIP_OBSERVABILITY_V1.md) for the common headers, operation/error schema, retry rules, capabilities, and endpoint examples. Legacy `error` fields remain display-only; clients should log the fixed `message`/`errorCode` and operational IDs instead.
+
+Build and validate with Go 1.26.10 or newer. Frontend build/test dependencies and Wails have been updated for security advisories.
+
+Credential readiness checks only local configuration and the last recorded attempt. A rejected state is historical evidence, not a fresh authentication test; inspect `lastAttemptAt` after changing credentials. No readiness request publishes a post.

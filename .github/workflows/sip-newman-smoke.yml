@@ -54,7 +54,7 @@ jobs:
         if: github.event_name != 'workflow_call' || inputs.enabled
         shell: pwsh
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
           "$env:USERPROFILE\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Build Windows app

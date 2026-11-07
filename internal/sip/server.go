@@ -49,7 +49,7 @@ func (s *Server) Start(ctx context.Context) error {
 		Handler:           s.service.Handler(),
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      5 * time.Minute,
 		IdleTimeout:       30 * time.Second,
 	}
 	s.listener = listener

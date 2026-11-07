@@ -110,9 +110,13 @@ func newAppWithDependenciesForMode(databasePath string, secretStore ports.Secret
 		Mode:     runtimeMode,
 		Protocol: sip.ProtocolVersion,
 	}, settingsService, profileSvc, recoverySvc)
+	_ = sipService.UseOperationHistory(filepath.Join(filepath.Dir(databasePath), "sip-operations.json"))
 	sipService.UseDestinations(destinationSvc)
 	sipService.UseDestinationGroups(groupRepo)
 	sipService.UseExecution(executionSvc)
+	sipService.UseOperationLogger(func(op sip.DiagnosticOperation) {
+		_ = logService.Append(context.Background(), "sip", op.Kind, op.Outcome, fmt.Sprintf("request_id=%s operation_id=%s session_id=%s code=%s", op.RequestID, op.ID, op.SessionID, op.ErrorCode))
+	})
 	sipService.UseAnnouncementFields(fieldSvc)
 
 	return &App{
